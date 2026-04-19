@@ -1,4 +1,6 @@
-# TeamsWork Backend (Phase 1 -> Production-like)
+# QLDA — TeamsWork (Phase 1 → Production-like)
+
+Repository: [github.com/vcongggggg/QLDA](https://github.com/vcongggggg/QLDA) — Hệ thống quản trị công việc & KPI nội bộ tích hợp Microsoft Teams.
 
 This repository now contains a production-like backend foundation for the TeamsWork project.
 
