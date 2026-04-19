@@ -1,0 +1,66 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "f4a0d9a4-9c71-47ca-bf12-7f1df2db59a7",
+  "packageName": "com.teamswork.app",
+  "developer": {
+    "name": "TeamsWork Project",
+    "websiteUrl": "https://REPLACE_WITH_PUBLIC_HOST",
+    "privacyUrl": "https://REPLACE_WITH_PUBLIC_HOST/privacy",
+    "termsOfUseUrl": "https://REPLACE_WITH_PUBLIC_HOST/terms"
+  },
+  "name": {
+    "short": "TeamsWork",
+    "full": "TeamsWork - Quản trị công việc & KPI"
+  },
+  "description": {
+    "short": "Quản lý công việc, sprint và KPI nội bộ trong Teams",
+    "full": "TeamsWork tích hợp quản lý công việc, bảng KPI, burndown sprint và nhắc nhở deadline trực tiếp vào Microsoft Teams."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#2B579A",
+  "staticTabs": [
+    {
+      "entityId": "teamswork-dashboard",
+      "name": "Dashboard",
+      "contentUrl": "https://REPLACE_WITH_PUBLIC_HOST/teams/tab/prod",
+      "websiteUrl": "https://REPLACE_WITH_PUBLIC_HOST/ui/",
+      "scopes": ["personal"]
+    },
+    {
+      "entityId": "teamswork-identity",
+      "name": "Kết nối tài khoản",
+      "contentUrl": "https://REPLACE_WITH_PUBLIC_HOST/teams/tab",
+      "websiteUrl": "https://REPLACE_WITH_PUBLIC_HOST/teams/tab",
+      "scopes": ["personal"]
+    }
+  ],
+  "bots": [
+    {
+      "botId": "REPLACE_WITH_BOT_APP_ID",
+      "scopes": ["personal"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            { "title": "help", "description": "Xem danh sách lệnh" },
+            { "title": "kpi-me", "description": "Xem KPI tháng này của tôi" },
+            { "title": "my-deadlines", "description": "Xem deadline sắp tới" }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": ["REPLACE_WITH_PUBLIC_HOST"],
+  "webApplicationInfo": {
+    "id": "REPLACE_WITH_AAD_APP_CLIENT_ID",
+    "resource": "api://REPLACE_WITH_PUBLIC_HOST/REPLACE_WITH_AAD_APP_CLIENT_ID"
+  }
+}

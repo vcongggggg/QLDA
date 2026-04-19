@@ -1,0 +1,35 @@
+services:
+  api:
+    build: .
+    container_name: teamswork-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///teamswork.db}
+      - AUTH_DISABLE_JWT_VALIDATION=${AUTH_DISABLE_JWT_VALIDATION:-true}
+      - AUTH_ALLOW_HEADER_FALLBACK=${AUTH_ALLOW_HEADER_FALLBACK:-true}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-secret-change-me}
+      - TEAMS_PROACTIVE_MODE=${TEAMS_PROACTIVE_MODE:-webhook}
+      - TEAMS_BOT_APP_ID=${TEAMS_BOT_APP_ID:-}
+      - TEAMS_BOT_APP_SECRET=${TEAMS_BOT_APP_SECRET:-}
+    volumes:
+      - ./:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    container_name: teamswork-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=teamswork
+      - POSTGRES_USER=teamswork
+      - POSTGRES_PASSWORD=teamswork
+    ports:
+      - "5432:5432"
+    volumes:
+      - teamswork_pgdata:/var/lib/postgresql/data
+
+volumes:
+  teamswork_pgdata:

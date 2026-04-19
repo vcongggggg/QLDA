@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TeamsWork – Quản trị công việc & KPI</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ SIDEBAR ═════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-logo">TW</div>
+    <div class="brand-name">TeamsWork</div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a class="nav-item active" data-section="dashboard" onclick="navigate('dashboard')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Dashboard</span>
+    </a>
+    <a class="nav-item" data-section="kanban" onclick="navigate('kanban')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="16" rx="1"/></svg>
+      <span>Kanban</span>
+    </a>
+    <a class="nav-item" data-section="projects" onclick="navigate('projects')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h3l2 2h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
+      <span>Dự án</span>
+    </a>
+    <a class="nav-item" data-section="kpi" onclick="navigate('kpi')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 9-9"/><circle cx="18" cy="7" r="2"/></svg>
+      <span>KPI</span>
+    </a>
+    <a class="nav-item" data-section="reports" onclick="navigate('reports')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+      <span>Báo cáo</span>
+    </a>
+    <a class="nav-item" data-section="teams" onclick="navigate('teams')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      <span>Teams</span>
+    </a>
+
+    <div class="nav-divider"></div>
+
+    <a class="nav-item" data-section="admin" onclick="navigate('admin')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span>Quản trị</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <div class="user-avatar" id="userAvatar">U</div>
+      <div class="user-info">
+        <div class="user-name" id="userName">Người dùng</div>
+        <div class="user-role" id="userRole">–</div>
+      </div>
+    </div>
+    <div class="user-id-row">
+      <label>User ID:</label>
+      <input type="number" id="userIdInput" value="1" min="1" onchange="changeUserId(this.value)" />
+    </div>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN ═════════ -->
+<div class="main-wrap">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+    <div class="topbar-title" id="pageTitle">Dashboard</div>
+    <div class="topbar-controls">
+      <div class="month-picker">
+        <label>Tháng:</label>
+        <input type="month" id="monthPicker" onchange="onMonthChange(this.value)" />
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="refreshCurrent()">↻ Làm mới</button>
+    </div>
+  </header>
+
+  <!-- Content area -->
+  <main class="content-area">
+
+    <!-- ─── DASHBOARD ─── -->
+    <section id="sec-dashboard" class="section">
+      <div class="stat-grid" id="dashStats">
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header">
+            <h3>🏆 Bảng xếp hạng KPI</h3>
+            <span class="tag" id="kpiMonth">–</span>
+          </div>
+          <div id="kpiRankTable"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>📊 Biểu đồ task theo trạng thái</h3></div>
+          <div class="chart-wrap"><canvas id="taskChart"></canvas></div>
+        </div>
+      </div>
+      <div class="card mt-16">
+        <div class="card-header"><h3>📁 Tổng quan dự án</h3></div>
+        <div id="projectOverview"></div>
+      </div>
+    </section>
+
+    <!-- ─── KANBAN ─── -->
+    <section id="sec-kanban" class="section hidden">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select id="kanbanProjectFilter" class="select" onchange="loadKanban()">
+            <option value="">Tất cả dự án</option>
+          </select>
+        </div>
+        <div class="toolbar-right">
+          <span id="kanbanCount" class="text-sm text-muted"></span>
+        </div>
+      </div>
+      <div class="kanban-board">
+        <div class="kanban-col">
+          <div class="kanban-col-header todo-header">
+            <span>📋 Chưa làm</span><span class="col-count" id="cnt-todo">0</span>
+          </div>
+          <div class="kanban-cards" id="col-todo"></div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-header doing-header">
+            <span>⚡ Đang làm</span><span class="col-count" id="cnt-doing">0</span>
+          </div>
+          <div class="kanban-cards" id="col-doing"></div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-header done-header">
+            <span>✅ Hoàn thành</span><span class="col-count" id="cnt-done">0</span>
+          </div>
+          <div class="kanban-cards" id="col-done"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── PROJECTS ─── -->
+    <section id="sec-projects" class="section hidden">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select id="projectStatusFilter" class="select" onchange="loadProjects()">
+            <option value="">Tất cả trạng thái</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="on_hold">Tạm dừng</option>
+            <option value="done">Hoàn thành</option>
+            <option value="archived">Lưu trữ</option>
+          </select>
+        </div>
+        <div class="toolbar-right">
+          <span id="projectCount" class="text-sm text-muted"></span>
+        </div>
+      </div>
+      <div class="project-grid" id="projectGrid"></div>
+    </section>
+
+    <!-- ─── KPI ─── -->
+    <section id="sec-kpi" class="section hidden">
+      <div class="two-col">
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-header">
+            <h3>🎯 Bảng KPI tháng <span id="kpiTableMonth">–</span></h3>
+            <div class="tag-group">
+              <span class="tag tag-green">Xuất sắc ≥ 90</span>
+              <span class="tag tag-blue">Tốt ≥ 70</span>
+              <span class="tag tag-yellow">Đạt ≥ 50</span>
+              <span class="tag tag-red">Cần cải thiện &lt; 50</span>
+            </div>
+          </div>
+          <div id="kpiFullTable"></div>
+        </div>
+      </div>
+      <div class="card mt-16">
+        <div class="card-header"><h3>📈 Biểu đồ điểm KPI</h3></div>
+        <div class="chart-wrap-wide"><canvas id="kpiBarChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ─── REPORTS ─── -->
+    <section id="sec-reports" class="section hidden">
+      <div class="report-grid">
+        <div class="report-card">
+          <div class="report-icon kpi-icon">📊</div>
+          <div class="report-info">
+            <h4>Báo cáo KPI tháng</h4>
+            <p>Điểm KPI toàn bộ nhân sự trong tháng đã chọn</p>
+          </div>
+          <div class="report-actions">
+            <button class="btn btn-outline btn-sm" onclick="downloadReport('kpi','csv')">CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="downloadReport('kpi','xlsx')">Excel</button>
+            <button class="btn btn-primary btn-sm" onclick="downloadReport('kpi','pdf')">PDF</button>
+          </div>
+        </div>
+        <div class="report-card">
+          <div class="report-icon proj-icon">📁</div>
+          <div class="report-info">
+            <h4>Tổng quan danh mục dự án</h4>
+            <p>Portfolio summary tất cả dự án và tiến độ</p>
+          </div>
+          <div class="report-actions">
+            <button class="btn btn-outline btn-sm" onclick="downloadReport('portfolio','csv')">CSV</button>
+            <button class="btn btn-primary btn-sm" onclick="downloadReport('portfolio','xlsx')">Excel</button>
+          </div>
+        </div>
+        <div class="report-card">
+          <div class="report-icon prog-icon">📈</div>
+          <div class="report-info">
+            <h4>Tiến độ dự án</h4>
+            <p>Trạng thái tiến độ tất cả dự án đang hoạt động</p>
+          </div>
+          <div class="report-actions">
+            <button class="btn btn-outline btn-sm" onclick="downloadReport('progress','csv')">CSV</button>
+            <button class="btn btn-primary btn-sm" onclick="downloadReport('progress','xlsx')">Excel</button>
+          </div>
+        </div>
+        <div class="report-card">
+          <div class="report-icon sprint-icon">🏃</div>
+          <div class="report-info">
+            <h4>Sprint Review</h4>
+            <p>Kết quả sprint theo ID (nhập ID sprint bên dưới)</p>
+          </div>
+          <div class="report-actions">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="number" id="sprintReportId" placeholder="Sprint ID" min="1" class="select" style="width:90px" />
+              <button class="btn btn-outline btn-sm" onclick="downloadSprintReport('csv')">CSV</button>
+              <button class="btn btn-primary btn-sm" onclick="downloadSprintReport('xlsx')">Excel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── TEAMS ─── -->
+    <section id="sec-teams" class="section hidden">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><h3>🔗 Tích hợp Microsoft Teams</h3></div>
+          <div class="info-list">
+            <div class="info-row">
+              <span class="info-label">Tab URL (Personal)</span>
+              <code class="info-val" id="teamsTabUrl">–</code>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Tab Production</span>
+              <code class="info-val" id="teamsTabProdUrl">–</code>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Bot App ID</span>
+              <code class="info-val" id="teamsBotId">Chưa cấu hình</code>
+            </div>
+          </div>
+          <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+            <a class="btn btn-primary btn-sm" href="/teams/tab" target="_blank">Mở Teams Tab</a>
+            <a class="btn btn-outline btn-sm" href="/teams/tab/prod" target="_blank">Tab Production</a>
+            <a class="btn btn-outline btn-sm" href="/docs" target="_blank">API Docs</a>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>🔔 Notification Queue</h3></div>
+          <div id="notifQueueStats">
+            <div class="skeleton" style="height:80px;border-radius:8px"></div>
+          </div>
+          <div style="margin-top:12px">
+            <button class="btn btn-primary btn-sm" onclick="loadTeams()">↻ Làm mới</button>
+          </div>
+        </div>
+      </div>
+      <div class="card mt-16">
+        <div class="card-header"><h3>📋 Hướng dẫn triển khai</h3></div>
+        <div class="deploy-steps">
+          <div class="step"><span class="step-num">1</span><div><strong>Expose HTTPS</strong> – Dùng ngrok hoặc Azure App Service để có URL công khai</div></div>
+          <div class="step"><span class="step-num">2</span><div><strong>Cập nhật manifest.json</strong> – Thay <code>REPLACE_WITH_PUBLIC_HOST</code> bằng hostname thực tế</div></div>
+          <div class="step"><span class="step-num">3</span><div><strong>Tạo Azure AD App</strong> – Đăng ký App Registration, lấy Client ID và Secret</div></div>
+          <div class="step"><span class="step-num">4</span><div><strong>Cập nhật .env</strong> – Điền <code>TEAMS_CLIENT_ID</code>, <code>TEAMS_TENANT_ID</code>, <code>APP_BASE_URL</code></div></div>
+          <div class="step"><span class="step-num">5</span><div><strong>Upload lên Teams</strong> – Zip thư mục <code>teams-app/</code> và upload qua Developer Portal</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── ADMIN ─── -->
+    <section id="sec-admin" class="section hidden">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header"><h3>🌱 Dữ liệu mẫu</h3></div>
+          <p class="text-muted text-sm">Khởi tạo dữ liệu mẫu (users, projects, sprints, tasks) để demo. Chỉ chạy một lần.</p>
+          <button class="btn btn-primary" id="seedBtn" onclick="runSeed()">Khởi tạo dữ liệu mẫu</button>
+          <div id="seedResult" style="margin-top:12px"></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>📋 Kế hoạch triển khai</h3>
+          </div>
+          <div id="planCompletion"></div>
+        </div>
+      </div>
+      <div class="card mt-16">
+        <div class="card-header">
+          <h3>🔍 Nhật ký hoạt động</h3>
+          <button class="btn btn-outline btn-sm" onclick="loadAuditLogs()">↻ Tải lại</button>
+        </div>
+        <div id="auditTable"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
