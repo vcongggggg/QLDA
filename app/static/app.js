@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('userIdInput').value = state.userId;
   loadCurrentUser();
+  initKanbanDragDrop();
   navigate('dashboard');
 });
 
@@ -268,6 +269,87 @@ async function loadProjectOverview() {
   }
 }
 
+/** Một lần: gắn dropzone + delegation (3 cột giữ id cố định, chỉ nội dung con thay đổi) */
+function initKanbanDragDrop() {
+  const board =
+    document.getElementById('kanban-board') ||
+    document.querySelector('#sec-kanban .kanban-board');
+  if (!board || board.dataset.dndInit === '1') return;
+  board.dataset.dndInit = '1';
+
+  const statusByColId = { 'col-todo': 'todo', 'col-doing': 'doing', 'col-done': 'done' };
+
+  board.addEventListener('dragstart', (e) => {
+    const card = e.target.closest('.task-card[draggable="true"]');
+    if (!card) return;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(
+      'text/plain',
+      JSON.stringify({ id: Number(card.dataset.taskId), from: card.dataset.status || '' })
+    );
+    card.classList.add('is-dragging');
+  });
+
+  board.addEventListener('dragend', (e) => {
+    const card = e.target.closest('.task-card');
+    if (card) card.classList.remove('is-dragging');
+    document.querySelectorAll('.kanban-cards').forEach((z) => z.classList.remove('kanban-drop-active'));
+  });
+
+  /* capture: true — dragover phải preventDefault trên vùng cột kể cả khi con trỏ đang ở thẻ con (empty-state, task-card) */
+  ['col-todo', 'col-doing', 'col-done'].forEach((id) => {
+    const zone = document.getElementById(id);
+    if (!zone) return;
+
+    zone.addEventListener(
+      'dragover',
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        zone.classList.add('kanban-drop-active');
+      },
+      true
+    );
+
+    zone.addEventListener(
+      'dragleave',
+      (e) => {
+        if (!zone.contains(e.relatedTarget)) {
+          zone.classList.remove('kanban-drop-active');
+        }
+      },
+      true
+    );
+
+    zone.addEventListener(
+      'drop',
+      async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('kanban-drop-active');
+        const newStatus = statusByColId[zone.id];
+        if (!newStatus) return;
+        let payload;
+        try {
+          payload = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+        } catch {
+          return;
+        }
+        const taskId = payload && payload.id;
+        if (!taskId) return;
+        if (payload.from && payload.from === newStatus) return;
+        try {
+          await updateTaskStatus(Number(taskId), newStatus, { silent: false });
+        } catch (err) {
+          toast(String(err?.message || err), 'error');
+        }
+      },
+      true
+    );
+  });
+}
+
 // ════════════════════════════════ KANBAN ═══════
 
 async function loadKanban() {
@@ -309,7 +391,7 @@ async function loadKanban() {
     Object.entries(grouped).forEach(([status, items]) => {
       const col = cols[status];
       if (!items.length) {
-        col.innerHTML = `<div class="empty-state" style="padding:20px"><div>📭</div>Trống</div>`;
+        col.innerHTML = `<div class="empty-state" style="padding:20px"><div>📭</div>Trống <span class="text-sm text-muted">(kéo thả thẻ vào đây)</span></div>`;
         return;
       }
       col.innerHTML = items.map(t => taskCard(t)).join('');
@@ -332,7 +414,8 @@ function taskCard(t) {
   const nextLabel  = nextStatus === 'doing' ? '▶ Bắt đầu' : nextStatus === 'done' ? '✅ Hoàn thành' : '';
 
   return `
-    <div class="task-card">
+    <div class="task-card" draggable="true" data-task-id="${t.id}" data-status="${t.status}" title="Giữ & kéo sang cột khác">
+      <div class="task-card-handle" aria-hidden="true">⋮⋮</div>
       <div class="task-card-title">${escHtml(t.title)}</div>
       <div class="task-card-meta">
         <span class="task-card-sp">SP: ${t.story_points}</span>
@@ -344,20 +427,28 @@ function taskCard(t) {
       </div>
       ${nextStatus ? `
         <div class="task-card-actions">
-          <button class="btn-mini" onclick="moveTask(${t.id}, '${nextStatus}')">${nextLabel}</button>
+          <button type="button" class="btn-mini" onclick="event.stopPropagation();moveTask(${t.id}, '${nextStatus}')">${nextLabel}</button>
         </div>` : ''}
     </div>`;
 }
 
+async function updateTaskStatus(taskId, newStatus, { silent = false } = {}) {
+  await api(`/tasks/${taskId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: newStatus }),
+  });
+  if (!silent) {
+    toast(`Đã cập nhật trạng thái: ${statusLabel(newStatus)}`, 'success');
+  }
+  if (state.currentSection === 'kanban') {
+    loadKanban();
+  }
+}
+
 async function moveTask(taskId, newStatus) {
   try {
-    await api(`/tasks/${taskId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    toast(`Đã cập nhật trạng thái: ${statusLabel(newStatus)}`, 'success');
-    loadKanban();
+    await updateTaskStatus(Number(taskId), newStatus, { silent: false });
   } catch (e) {
     toast(`Lỗi: ${e.message}`, 'error');
   }
