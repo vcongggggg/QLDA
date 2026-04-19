@@ -39,3 +39,9 @@ Thumbs.db
 # Temp / extracted junk
 _extracted/
 *.log
+
+# PM / báo cáo / backlog / dự toán — không cần để chạy ứng dụng (giữ bản local nếu cần)
+*.docx
+*.xlsx
+PLAN.md
+read_docx_v2.py
