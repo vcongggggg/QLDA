@@ -8,10 +8,10 @@ def seed_data() -> dict:
         user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if user_count == 0:
             users = [
-                ("Nguyen Van A", "a@teamswork.local", None, "manager", "PMO"),
-                ("Tran Thi B", "b@teamswork.local", None, "staff", "Engineering"),
-                ("Le Van C", "c@teamswork.local", None, "staff", "Engineering"),
-                ("Pham Thi D", "d@teamswork.local", None, "hr", "HR"),
+                ("Nguyen Van A", "a@teamswork.example.com", None, "manager", "PMO"),
+                ("Tran Thi B", "b@teamswork.example.com", None, "staff", "Engineering"),
+                ("Le Van C", "c@teamswork.example.com", None, "staff", "Engineering"),
+                ("Pham Thi D", "d@teamswork.example.com", None, "hr", "HR"),
             ]
             conn.executemany(
                 "INSERT INTO users (full_name, email, aad_object_id, role, department) VALUES (?, ?, ?, ?, ?)",

@@ -550,6 +550,23 @@ def _ensure_column(conn: DatabaseConnection, table: str, column: str, definition
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
 
 
+def _normalize_reserved_user_email_domains(conn: DatabaseConnection) -> None:
+    replacements = (
+        ("@local.test", "@example.com"),
+        ("@teamswork.local", "@teamswork.example.com"),
+        ("@aad.local", "@aad.example.com"),
+    )
+    for old_domain, new_domain in replacements:
+        conn.execute(
+            """
+            UPDATE users
+            SET email = REPLACE(email, ?, ?)
+            WHERE email LIKE ?
+            """,
+            (old_domain, new_domain, f"%{old_domain}"),
+        )
+
+
 def init_db() -> None:
     with get_connection() as conn:
         for statement in _schema_statements(conn.dialect):
@@ -568,3 +585,4 @@ def init_db() -> None:
         _ensure_column(conn, "notification_queue", "max_attempts", "max_attempts INTEGER NOT NULL DEFAULT 3")
         _ensure_column(conn, "notification_queue", "last_error", "last_error TEXT")
         _ensure_column(conn, "notification_queue", "next_retry_at", "next_retry_at TEXT")
+        _normalize_reserved_user_email_domains(conn)

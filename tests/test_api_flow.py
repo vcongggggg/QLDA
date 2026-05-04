@@ -19,9 +19,9 @@ def _hdr(user_id: int) -> dict:
 def _bootstrap_users() -> tuple[int, int, int]:
     init_db()
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-    admin = create_user("Admin Test", f"admin.{ts}@local.test", "admin", "IT")
-    manager = create_user("Manager Test", f"manager.{ts}@local.test", "manager", "PMO")
-    staff = create_user("Staff Test", f"staff.{ts}@local.test", "staff", "Engineering")
+    admin = create_user("Admin Test", f"admin.{ts}@example.com", "admin", "IT")
+    manager = create_user("Manager Test", f"manager.{ts}@example.com", "manager", "PMO")
+    staff = create_user("Staff Test", f"staff.{ts}@example.com", "staff", "Engineering")
     return int(admin["id"]), int(manager["id"]), int(staff["id"])
 
 
@@ -119,7 +119,7 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
     update_forbidden = client.patch(f"/tasks/{task_id}/status", headers=_hdr(admin_id), json={"status": "done"})
     assert update_forbidden.status_code == 200
 
-    other_staff = create_user("Other Staff", f"other.{datetime.now(timezone.utc).timestamp()}@local.test", "staff", "Engineering")
+    other_staff = create_user("Other Staff", f"other.{datetime.now(timezone.utc).timestamp()}@example.com", "staff", "Engineering")
     update_forbidden = client.patch(
         f"/tasks/{task_id}/status",
         headers=_hdr(int(other_staff["id"])),
@@ -228,7 +228,7 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
 
     outsider = create_user(
         "Outsider Staff",
-        f"outsider.{datetime.now(timezone.utc).timestamp()}@local.test",
+        f"outsider.{datetime.now(timezone.utc).timestamp()}@example.com",
         "staff",
         "Engineering",
     )

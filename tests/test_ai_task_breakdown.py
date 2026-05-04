@@ -2,10 +2,11 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
-from app.ai_task_breakdown import breakdown_requirements_locally
+from app.ai_task_breakdown import breakdown_requirements, breakdown_requirements_locally
 from app.database import init_db
 from app.main import app
 from app.repository import create_user
+from app.schemas import TaskBreakdownItem
 from app.settings import settings
 
 
@@ -19,9 +20,9 @@ def _hdr(user_id: int) -> dict:
 def _bootstrap() -> tuple[int, int, int]:
     init_db()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-    admin = create_user("AI Admin", f"ai.admin.{stamp}@local.test", "admin", "PMO")
-    manager = create_user("AI Manager", f"ai.manager.{stamp}@local.test", "manager", "PMO")
-    staff = create_user("AI Staff", f"ai.staff.{stamp}@local.test", "staff", "Engineering")
+    admin = create_user("AI Admin", f"ai.admin.{stamp}@example.com", "admin", "PMO")
+    manager = create_user("AI Manager", f"ai.manager.{stamp}@example.com", "manager", "PMO")
+    staff = create_user("AI Staff", f"ai.staff.{stamp}@example.com", "staff", "Engineering")
     return int(admin["id"]), int(manager["id"]), int(staff["id"])
 
 
@@ -37,6 +38,37 @@ def test_local_breakdown_extracts_actionable_tasks() -> None:
     assert all(item.title for item in items)
     assert {item.difficulty for item in items}.issubset({"easy", "medium", "hard"})
     assert all(1 <= item.story_points <= 13 for item in items)
+
+
+def test_ai_breakdown_uses_fallback_model_when_primary_fails(monkeypatch) -> None:
+    settings.ai_provider = "openai_compatible"
+    settings.ai_api_key = "ollama"
+    settings.ai_model = "qwen3:8b"
+    settings.ai_fallback_model = "qwen2.5:7b"
+    called_models: list[str | None] = []
+
+    def fake_breakdown(text: str, project_context: str | None, max_tasks: int, model: str | None = None):
+        called_models.append(model)
+        if model == "qwen3:8b":
+            raise RuntimeError("primary unavailable")
+        return [
+            TaskBreakdownItem(
+                title="Fallback task",
+                description=text,
+                story_points=3,
+                difficulty="medium",
+                deadline_offset_days=7,
+            )
+        ]
+
+    monkeypatch.setattr("app.ai_task_breakdown._breakdown_with_openai_compatible", fake_breakdown)
+
+    result = breakdown_requirements("Tạo báo cáo KPI", max_tasks=3)
+
+    assert result.source == "openai_compatible"
+    assert result.items[0].title == "Fallback task"
+    assert called_models == ["qwen3:8b", "qwen2.5:7b"]
+    assert any("trying fallback model qwen2.5:7b" in warning for warning in result.warnings)
 
 
 def test_task_breakdown_preview_and_import_flow() -> None:
