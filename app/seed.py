@@ -59,7 +59,11 @@ def seed_data() -> dict:
                     role = "manager" if u == staff_ids[0] else "member"
                     rows.append((p, u, role, joined_at))
             conn.executemany(
-                "INSERT OR IGNORE INTO project_members (project_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)",
+                """
+                INSERT INTO project_members (project_id, user_id, role, joined_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (project_id, user_id) DO NOTHING
+                """,
                 rows,
             )
 

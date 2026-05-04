@@ -18,7 +18,7 @@ This repository now contains a production-like backend foundation for the TeamsW
 ## Tech stack
 - Python 3.12+
 - FastAPI
-- SQLite (runtime default) and PostgreSQL migration scripts
+- PostgreSQL (runtime default) with SQLite compatibility and migration scripts
 - Uvicorn
 - Pytest
 
@@ -135,7 +135,7 @@ pytest -q
 ```
 
 ## Container run
-Build and run with Docker Compose:
+Build and run with Docker Compose (API uses PostgreSQL by default):
 
 ```bash
 docker compose up --build

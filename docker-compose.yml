@@ -5,7 +5,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=${DATABASE_URL:-sqlite:///teamswork.db}
+      - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://teamswork:teamswork@postgres:5432/teamswork}
       - AUTH_DISABLE_JWT_VALIDATION=${AUTH_DISABLE_JWT_VALIDATION:-true}
       - AUTH_ALLOW_HEADER_FALLBACK=${AUTH_ALLOW_HEADER_FALLBACK:-true}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-secret-change-me}
@@ -16,7 +16,8 @@ services:
       - ./:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   postgres:
     image: postgres:16
@@ -30,6 +31,11 @@ services:
       - "5432:5432"
     volumes:
       - teamswork_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teamswork -d teamswork"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   teamswork_pgdata:
