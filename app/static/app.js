@@ -8,6 +8,7 @@ const state = {
   month: new Date().toISOString().slice(0, 7),
   currentSection: 'dashboard',
   charts: {},
+  aiItems: [],
 };
 
 // ── Init ───────────────────────────────────────
@@ -72,6 +73,7 @@ const TITLES = {
   projects:  'Dự án',
   kpi:       'KPI – Chỉ số hiệu suất',
   reports:   'Báo cáo',
+  ai:        'AI – Phân rã yêu cầu thành task',
   teams:     'Tích hợp Microsoft Teams',
   admin:     'Quản trị hệ thống',
 };
@@ -100,6 +102,7 @@ function loadSection(section) {
     case 'projects':  loadProjects();  break;
     case 'kpi':       loadKPI();       break;
     case 'reports':   setupReports();  break;
+    case 'ai':        loadAI();        break;
     case 'teams':     loadTeams();     break;
     case 'admin':     loadAdmin();     break;
   }
@@ -647,6 +650,156 @@ function triggerDownload(url) {
   const a = document.createElement('a');
   a.href = url;
   a.click();
+}
+
+// ════════════════════════════════ AI TASKS ═════
+
+async function loadAI() {
+  await populateAiSelectors();
+  renderAiPreview();
+}
+
+async function populateAiSelectors() {
+  const assignee = document.getElementById('aiAssigneeSelect');
+  const project = document.getElementById('aiProjectSelect');
+  if (!assignee || !project) return;
+
+  if (assignee.options.length === 0) {
+    try {
+      const users = await api('/users');
+      assignee.innerHTML = users.map(u => `<option value="${u.id}">${escHtml(u.full_name)} (${u.role})</option>`).join('');
+    } catch (e) {
+      assignee.innerHTML = `<option value="">Không tải được user</option>`;
+    }
+  }
+
+  if (project.options.length <= 1) {
+    try {
+      const projects = await api('/projects');
+      projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        project.appendChild(opt);
+      });
+    } catch (_) {}
+  }
+}
+
+async function generateAiTasksFromText() {
+  const text = document.getElementById('aiRequirementText').value.trim();
+  const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
+  if (text.length < 10) {
+    toast('Vui lòng nhập requirements dài hơn 10 ký tự', 'error');
+    return;
+  }
+  await generateAiTasks(() => api('/ai/task-breakdown', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, max_tasks: maxTasks }),
+  }));
+}
+
+async function generateAiTasksFromDocx() {
+  const file = document.getElementById('aiDocxFile').files[0];
+  const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
+  if (!file) {
+    toast('Vui lòng chọn file .docx', 'error');
+    return;
+  }
+  const form = new FormData();
+  form.append('file', file);
+  form.append('max_tasks', String(maxTasks));
+  await generateAiTasks(() => api('/ai/task-breakdown/docx', {
+    method: 'POST',
+    body: form,
+  }));
+}
+
+async function generateAiTasks(loader) {
+  const preview = document.getElementById('aiTaskPreview');
+  preview.innerHTML = '<div class="skeleton" style="height:160px"></div>';
+  try {
+    const result = await loader();
+    state.aiItems = result.items || [];
+    document.getElementById('aiPreviewMeta').textContent = `${state.aiItems.length} task · nguồn: ${result.source}`;
+    document.getElementById('aiWarnings').textContent = (result.warnings || []).join(' ');
+    renderAiPreview();
+    toast('Đã tạo danh sách task đề xuất', 'success');
+  } catch (e) {
+    preview.innerHTML = `<div class="empty-state"><div>⚠️</div>${escHtml(e.message)}</div>`;
+    toast(e.message, 'error');
+  }
+}
+
+function renderAiPreview() {
+  const el = document.getElementById('aiTaskPreview');
+  if (!el) return;
+  if (!state.aiItems.length) {
+    el.innerHTML = `<div class="empty-state"><div>AI</div>Dán requirements hoặc upload .docx để tạo task đề xuất</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <table class="kpi-table ai-task-table">
+      <thead>
+        <tr>
+          <th>Chọn</th><th>Task</th><th>Độ khó</th><th>SP</th><th>Deadline</th><th>Lý do</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${state.aiItems.map((item, i) => `
+          <tr>
+            <td><input type="checkbox" ${item.selected !== false ? 'checked' : ''} onchange="toggleAiTask(${i}, this.checked)" /></td>
+            <td>
+              <strong>${escHtml(item.title)}</strong>
+              <div class="text-sm text-muted">${escHtml(item.description || '')}</div>
+            </td>
+            <td><span class="badge badge-${item.difficulty}">${diffLabel(item.difficulty)}</span></td>
+            <td>${item.story_points}</td>
+            <td>+${item.deadline_offset_days} ngày</td>
+            <td class="text-sm text-muted">${escHtml(item.rationale || '')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function toggleAiTask(index, checked) {
+  if (state.aiItems[index]) {
+    state.aiItems[index] = { ...state.aiItems[index], selected: checked };
+  }
+}
+
+async function importSelectedAiTasks() {
+  const selected = state.aiItems.filter(item => item.selected !== false);
+  const assigneeId = Number(document.getElementById('aiAssigneeSelect').value);
+  const projectRaw = document.getElementById('aiProjectSelect').value;
+  if (!selected.length) {
+    toast('Chưa chọn task nào để import', 'error');
+    return;
+  }
+  if (!assigneeId) {
+    toast('Vui lòng chọn người phụ trách', 'error');
+    return;
+  }
+  try {
+    const result = await api('/ai/task-breakdown/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assignee_id: assigneeId,
+        project_id: projectRaw ? Number(projectRaw) : null,
+        sprint_id: null,
+        items: selected,
+      }),
+    });
+    toast(`Đã import ${result.created_count} task vào Kanban`, 'success');
+    state.aiItems = [];
+    renderAiPreview();
+    document.getElementById('aiPreviewMeta').textContent = 'Đã import xong';
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 // ════════════════════════════════ TEAMS ════════
