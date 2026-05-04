@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routers import auth, kpi, monitoring, org, reports, sprints, tasks, teams, users
+from app.routers import ai, auth, kpi, monitoring, org, reports, sprints, tasks, teams, users
 
 
 @asynccontextmanager
@@ -35,6 +35,7 @@ def root_redirect() -> RedirectResponse:
 
 # ── Routers ────────────────────────────────────────────────────────────────────
 app.include_router(monitoring.router)
+app.include_router(ai.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(org.router)

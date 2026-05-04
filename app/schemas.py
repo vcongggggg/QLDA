@@ -303,3 +303,38 @@ class PlanCompletionOut(BaseModel):
     completed_items: int
     completion_percent: float
     items: list[dict]
+
+
+class TaskBreakdownRequest(BaseModel):
+    text: str = Field(min_length=10, max_length=50000)
+    project_context: str | None = Field(default=None, max_length=2000)
+    max_tasks: int = Field(default=8, ge=1, le=30)
+
+
+class TaskBreakdownItem(BaseModel):
+    title: str = Field(min_length=2, max_length=200)
+    description: str | None = Field(default=None, max_length=1200)
+    story_points: int = Field(default=3, ge=1, le=13)
+    difficulty: str = Field(default="medium", description="easy|medium|hard")
+    deadline_offset_days: int = Field(default=7, ge=1, le=90)
+    rationale: str | None = Field(default=None, max_length=500)
+    selected: bool = True
+
+
+class TaskBreakdownResponse(BaseModel):
+    source: str
+    items: list[TaskBreakdownItem]
+    warnings: list[str] = []
+
+
+class TaskImportRequest(BaseModel):
+    assignee_id: int
+    project_id: int | None = None
+    sprint_id: int | None = None
+    base_deadline: datetime | None = None
+    items: list[TaskBreakdownItem] = Field(min_length=1, max_length=30)
+
+
+class TaskImportResponse(BaseModel):
+    created_count: int
+    tasks: list[TaskOut]

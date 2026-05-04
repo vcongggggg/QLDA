@@ -39,6 +39,9 @@ Thumbs.db
 # Temp / extracted junk
 _extracted/
 *.log
+teams-app-package.zip
+ecc_guide.md
+everything-claude-code/
 
 # PM / báo cáo / backlog / dự toán — không cần để chạy ứng dụng (giữ bản local nếu cần)
 *.docx

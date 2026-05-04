@@ -39,24 +39,6 @@
       "scopes": ["personal"]
     }
   ],
-  "bots": [
-    {
-      "botId": "REPLACE_WITH_BOT_APP_ID",
-      "scopes": ["personal"],
-      "supportsFiles": false,
-      "isNotificationOnly": false,
-      "commandLists": [
-        {
-          "scopes": ["personal"],
-          "commands": [
-            { "title": "help", "description": "Xem danh sách lệnh" },
-            { "title": "kpi-me", "description": "Xem KPI tháng này của tôi" },
-            { "title": "my-deadlines", "description": "Xem deadline sắp tới" }
-          ]
-        }
-      ]
-    }
-  ],
   "permissions": ["identity", "messageTeamMembers"],
   "validDomains": ["REPLACE_WITH_PUBLIC_HOST"],
   "webApplicationInfo": {

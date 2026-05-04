@@ -37,6 +37,10 @@
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
       <span>Báo cáo</span>
     </a>
+    <a class="nav-item" data-section="ai" onclick="navigate('ai')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"/></svg>
+      <span>AI Tasks</span>
+    </a>
     <a class="nav-item" data-section="teams" onclick="navigate('teams')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
       <span>Teams</span>
@@ -240,6 +244,65 @@
       </div>
     </section>
 
+    <!-- ─── AI TASK BREAKDOWN ─── -->
+    <section id="sec-ai" class="section hidden">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-header">
+            <h3>AI phân rã yêu cầu thành task</h3>
+            <span class="tag">ECC workflow: preview trước, import sau</span>
+          </div>
+          <div class="form-stack">
+            <label class="field-label">Nội dung requirements / mô tả từ tài liệu</label>
+            <textarea id="aiRequirementText" class="textarea" rows="10" placeholder="Ví dụ: Hệ thống cần cho phép manager tạo task, kéo thả Kanban, tự động tính KPI và xuất báo cáo..."></textarea>
+            <div class="inline-fields">
+              <div>
+                <label class="field-label">Số task tối đa</label>
+                <input id="aiMaxTasks" class="input" type="number" min="1" max="30" value="8" />
+              </div>
+              <div>
+                <label class="field-label">File .docx</label>
+                <input id="aiDocxFile" class="input" type="file" accept=".docx" />
+              </div>
+            </div>
+            <div class="action-row">
+              <button class="btn btn-primary" onclick="generateAiTasksFromText()">Tạo task từ nội dung</button>
+              <button class="btn btn-outline" onclick="generateAiTasksFromDocx()">Tạo task từ .docx</button>
+            </div>
+            <div id="aiWarnings" class="text-sm text-muted"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Import vào Kanban</h3></div>
+          <div class="form-stack">
+            <div class="inline-fields">
+              <div>
+                <label class="field-label">Người phụ trách</label>
+                <select id="aiAssigneeSelect" class="select"></select>
+              </div>
+              <div>
+                <label class="field-label">Dự án</label>
+                <select id="aiProjectSelect" class="select">
+                  <option value="">Không gắn dự án</option>
+                </select>
+              </div>
+            </div>
+            <p class="text-sm text-muted">Task được import sẽ vào trạng thái <code>todo</code>; deadline tính từ hôm nay theo số ngày AI đề xuất.</p>
+            <button class="btn btn-primary" onclick="importSelectedAiTasks()">Import task đã chọn</button>
+          </div>
+        </div>
+      </div>
+      <div class="card mt-16">
+        <div class="card-header">
+          <h3>Danh sách task đề xuất</h3>
+          <span id="aiPreviewMeta" class="tag">Chưa có dữ liệu</span>
+        </div>
+        <div id="aiTaskPreview">
+          <div class="empty-state"><div>AI</div>Dán requirements hoặc upload .docx để tạo task đề xuất</div>
+        </div>
+      </div>
+    </section>
+
     <!-- ─── TEAMS ─── -->
     <section id="sec-teams" class="section hidden">
       <div class="two-col">
@@ -279,9 +342,9 @@
         <div class="card-header"><h3>📋 Hướng dẫn triển khai</h3></div>
         <div class="deploy-steps">
           <div class="step"><span class="step-num">1</span><div><strong>Expose HTTPS</strong> – Dùng ngrok hoặc Azure App Service để có URL công khai</div></div>
-          <div class="step"><span class="step-num">2</span><div><strong>Cập nhật manifest.json</strong> – Thay <code>REPLACE_WITH_PUBLIC_HOST</code> bằng hostname thực tế</div></div>
+          <div class="step"><span class="step-num">2</span><div><strong>Cập nhật manifest.json</strong> – Đồng bộ hostname, <code>validDomains</code> và <code>webApplicationInfo</code> với Azure</div></div>
           <div class="step"><span class="step-num">3</span><div><strong>Tạo Azure AD App</strong> – Đăng ký App Registration, lấy Client ID và Secret</div></div>
-          <div class="step"><span class="step-num">4</span><div><strong>Cập nhật .env</strong> – Điền <code>TEAMS_CLIENT_ID</code>, <code>TEAMS_TENANT_ID</code>, <code>APP_BASE_URL</code></div></div>
+          <div class="step"><span class="step-num">4</span><div><strong>Cập nhật .env</strong> – Điền <code>APP_BASE_URL</code>, <code>TEAMS_CLIENT_ID</code>, <code>TEAMS_TENANT_ID</code>, <code>TEAMS_CLIENT_SECRET</code></div></div>
           <div class="step"><span class="step-num">5</span><div><strong>Upload lên Teams</strong> – Zip thư mục <code>teams-app/</code> và upload qua Developer Portal</div></div>
         </div>
       </div>
