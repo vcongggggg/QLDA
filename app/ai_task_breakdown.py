@@ -95,23 +95,31 @@ def breakdown_requirements(text: str, project_context: str | None = None, max_ta
     warnings: list[str] = []
     if settings.ai_provider == "openai_compatible" and settings.ai_api_key:
         last_exc: Exception | None = None
-        for attempt in range(1, 4):
-            try:
-                items = _breakdown_with_openai_compatible(text, project_context, max_tasks)
-                if items:
-                    return BreakdownResult(source="openai_compatible", items=items, warnings=warnings)
-                warnings.append("AI provider returned no tasks; used local fallback.")
-                break
-            except httpx.HTTPStatusError as exc:
-                last_exc = exc
-                if exc.response.status_code == 429 and attempt < 3:
-                    warnings.append(f"Rate limit (attempt {attempt}/3), retrying in {attempt * 3}s...")
-                    time.sleep(attempt * 3)
-                    continue
-                break
-            except Exception as exc:  # noqa: BLE001 - fallback must be robust for demos
-                last_exc = exc
-                break
+        models = [settings.ai_model]
+        if settings.ai_fallback_model and settings.ai_fallback_model not in models:
+            models.append(settings.ai_fallback_model)
+
+        for model_index, model in enumerate(models):
+            for attempt in range(1, 4):
+                try:
+                    items = _breakdown_with_openai_compatible(text, project_context, max_tasks, model=model)
+                    if items:
+                        return BreakdownResult(source="openai_compatible", items=items, warnings=warnings)
+                    warnings.append(f"AI model {model} returned no tasks.")
+                    break
+                except httpx.HTTPStatusError as exc:
+                    last_exc = exc
+                    if exc.response.status_code == 429 and attempt < 3:
+                        warnings.append(f"Rate limit on {model} (attempt {attempt}/3), retrying in {attempt * 3}s...")
+                        time.sleep(attempt * 3)
+                        continue
+                    break
+                except Exception as exc:  # noqa: BLE001 - fallback must be robust for demos
+                    last_exc = exc
+                    break
+            if model_index < len(models) - 1:
+                warnings.append(f"AI model {model} failed; trying fallback model {models[-1]}.")
+                continue
         if last_exc is not None:
             warnings.append(f"AI provider failed; used local fallback: {last_exc}")
     else:
@@ -123,6 +131,7 @@ def _breakdown_with_openai_compatible(
     text: str,
     project_context: str | None,
     max_tasks: int,
+    model: str | None = None,
 ) -> list[TaskBreakdownItem]:
     base_url = settings.ai_base_url.rstrip("/")
     prompt = {
@@ -146,7 +155,7 @@ def _breakdown_with_openai_compatible(
                 "Content-Type": "application/json",
             },
             json={
-                "model": settings.ai_model,
+                "model": model or settings.ai_model,
                 "messages": [prompt, {"role": "user", "content": json.dumps(user_content, ensure_ascii=False)}],
                 "temperature": 0.2,
                 "response_format": {"type": "json_object"},

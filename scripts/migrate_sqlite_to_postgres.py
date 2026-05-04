@@ -58,6 +58,20 @@ def copy_table(pg_conn, sqlite_path: Path, table: str) -> int:
     return len(rows)
 
 
+def sync_table_sequence(pg_conn, table: str) -> None:
+    with pg_conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT setval(
+                pg_get_serial_sequence('{table}', 'id'),
+                COALESCE(MAX(id), 1),
+                COALESCE(MAX(id) IS NOT NULL, FALSE)
+            )
+            FROM {table}
+            """
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate TeamsWork data from SQLite to PostgreSQL")
     parser.add_argument("--sqlite", default="teamswork.db", help="Path to SQLite DB file")
@@ -74,6 +88,7 @@ def main() -> None:
         for table in TABLES_IN_ORDER:
             try:
                 copied = copy_table(pg_conn, sqlite_path, table)
+                sync_table_sequence(pg_conn, table)
                 total += copied
                 print(f"{table}: copied {copied} rows")
             except Exception as exc:

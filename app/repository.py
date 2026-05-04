@@ -54,7 +54,7 @@ def upsert_user_from_aad(aad_object_id: str, display_name: str | None, email: st
             row = conn.execute("SELECT * FROM users WHERE id = ?", (existing["id"],)).fetchone()
         return dict(row)
 
-    safe_email = email or f"{aad_object_id}@aad.local"
+    safe_email = email or f"{aad_object_id}@aad.example.com"
     safe_name = display_name or "Teams User"
     return create_user(
         full_name=safe_name,

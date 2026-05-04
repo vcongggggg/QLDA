@@ -38,9 +38,10 @@ class Settings:
     teams_bot_app_secret: str = os.getenv("TEAMS_BOT_APP_SECRET", "")
 
     ai_provider: str = os.getenv("AI_PROVIDER", "openai_compatible")
-    ai_api_key: str = os.getenv("AI_API_KEY", "")
-    ai_base_url: str = os.getenv("AI_BASE_URL", "https://api.openai.com/v1")
-    ai_model: str = os.getenv("AI_MODEL", "gpt-4o-mini")
+    ai_api_key: str = os.getenv("AI_API_KEY", "ollama")
+    ai_base_url: str = os.getenv("AI_BASE_URL", "http://localhost:11434/v1")
+    ai_model: str = os.getenv("AI_MODEL", "qwen3:8b")
+    ai_fallback_model: str = os.getenv("AI_FALLBACK_MODEL", "qwen2.5:7b")
     ai_task_breakdown_timeout_seconds: float = float(os.getenv("AI_TASK_BREAKDOWN_TIMEOUT_SECONDS", "20"))
 
 
