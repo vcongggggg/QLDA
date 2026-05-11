@@ -49,16 +49,27 @@ function toast(msg, type = 'info') {
 }
 
 // ── User ───────────────────────────────────────
+function setCurrentUserDisplay({ name, role, avatar }) {
+  document.getElementById('userName').textContent = name;
+  document.getElementById('userRole').textContent = role;
+  document.getElementById('userAvatar').textContent = avatar;
+}
+
 async function loadCurrentUser() {
   try {
-    const users = await api('/users');
-    const me = users.find(u => String(u.id) === String(state.userId));
-    if (me) {
-      document.getElementById('userName').textContent = me.full_name;
-      document.getElementById('userRole').textContent = me.role;
-      document.getElementById('userAvatar').textContent = me.full_name.charAt(0).toUpperCase();
-    }
-  } catch (_) {}
+    const me = await api('/users/me');
+    setCurrentUserDisplay({
+      name: me.full_name,
+      role: me.role,
+      avatar: me.full_name.charAt(0).toUpperCase(),
+    });
+  } catch (_) {
+    setCurrentUserDisplay({
+      name: `User ${state.userId}`,
+      role: 'Unknown',
+      avatar: 'U',
+    });
+  }
 }
 
 function changeUserId(val) {

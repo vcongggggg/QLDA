@@ -21,6 +21,11 @@ def create_user_endpoint(payload: UserCreate, current_user: dict = Depends(get_c
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/users/me", response_model=UserOut)
+def get_current_user_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    return current_user
+
+
 @router.get("/users", response_model=list[UserOut])
 def list_users_endpoint(current_user: dict = Depends(get_current_user)) -> list[dict]:
     require_roles(current_user, {"admin", "manager", "hr"})

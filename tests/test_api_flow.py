@@ -332,6 +332,28 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
     assert "commands" in bot_help.json().get("text", "")
 
 
+def test_users_me_rbac_for_all_roles_and_users_list_unchanged() -> None:
+    init_db()
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
+    admin = create_user("Admin Me", f"admin.me.{ts}@example.com", "admin", "IT")
+    manager = create_user("Manager Me", f"manager.me.{ts}@example.com", "manager", "PMO")
+    staff = create_user("Staff Me", f"staff.me.{ts}@example.com", "staff", "Engineering")
+    hr = create_user("HR Me", f"hr.me.{ts}@example.com", "hr", "People")
+
+    for user in (admin, manager, staff, hr):
+        resp = client.get("/users/me", headers=_hdr(int(user["id"])))
+        assert resp.status_code == 200
+        assert resp.json()["id"] == user["id"]
+        assert resp.json()["role"] == user["role"]
+
+    staff_users_resp = client.get("/users", headers=_hdr(int(staff["id"])))
+    assert staff_users_resp.status_code == 403
+
+    for user in (admin, manager, hr):
+        resp = client.get("/users", headers=_hdr(int(user["id"])))
+        assert resp.status_code == 200
+
+
 def test_issue_jwt_and_call_authorized_endpoint() -> None:
     admin_id, _, _ = _bootstrap_users()
     settings.auth_disable_jwt_validation = False
