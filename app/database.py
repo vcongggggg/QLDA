@@ -88,6 +88,17 @@ _SQLITE_SCHEMA_STATEMENTS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS task_comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL,
+        author_user_id INTEGER NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (task_id) REFERENCES tasks(id),
+        FOREIGN KEY (author_user_id) REFERENCES users(id)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS sprint_capacity_plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sprint_id INTEGER NOT NULL,
@@ -259,6 +270,15 @@ _POSTGRES_SCHEMA_STATEMENTS = [
         completed_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS task_comments (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL REFERENCES tasks(id),
+        author_user_id INTEGER NOT NULL REFERENCES users(id),
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
     )
     """,
     """

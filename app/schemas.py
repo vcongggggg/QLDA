@@ -33,6 +33,19 @@ class TaskStatusUpdate(BaseModel):
     status: str = Field(description="todo|doing|done")
 
 
+class TaskCommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class TaskCommentOut(BaseModel):
+    id: int
+    task_id: int
+    author_user_id: int
+    author_name: str | None = None
+    body: str
+    created_at: datetime
+
+
 class TaskOut(BaseModel):
     id: int
     title: str
@@ -47,6 +60,15 @@ class TaskOut(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class TaskDetailOut(TaskOut):
+    assignee_name: str | None = None
+    project_name: str | None = None
+    sprint_name: str | None = None
+    due_state: str
+    comments: list[TaskCommentOut]
+    activity_logs: list["AuditLogOut"]
 
 
 class KPIUserResult(BaseModel):

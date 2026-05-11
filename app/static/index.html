@@ -378,6 +378,20 @@
   </main>
 </div>
 
+<!-- Task detail drawer -->
+<div id="taskDetailOverlay" class="drawer-overlay hidden" onclick="if(event.target===this) closeTaskDetail()">
+  <aside class="task-detail-drawer" aria-label="Task detail drawer">
+    <div class="task-detail-header">
+      <div>
+        <div class="task-detail-kicker">Chi tiết công việc</div>
+        <strong>Task Detail</strong>
+      </div>
+      <button type="button" class="drawer-close" onclick="closeTaskDetail()" aria-label="Đóng">×</button>
+    </div>
+    <div id="taskDetailBody" class="task-detail-body"></div>
+  </aside>
+</div>
+
 <!-- Toast notification -->
 <div id="toast" class="toast hidden"></div>
 

@@ -71,6 +71,12 @@ def list_users() -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def count_users() -> int:
+    with get_connection() as conn:
+        row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
+    return int(row[0] if row else 0)
+
+
 def user_exists(user_id: int) -> bool:
     with get_connection() as conn:
         row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -146,6 +152,78 @@ def get_task_by_id(task_id: int) -> dict[str, Any] | None:
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     return dict(row) if row else None
+
+
+def get_task_detail_by_id(task_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                t.*,
+                u.full_name AS assignee_name,
+                p.name AS project_name,
+                s.name AS sprint_name
+            FROM tasks t
+            JOIN users u ON u.id = t.assignee_id
+            LEFT JOIN projects p ON p.id = t.project_id
+            LEFT JOIN sprints s ON s.id = t.sprint_id
+            WHERE t.id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_task_comment(task_id: int, author_user_id: int, body: str) -> dict[str, Any]:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO task_comments (task_id, author_user_id, body, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (task_id, author_user_id, body, _now_iso()),
+        )
+        row = conn.execute(
+            """
+            SELECT tc.*, u.full_name AS author_name
+            FROM task_comments tc
+            JOIN users u ON u.id = tc.author_user_id
+            WHERE tc.id = ?
+            """,
+            (cursor.lastrowid,),
+        ).fetchone()
+    return dict(row)
+
+
+def list_task_comments(task_id: int) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT tc.*, u.full_name AS author_name
+            FROM task_comments tc
+            JOIN users u ON u.id = tc.author_user_id
+            WHERE tc.task_id = ?
+            ORDER BY tc.id ASC
+            """,
+            (task_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_task_activity_logs(task_id: int, limit: int = 100) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT al.*, u.full_name AS actor_name
+            FROM audit_logs al
+            LEFT JOIN users u ON u.id = al.actor_user_id
+            WHERE al.entity = 'task' AND al.entity_id = ?
+            ORDER BY al.id DESC
+            LIMIT ?
+            """,
+            (task_id, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def all_tasks_with_users() -> list[dict[str, Any]]:
