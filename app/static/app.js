@@ -11,6 +11,7 @@ const state = {
   aiItems: [],
   activeTaskId: null,
   draggingTaskId: null,
+  notificationsOpen: false,
 };
 
 // ── Init ───────────────────────────────────────
@@ -20,8 +21,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('userIdInput').value = state.userId;
   loadCurrentUser();
+  loadNotificationCount();
   initKanbanDragDrop();
   navigate('dashboard');
+
+  document.addEventListener('click', (e) => {
+    const wrap = document.querySelector('.notification-wrap');
+    if (state.notificationsOpen && wrap && !wrap.contains(e.target)) {
+      closeNotificationPanel();
+    }
+  });
 });
 
 // ── API Helper ─────────────────────────────────
@@ -76,6 +85,8 @@ function changeUserId(val) {
   state.userId = String(val);
   localStorage.setItem('tw_uid', state.userId);
   loadCurrentUser();
+  loadNotificationCount();
+  closeNotificationPanel();
   refreshCurrent();
 }
 
@@ -131,6 +142,101 @@ function onMonthChange(val) {
 
 function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
+}
+
+async function loadNotificationCount() {
+  const badge = document.getElementById('notificationCount');
+  if (!badge) return;
+  try {
+    const result = await api('/notifications/unread-count');
+    const count = Number(result.unread_count || 0);
+    badge.textContent = String(count);
+    badge.classList.toggle('hidden', count === 0);
+  } catch (_) {
+    badge.classList.add('hidden');
+  }
+}
+
+async function toggleNotificationPanel(event) {
+  if (event) event.stopPropagation();
+  if (state.notificationsOpen) {
+    closeNotificationPanel();
+    return;
+  }
+  state.notificationsOpen = true;
+  const panel = document.getElementById('notificationPanel');
+  if (panel) panel.classList.remove('hidden');
+  await loadNotifications();
+}
+
+function closeNotificationPanel() {
+  state.notificationsOpen = false;
+  const panel = document.getElementById('notificationPanel');
+  if (panel) panel.classList.add('hidden');
+}
+
+async function loadNotifications() {
+  const list = document.getElementById('notificationList');
+  if (!list) return;
+  list.innerHTML = '<div class="skeleton" style="height:80px"></div>';
+  try {
+    const rows = await api('/notifications?limit=20');
+    if (!rows.length) {
+      list.innerHTML = '<div class="empty-state compact">No notifications</div>';
+      return;
+    }
+    list.innerHTML = rows.map(notificationItem).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+function notificationItem(n) {
+  const taskAction = n.entity_type === 'task'
+    ? `<button type="button" class="btn-mini" onclick="event.stopPropagation();openNotificationTask(${n.id}, ${n.entity_id})">View task</button>`
+    : '';
+  const readAction = n.is_read
+    ? ''
+    : `<button type="button" class="btn-mini" onclick="event.stopPropagation();markNotificationRead(${n.id})">Mark read</button>`;
+  return `
+    <div class="notification-item ${n.is_read ? '' : 'unread'}" onclick="openNotificationTask(${n.id}, ${n.entity_id})">
+      <div class="notification-item-head">
+        <strong>${escHtml(n.title)}</strong>
+        <time>${fmtDateTime(n.created_at)}</time>
+      </div>
+      <div class="notification-message">${escHtml(n.message)}</div>
+      <div class="notification-actions">
+        <span class="text-sm text-muted">${escHtml(n.entity_type)} #${n.entity_id}</span>
+        <span>${taskAction}${readAction}</span>
+      </div>
+    </div>`;
+}
+
+async function markNotificationRead(notificationId) {
+  try {
+    await api(`/notifications/${notificationId}/read`, { method: 'PATCH' });
+    await Promise.all([loadNotificationCount(), loadNotifications()]);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function markAllNotificationsRead() {
+  try {
+    await api('/notifications/read-all', { method: 'PATCH' });
+    await Promise.all([loadNotificationCount(), loadNotifications()]);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function openNotificationTask(notificationId, taskId) {
+  try {
+    await api(`/notifications/${notificationId}/read`, { method: 'PATCH' });
+  } catch (_) {}
+  closeNotificationPanel();
+  await loadNotificationCount();
+  openTaskDetail(Number(taskId));
 }
 
 // ════════════════════════════════ DASHBOARD ════
@@ -470,6 +576,7 @@ async function updateTaskStatus(taskId, newStatus, { silent = false } = {}) {
   if (state.currentSection === 'kanban') {
     loadKanban();
   }
+  loadNotificationCount();
 }
 
 async function moveTask(taskId, newStatus) {
@@ -602,6 +709,7 @@ async function submitTaskComment() {
     });
     toast('Đã thêm comment', 'success');
     openTaskDetail(state.activeTaskId);
+    loadNotificationCount();
   } catch (e) {
     toast(e.message, 'error');
   }

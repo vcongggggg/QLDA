@@ -226,6 +226,111 @@ def list_task_activity_logs(task_id: int, limit: int = 100) -> list[dict[str, An
     return [dict(r) for r in rows]
 
 
+def create_app_notification(
+    user_id: int,
+    notification_type: str,
+    title: str,
+    message: str,
+    entity_type: str,
+    entity_id: int,
+) -> dict[str, Any]:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO app_notifications
+            (user_id, type, title, message, entity_type, entity_id, is_read, created_at, read_at)
+            VALUES (?, ?, ?, ?, ?, ?, FALSE, ?, NULL)
+            """,
+            (user_id, notification_type, title, message, entity_type, entity_id, _now_iso()),
+        )
+        row = conn.execute("SELECT * FROM app_notifications WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return dict(row)
+
+
+def list_app_notifications(user_id: int, unread_only: bool = False, limit: int = 50) -> list[dict[str, Any]]:
+    query = "SELECT * FROM app_notifications WHERE user_id = ?"
+    params: list[Any] = [user_id]
+    if unread_only:
+        query += " AND is_read = FALSE"
+    query += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    with get_connection() as conn:
+        rows = conn.execute(query, tuple(params)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_app_notification_read(notification_id: int, user_id: int) -> dict[str, Any] | None:
+    now = _now_iso()
+    with get_connection() as conn:
+        existing = conn.execute(
+            "SELECT id FROM app_notifications WHERE id = ? AND user_id = ?",
+            (notification_id, user_id),
+        ).fetchone()
+        if not existing:
+            return None
+        conn.execute(
+            """
+            UPDATE app_notifications
+            SET is_read = TRUE,
+                read_at = COALESCE(read_at, ?)
+            WHERE id = ? AND user_id = ?
+            """,
+            (now, notification_id, user_id),
+        )
+        row = conn.execute("SELECT * FROM app_notifications WHERE id = ?", (notification_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def mark_all_app_notifications_read(user_id: int) -> int:
+    now = _now_iso()
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE app_notifications
+            SET is_read = TRUE,
+                read_at = COALESCE(read_at, ?)
+            WHERE user_id = ? AND is_read = FALSE
+            """,
+            (now, user_id),
+        )
+    return int(cursor.rowcount)
+
+
+def count_unread_app_notifications(user_id: int) -> int:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM app_notifications WHERE user_id = ? AND is_read = FALSE",
+            (user_id,),
+        ).fetchone()
+    return int(row["c"] if row else 0)
+
+
+def notification_exists_for_event(
+    user_id: int,
+    notification_type: str,
+    entity_type: str,
+    entity_id: int,
+    window_start_iso: str,
+    window_end_iso: str,
+) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM app_notifications
+            WHERE user_id = ?
+              AND type = ?
+              AND entity_type = ?
+              AND entity_id = ?
+              AND created_at >= ?
+              AND created_at < ?
+            LIMIT 1
+            """,
+            (user_id, notification_type, entity_type, entity_id, window_start_iso, window_end_iso),
+        ).fetchone()
+    return row is not None
+
+
 def all_tasks_with_users() -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(

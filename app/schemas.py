@@ -313,6 +313,33 @@ class NotificationQueueOut(BaseModel):
     sent_at: datetime | None = None
 
 
+class AppNotificationOut(BaseModel):
+    id: int
+    user_id: int
+    type: str
+    title: str
+    message: str
+    entity_type: str
+    entity_id: int
+    is_read: bool
+    created_at: datetime
+    read_at: datetime | None = None
+
+
+class UnreadNotificationCountOut(BaseModel):
+    unread_count: int
+
+
+class MarkAllReadOut(BaseModel):
+    updated: int
+
+
+class TaskReminderRunOut(BaseModel):
+    due_soon_created: int
+    overdue_created: int
+    skipped_duplicates: int
+
+
 class QueueProcessOut(BaseModel):
     processed: int
     sent: int

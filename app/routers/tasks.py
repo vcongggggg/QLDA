@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import get_current_user, require_roles
 from app.repository import (
     create_audit_log,
+    create_app_notification,
     create_task,
     create_task_comment,
     get_task_by_id,
     get_task_detail_by_id,
+    get_user_by_id,
     list_task_activity_logs,
     list_task_comments,
     list_tasks,
@@ -52,6 +54,10 @@ def _task_detail_payload(task_id: int) -> dict:
         "comments": list_task_comments(task_id),
         "activity_logs": list_task_activity_logs(task_id),
     }
+
+
+def _status_label(status: str) -> str:
+    return {"todo": "To-do", "doing": "Doing", "done": "Done"}.get(status, status)
 
 
 @router.post("/tasks", response_model=TaskOut)
@@ -118,6 +124,17 @@ def create_task_comment_endpoint(
         raise HTTPException(status_code=400, detail="comment body is required")
     comment = create_task_comment(task_id=task_id, author_user_id=int(current_user["id"]), body=body)
     create_audit_log(current_user["id"], "comment", "task", task_id, f"comment_id={comment['id']}")
+    if int(current_user["id"]) != int(task["assignee_id"]):
+        commenter = get_user_by_id(int(current_user["id"]))
+        commenter_name = commenter["full_name"] if commenter else f"User {current_user['id']}"
+        create_app_notification(
+            user_id=int(task["assignee_id"]),
+            notification_type="task_comment",
+            title="New comment on your task",
+            message=f'{commenter_name} commented on "{task["title"]}"',
+            entity_type="task",
+            entity_id=task_id,
+        )
     return comment
 
 
@@ -137,4 +154,13 @@ def update_task_status_endpoint(
     if row is None:
         raise HTTPException(status_code=404, detail="task not found")
     create_audit_log(current_user["id"], "update_status", "task", task_id, f"status={payload.status}")
+    if task_before["status"] != payload.status:
+        create_app_notification(
+            user_id=int(row["assignee_id"]),
+            notification_type="task_status_changed",
+            title="Task status updated",
+            message=f'"{row["title"]}" moved to {_status_label(payload.status)}',
+            entity_type="task",
+            entity_id=task_id,
+        )
     return row
