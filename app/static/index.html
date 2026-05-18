@@ -77,6 +77,21 @@
     <button class="menu-btn" onclick="toggleSidebar()">☰</button>
     <div class="topbar-title" id="pageTitle">Dashboard</div>
     <div class="topbar-controls">
+      <div class="notification-wrap">
+        <button type="button" class="notification-bell" id="notificationBell" onclick="toggleNotificationPanel(event)" aria-label="Notifications">
+          <span aria-hidden="true">🔔</span>
+          <span id="notificationCount" class="notification-count hidden">0</span>
+        </button>
+        <div id="notificationPanel" class="notification-panel hidden">
+          <div class="notification-panel-head">
+            <strong>Notifications</strong>
+            <button type="button" class="btn btn-outline btn-sm" onclick="markAllNotificationsRead()">Mark all read</button>
+          </div>
+          <div id="notificationList" class="notification-list">
+            <div class="empty-state compact">No notifications</div>
+          </div>
+        </div>
+      </div>
       <div class="month-picker">
         <label>Tháng:</label>
         <input type="month" id="monthPicker" onchange="onMonthChange(this.value)" />

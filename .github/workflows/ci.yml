@@ -27,6 +27,8 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+        env:
+          PYTHONPATH: .
 
       - name: Smoke compile
         run: python -m compileall app scripts

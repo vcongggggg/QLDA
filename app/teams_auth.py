@@ -41,7 +41,7 @@ def _parse_bearer_token(authorization: str | None) -> str:
 def decode_teams_token(token: str) -> dict:
     if settings.teams_disable_jwt_validation:
         # Local dev shortcut for demos where Azure AD is unavailable.
-        return {"sub": "dev-user", "name": "Dev User", "preferred_username": "dev@local"}
+        return {"sub": "dev-user", "name": "Dev User", "preferred_username": "dev@example.com"}
 
     if not settings.teams_client_id:
         raise HTTPException(status_code=500, detail="TEAMS_CLIENT_ID is not configured")
@@ -59,7 +59,7 @@ def decode_teams_token(token: str) -> dict:
             options={"verify_at_hash": False},
         )
     except JWTError as exc:
-        raise HTTPException(status_code=401, detail=f"invalid AAD token: {exc}") from exc
+        raise HTTPException(status_code=401, detail="invalid AAD token") from exc
 
     return claims
 

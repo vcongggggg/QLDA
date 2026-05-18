@@ -175,6 +175,21 @@ _SQLITE_SCHEMA_STATEMENTS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS app_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('task_due_soon','task_overdue','task_comment','task_status_changed')),
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        is_read INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        read_at TEXT,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS audit_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         actor_user_id INTEGER,
@@ -349,6 +364,20 @@ _POSTGRES_SCHEMA_STATEMENTS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS app_notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        type TEXT NOT NULL CHECK(type IN ('task_due_soon','task_overdue','task_comment','task_status_changed')),
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        is_read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TEXT NOT NULL,
+        read_at TEXT
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS audit_logs (
         id SERIAL PRIMARY KEY,
         actor_user_id INTEGER REFERENCES users(id),
@@ -370,6 +399,16 @@ _POSTGRES_SCHEMA_STATEMENTS = [
         created_at TEXT NOT NULL
     )
     """,
+]
+
+_INDEX_STATEMENTS = [
+    "CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status_deadline ON tasks(assignee_id, status, deadline)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_project_status_deadline ON tasks(project_id, status, deadline)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_sprint_status ON tasks(sprint_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_notification_queue_status_retry ON notification_queue(status, next_retry_at)",
+    "CREATE INDEX IF NOT EXISTS idx_app_notifications_user_read_created ON app_notifications(user_id, is_read, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity, entity_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_kpi_adjustments_month_user ON kpi_adjustments(month, user_id)",
 ]
 
 _NO_ROW = object()
@@ -590,6 +629,9 @@ def _normalize_reserved_user_email_domains(conn: DatabaseConnection) -> None:
 def init_db() -> None:
     with get_connection() as conn:
         for statement in _schema_statements(conn.dialect):
+            conn.execute(statement)
+
+        for statement in _INDEX_STATEMENTS:
             conn.execute(statement)
 
         user_cols = _table_columns(conn, "users")

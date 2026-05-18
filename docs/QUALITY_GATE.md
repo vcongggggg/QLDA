@@ -1,5 +1,11 @@
 # Quality Gate cho TeamsWork
 
+Codex baseline:
+
+- UI changes must follow `DESIGN.md`.
+- Code, RBAC, KPI, AI import, Teams, and security changes must follow `AGENTS.md`.
+- `pytest -q` must be scoped by `pytest.ini` to the TeamsWork `tests/` directory so vendored/local folders such as `everything-claude-code/` are not collected.
+
 Checklist này dùng trước khi merge, demo hoặc nộp bài. Mục tiêu là bắt lỗi ở các vùng rủi ro: KPI, RBAC/auth, AI task generation, Teams integration, report export và security.
 
 ## 1. Test Commands
