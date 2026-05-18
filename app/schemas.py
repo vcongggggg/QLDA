@@ -347,6 +347,21 @@ class QueueProcessOut(BaseModel):
     failed: int
 
 
+class TeamsQueueStatsOut(BaseModel):
+    queued: int
+    sent: int
+    failed: int
+
+
+class TeamsSummaryOut(BaseModel):
+    month: str
+    dashboard: DashboardSummary
+    kpi: list[KPIUserResult]
+    tasks: list[TaskOut]
+    can_manage_queue: bool
+    queue_stats: TeamsQueueStatsOut | None = None
+
+
 class PlanCompletionOut(BaseModel):
     total_items: int
     completed_items: int
