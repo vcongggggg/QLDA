@@ -22,6 +22,17 @@ curl http://localhost:8000/health
 curl http://localhost:8000/monitoring/readiness
 ```
 
+Smoke checklist before pilot:
+
+- `GET /health` returns `ok`.
+- `GET /monitoring/readiness` returns `ready`.
+- Protected endpoints reject missing auth in production mode.
+- `GET /teams/tab` and `GET /teams/tab/prod` render HTML.
+- `GET /integrations/teams/summary?month=YYYY-MM` returns task/KPI data for the current user.
+- `POST /integrations/teams/aad/sync` works from the Teams tab.
+- Notification queue can be listed, processed, and failed items can be requeued by `admin`, `manager`, or `hr`.
+- KPI, project progress, sprint review, and portfolio reports download with the expected content type.
+
 ## 5. Authentication Hardening Validation
 - Confirm `AUTH_DISABLE_JWT_VALIDATION=false`.
 - Confirm `AUTH_ALLOW_HEADER_FALLBACK=false`.

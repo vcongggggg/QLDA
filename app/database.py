@@ -401,6 +401,16 @@ _POSTGRES_SCHEMA_STATEMENTS = [
     """,
 ]
 
+_INDEX_STATEMENTS = [
+    "CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status_deadline ON tasks(assignee_id, status, deadline)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_project_status_deadline ON tasks(project_id, status, deadline)",
+    "CREATE INDEX IF NOT EXISTS idx_tasks_sprint_status ON tasks(sprint_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_notification_queue_status_retry ON notification_queue(status, next_retry_at)",
+    "CREATE INDEX IF NOT EXISTS idx_app_notifications_user_read_created ON app_notifications(user_id, is_read, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity, entity_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_kpi_adjustments_month_user ON kpi_adjustments(month, user_id)",
+]
+
 _NO_ROW = object()
 
 
@@ -619,6 +629,9 @@ def _normalize_reserved_user_email_domains(conn: DatabaseConnection) -> None:
 def init_db() -> None:
     with get_connection() as conn:
         for statement in _schema_statements(conn.dialect):
+            conn.execute(statement)
+
+        for statement in _INDEX_STATEMENTS:
             conn.execute(statement)
 
         user_cols = _table_columns(conn, "users")

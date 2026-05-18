@@ -14,6 +14,12 @@ TeamsWork la ung dung quan ly cong viec, KPI va du an noi bo, co API FastAPI, gi
 - Import task AI da chon vao Kanban.
 - SQLite cho dev local, PostgreSQL cho docker/production-like.
 
+## Quy uoc phat trien
+
+- UI thay doi theo `DESIGN.md`.
+- Backend, RBAC, KPI, Teams, AI import va security thay doi theo `AGENTS.md`.
+- Quality gate mac dinh la `pytest -q`; `pytest.ini` chi collect test trong `tests/`.
+
 ## Stack
 
 - Python 3.12+
@@ -145,6 +151,7 @@ Da co scaffold tich hop Teams:
 - Reminder runner: `POST /integrations/teams/reminders/run`
 - Bot callback: `POST /integrations/teams/bot/messages`
 - Proactive queue: `POST /integrations/teams/proactive/queue`
+- Teams tab summary: `GET /integrations/teams/summary?month=YYYY-MM`
 - Queue processor: `POST /integrations/teams/proactive/process`
 - Requeue failed item: `POST /integrations/teams/proactive/requeue/{notification_id}`
 
