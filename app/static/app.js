@@ -14,6 +14,10 @@ const state = {
   notificationsOpen: false,
 };
 
+function icon(name, className = 'ui-icon') {
+  return `<svg class="${className}" aria-hidden="true"><use href="#i-${name}"></use></svg>`;
+}
+
 // ── Init ───────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const mp = document.getElementById('monthPicker');
@@ -252,15 +256,15 @@ async function loadDashStats() {
     const d = await api(`/dashboard/summary?month=${state.month}`);
 
     const cards = [
-      { icon: '📋', label: 'Tổng công việc',   value: d.total_tasks   ?? 0, change: '' },
-      { icon: '✅', label: 'Hoàn thành',        value: d.done_tasks    ?? 0, cls: 'up',      change: pct(d.done_tasks, d.total_tasks) },
-      { icon: '⚠️', label: 'Quá hạn',           value: d.overdue_tasks ?? 0, cls: 'down',    change: d.overdue_tasks > 0 ? `${d.overdue_tasks} task cần xử lý` : 'Tốt!' },
-      { icon: '🎯', label: 'KPI trung bình',    value: (d.avg_kpi_score ?? 0).toFixed(1), cls: kpiCls(d.avg_kpi_score), change: kpiTier(d.avg_kpi_score) },
+      { icon: 'list-checks', label: 'Tổng công việc',   value: d.total_tasks   ?? 0, change: '' },
+      { icon: 'check-circle', label: 'Hoàn thành',        value: d.done_tasks    ?? 0, cls: 'up',      change: pct(d.done_tasks, d.total_tasks) },
+      { icon: 'alert-triangle', label: 'Quá hạn',           value: d.overdue_tasks ?? 0, cls: 'down',    change: d.overdue_tasks > 0 ? `${d.overdue_tasks} task cần xử lý` : 'Tốt!' },
+      { icon: 'target', label: 'KPI trung bình',    value: (d.avg_kpi_score ?? 0).toFixed(1), cls: kpiCls(d.avg_kpi_score), change: kpiTier(d.avg_kpi_score) },
     ];
 
     container.innerHTML = cards.map(c => `
       <div class="stat-card">
-        <div class="stat-icon">${c.icon}</div>
+        <div class="stat-icon">${icon(c.icon, 'stat-svg')}</div>
         <div class="stat-value">${c.value}</div>
         <div class="stat-label">${c.label}</div>
         ${c.change ? `<div class="stat-change ${c.cls || 'neutral'}">${c.change}</div>` : ''}
@@ -273,7 +277,7 @@ async function loadDashStats() {
       d.overdue_tasks ?? 0);
 
   } catch (e) {
-    container.innerHTML = `<div class="stat-card"><div class="empty-state"><div>⚠️</div>Không tải được dữ liệu<br><small>${e.message}</small></div></div>`;
+    container.innerHTML = `<div class="stat-card"><div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>Không tải được dữ liệu<br><small>${e.message}</small></div></div>`;
   }
 }
 
@@ -291,10 +295,10 @@ function kpiCls(score) {
 
 function kpiTier(score) {
   if (!score) return '–';
-  if (score >= 90) return '⭐ Xuất sắc';
-  if (score >= 70) return '👍 Tốt';
-  if (score >= 50) return '✔️ Đạt';
-  return '❗ Cần cải thiện';
+  if (score >= 90) return `${icon('star', 'text-icon')} Xuất sắc`;
+  if (score >= 70) return `${icon('thumbs-up', 'text-icon')} Tốt`;
+  if (score >= 50) return `${icon('check-circle', 'text-icon')} Đạt`;
+  return `${icon('alert-triangle', 'text-icon')} Cần cải thiện`;
 }
 
 function renderTaskChart(total, done, doing, overdue) {
@@ -330,7 +334,7 @@ async function loadKpiRank() {
   try {
     const rows = await api(`/kpi/monthly?month=${state.month}`);
     if (!rows.length) {
-      el.innerHTML = `<div class="empty-state"><div>📊</div>Chưa có dữ liệu KPI tháng này</div>`;
+      el.innerHTML = `<div class="empty-state"><div>${icon('bar-chart', 'empty-icon')}</div>Chưa có dữ liệu KPI tháng này</div>`;
       return;
     }
     el.innerHTML = `
@@ -348,7 +352,7 @@ async function loadKpiRank() {
         </tbody>
       </table>`;
   } catch (e) {
-    el.innerHTML = `<div class="empty-state"><div>⚠️</div>${e.message}</div>`;
+    el.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div>`;
   }
 }
 
@@ -357,7 +361,7 @@ async function loadProjectOverview() {
   try {
     const projects = await api('/projects');
     if (!projects.length) {
-      el.innerHTML = `<div class="empty-state"><div>📁</div>Chưa có dự án nào</div>`;
+      el.innerHTML = `<div class="empty-state"><div>${icon('folder', 'empty-icon')}</div>Chưa có dự án nào</div>`;
       return;
     }
     const rows = await Promise.all(
@@ -387,7 +391,7 @@ async function loadProjectOverview() {
         </div>`;
     }).join('');
   } catch (e) {
-    el.innerHTML = `<div class="empty-state"><div>⚠️</div>${e.message}</div>`;
+    el.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div>`;
   }
 }
 
@@ -523,14 +527,14 @@ async function loadKanban() {
     Object.entries(grouped).forEach(([status, items]) => {
       const col = cols[status];
       if (!items.length) {
-        col.innerHTML = `<div class="empty-state" style="padding:20px"><div>📭</div>Trống <span class="text-sm text-muted">(kéo thả thẻ vào đây)</span></div>`;
+        col.innerHTML = `<div class="empty-state" style="padding:20px"><div>${icon('list-checks', 'empty-icon')}</div>Trống <span class="text-sm text-muted">(kéo thả thẻ vào đây)</span></div>`;
         return;
       }
       col.innerHTML = items.map(t => taskCard(t)).join('');
     });
   } catch (e) {
     Object.values(cols).forEach(c => {
-      c.innerHTML = `<div class="empty-state"><div>⚠️</div>${e.message}</div>`;
+      c.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div>`;
     });
   }
 }
@@ -543,7 +547,11 @@ function taskCard(t) {
   const deadlineStr = deadline.toLocaleDateString('vi-VN');
 
   const nextStatus = t.status === 'todo' ? 'doing' : t.status === 'doing' ? 'done' : null;
-  const nextLabel  = nextStatus === 'doing' ? '▶ Bắt đầu' : nextStatus === 'done' ? '✅ Hoàn thành' : '';
+  const nextLabel  = nextStatus === 'doing'
+    ? `${icon('zap', 'text-icon')} Bắt đầu`
+    : nextStatus === 'done'
+      ? `${icon('check-circle', 'text-icon')} Hoàn thành`
+      : '';
 
   return `
     <div class="task-card" draggable="true" data-task-id="${t.id}" data-status="${t.status}" title="Giữ & kéo sang cột khác">
@@ -553,7 +561,7 @@ function taskCard(t) {
         <span class="task-card-sp">SP: ${t.story_points}</span>
         <span class="badge badge-${t.difficulty}">${diffLabel(t.difficulty)}</span>
         <span class="task-card-deadline ${isOverdue ? 'overdue' : ''}">
-          ${isOverdue ? '⚠️' : '📅'} ${deadlineStr}
+          ${icon(isOverdue ? 'alert-triangle' : 'calendar', 'text-icon')} ${deadlineStr}
           ${!isOverdue && daysLeft >= 0 ? `(${daysLeft}d)` : ''}
         </span>
       </div>
@@ -600,7 +608,7 @@ async function openTaskDetail(taskId) {
     const task = await api(`/tasks/${taskId}`);
     renderTaskDetail(task);
   } catch (e) {
-    body.innerHTML = `<div class="empty-state"><div>⚠️</div>${escHtml(e.message)}</div>`;
+    body.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${escHtml(e.message)}</div>`;
   }
 }
 
@@ -728,7 +736,7 @@ async function loadProjects() {
     document.getElementById('projectCount').textContent = `${projects.length} dự án`;
 
     if (!projects.length) {
-      grid.innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div>📁</div>Không có dự án nào</div></div>`;
+      grid.innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div>${icon('folder', 'empty-icon')}</div>Không có dự án nào</div></div>`;
       return;
     }
 
@@ -745,7 +753,7 @@ async function loadProjects() {
 
     grid.innerHTML = withProgress.map(p => projectCard(p)).join('');
   } catch (e) {
-    grid.innerHTML = `<div class="card"><div class="empty-state"><div>⚠️</div>${e.message}</div></div>`;
+    grid.innerHTML = `<div class="card"><div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div></div>`;
   }
 }
 
@@ -772,8 +780,8 @@ function projectCard(p) {
         </div>
       </div>
       <div class="project-footer">
-        <span>📋 ${p.progress?.done_tasks ?? 0}/${p.progress?.total_tasks ?? 0} tasks</span>
-        <span>📅 ${start} → ${end}</span>
+        <span>${icon('list-checks', 'text-icon')} ${p.progress?.done_tasks ?? 0}/${p.progress?.total_tasks ?? 0} tasks</span>
+        <span>${icon('calendar', 'text-icon')} ${start} → ${end}</span>
       </div>
     </div>`;
 }
@@ -791,7 +799,7 @@ async function loadKpiTable() {
   try {
     const rows = await api(`/kpi/monthly?month=${state.month}`);
     if (!rows.length) {
-      el.innerHTML = `<div class="empty-state"><div>📊</div>Chưa có dữ liệu KPI tháng ${state.month}</div>`;
+      el.innerHTML = `<div class="empty-state"><div>${icon('bar-chart', 'empty-icon')}</div>Chưa có dữ liệu KPI tháng ${state.month}</div>`;
       return;
     }
     el.innerHTML = `
@@ -827,7 +835,7 @@ async function loadKpiTable() {
         </tbody>
       </table>`;
   } catch (e) {
-    el.innerHTML = `<div class="empty-state"><div>⚠️</div>${e.message}</div>`;
+    el.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div>`;
   }
 }
 
@@ -983,7 +991,7 @@ async function generateAiTasks(loader) {
     renderAiPreview();
     toast('Đã tạo danh sách task đề xuất', 'success');
   } catch (e) {
-    preview.innerHTML = `<div class="empty-state"><div>⚠️</div>${escHtml(e.message)}</div>`;
+    preview.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${escHtml(e.message)}</div>`;
     toast(e.message, 'error');
   }
 }
@@ -1089,7 +1097,7 @@ async function loadTeams() {
         </div>
       </div>`;
   } catch (e) {
-    statsEl.innerHTML = `<div class="empty-state"><div>⚠️</div>${e.message}</div>`;
+    statsEl.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div>`;
   }
 }
 
@@ -1115,12 +1123,12 @@ async function loadPlanCompletion() {
       <div class="plan-list">
         ${keys.map(([k, v]) => `
           <div class="plan-item">
-            <span class="plan-check">${v ? '✅' : '⬜'}</span>
+            <span class="plan-check">${icon(v ? 'check-circle' : 'square', 'text-icon')}</span>
             <span style="color:${v ? 'var(--success)' : 'var(--text-2)'}">${formatPlanKey(k)}</span>
           </div>`).join('')}
       </div>`;
   } catch (e) {
-    el.innerHTML = `<div class="empty-state"><div>⚠️</div>${e.message}</div>`;
+    el.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div>`;
   }
 }
 
@@ -1130,7 +1138,7 @@ async function loadAuditLogs() {
   try {
     const logs = await api('/audit/logs?limit=50');
     if (!logs.length) {
-      el.innerHTML = `<div class="empty-state"><div>📋</div>Chưa có nhật ký hoạt động</div>`;
+      el.innerHTML = `<div class="empty-state"><div>${icon('list-checks', 'empty-icon')}</div>Chưa có nhật ký hoạt động</div>`;
       return;
     }
     el.innerHTML = `
@@ -1148,7 +1156,7 @@ async function loadAuditLogs() {
         </tbody>
       </table>`;
   } catch (e) {
-    el.innerHTML = `<div class="empty-state"><div>⚠️</div>${e.message}</div>`;
+    el.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div>`;
   }
 }
 
@@ -1163,10 +1171,10 @@ async function runSeed() {
       .filter(([k, v]) => typeof v === 'number')
       .map(([k, v]) => `${k}: ${v}`)
       .join(', ');
-    result.innerHTML = `<div style="color:var(--success);font-size:13px">✅ Khởi tạo thành công! ${count}</div>`;
+    result.innerHTML = `<div class="inline-status" style="color:var(--success);font-size:13px">${icon('check-circle', 'text-icon')} Khởi tạo thành công! ${count}</div>`;
     toast('Dữ liệu mẫu đã được khởi tạo', 'success');
   } catch (e) {
-    result.innerHTML = `<div style="color:var(--danger);font-size:13px">❌ ${e.message}</div>`;
+    result.innerHTML = `<div class="inline-status" style="color:var(--danger);font-size:13px">${icon('x-circle', 'text-icon')} ${e.message}</div>`;
     toast(e.message, 'error');
   } finally {
     btn.disabled = false;
