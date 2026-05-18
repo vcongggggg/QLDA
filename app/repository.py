@@ -930,6 +930,21 @@ def list_notifications(status: str = "queued", limit: int = 50) -> list[dict[str
     return out
 
 
+def count_notifications_by_status() -> dict[str, int]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT status, COUNT(*) AS c
+            FROM notification_queue
+            WHERE status IN ('queued', 'sent', 'failed')
+            GROUP BY status
+            """
+        ).fetchall()
+    counts = {"queued": 0, "sent": 0, "failed": 0}
+    counts.update({str(row["status"]): int(row["c"] or 0) for row in rows})
+    return counts
+
+
 def list_processable_notifications(limit: int = 50) -> list[dict[str, Any]]:
     now = _now_iso()
     with get_connection() as conn:

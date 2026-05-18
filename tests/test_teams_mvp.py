@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.database import init_db
 from app.main import app
-from app.repository import create_task, create_user, queue_notification
+from app.repository import count_notifications_by_status, create_task, create_user, queue_notification
 from app.settings import settings
 from scripts.package_teams_app import package_teams_app
 
@@ -97,6 +97,21 @@ def test_staff_cannot_manage_teams_queue() -> None:
 
     list_resp = client.get("/integrations/teams/proactive/queue?status=all", headers=_hdr(int(staff["id"])))
     assert list_resp.status_code == 403
+
+
+def test_teams_summary_queue_stats_count_beyond_list_page_limit() -> None:
+    _admin, manager, staff, _hr = _bootstrap()
+    before = count_notifications_by_status()["queued"]
+    for index in range(205):
+        queue_notification(
+            user_id=int(staff["id"]),
+            channel="teams",
+            payload={"type": "message", "text": f"Bulk queue {index}"},
+        )
+
+    resp = client.get("/integrations/teams/summary?month=2026-05", headers=_hdr(int(manager["id"])))
+    assert resp.status_code == 200
+    assert resp.json()["queue_stats"]["queued"] >= before + 205
 
 
 def test_production_tab_uses_teams_summary_endpoint() -> None:

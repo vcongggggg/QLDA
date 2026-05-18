@@ -8,6 +8,7 @@ from app.kpi import calculate_monthly_kpi, compute_dashboard_metrics
 from app.proactive_worker import process_notification_queue
 from app.repository import (
     all_tasks_with_users,
+    count_notifications_by_status,
     create_audit_log,
     get_notification_by_id,
     list_notifications,
@@ -33,12 +34,7 @@ router = APIRouter(tags=["teams"])
 
 
 def _queue_stats() -> dict:
-    rows = list_notifications(status="all", limit=200)
-    return {
-        "queued": sum(1 for row in rows if row.get("status") == "queued"),
-        "sent": sum(1 for row in rows if row.get("status") == "sent"),
-        "failed": sum(1 for row in rows if row.get("status") == "failed"),
-    }
+    return count_notifications_by_status()
 
 
 @router.get("/integrations/teams/summary", response_model=TeamsSummaryOut)
