@@ -40,6 +40,36 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.ui-icon,
+.btn-icon,
+.heading-icon,
+.text-icon,
+.stat-svg,
+.report-svg,
+.empty-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.ui-icon { width: 18px; height: 18px; }
+.btn-icon { width: 15px; height: 15px; }
+.heading-icon { width: 16px; height: 16px; }
+.text-icon { width: 14px; height: 14px; vertical-align: -2px; }
+.stat-svg { width: 24px; height: 24px; }
+.report-svg { width: 24px; height: 24px; }
+.empty-icon { width: 32px; height: 32px; }
+
 html, body {
   height: 100%;
   font-family: var(--font);
@@ -86,14 +116,11 @@ html, body {
 
 .brand-logo {
   width: 36px; height: 36px;
-  background: var(--brand);
   border-radius: 10px;
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-  display: grid;
-  place-items: center;
+  display: block;
+  object-fit: cover;
   flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.18), 0 6px 14px rgba(0,0,0,.16);
 }
 
 .brand-name {
@@ -234,10 +261,10 @@ html, body {
   display: none;
   background: none;
   border: none;
-  font-size: 20px;
   cursor: pointer;
   color: var(--text-2);
-  padding: 4px;
+  padding: 7px;
+  border-radius: var(--radius-sm);
 }
 
 .topbar-title {
@@ -451,6 +478,9 @@ html, body {
 }
 
 .card-header h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 15px;
   font-weight: 700;
   color: var(--text);
@@ -473,8 +503,24 @@ html, body {
 }
 
 .stat-icon {
-  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand);
   margin-bottom: 8px;
+}
+
+.stat-card:nth-child(2) .stat-icon { color: var(--success); }
+.stat-card:nth-child(3) .stat-icon { color: var(--warning); }
+.stat-card:nth-child(4) .stat-icon { color: var(--danger); }
+
+.stat-change,
+.task-card-deadline,
+.project-footer span,
+.inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .stat-value {
@@ -703,6 +749,12 @@ html, body {
   padding: 12px 14px;
   font-size: 13px;
   font-weight: 700;
+}
+
+.kanban-col-header > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .todo-header   { background: #F1F5F9; color: #475569; border-bottom: 2px solid #CBD5E1; }
@@ -963,17 +1015,16 @@ html, body {
 }
 
 .report-icon {
-  font-size: 28px;
   width: 48px; height: 48px;
   border-radius: 12px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
 }
-.kpi-icon    { background: #EFF6FF; }
-.proj-icon   { background: #F0FDF4; }
-.prog-icon   { background: #FFF7ED; }
-.sprint-icon { background: #FDF4FF; }
+.kpi-icon    { background: #EFF6FF; color: var(--brand); }
+.proj-icon   { background: #F0FDF4; color: var(--success); }
+.prog-icon   { background: #FFF7ED; color: var(--warning); }
+.sprint-icon { background: #FDF4FF; color: #A21CAF; }
 
 .report-info { flex: 1; }
 .report-info h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
