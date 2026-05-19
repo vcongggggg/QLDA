@@ -1,6 +1,6 @@
-{
-  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
-  "manifestVersion": "1.17",
+﻿{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.13/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.13",
   "version": "1.0.0",
   "id": "f4a0d9a4-9c71-47ca-bf12-7f1df2db59a7",
   "packageName": "com.teamswork.app",
@@ -12,11 +12,11 @@
   },
   "name": {
     "short": "TeamsWork",
-    "full": "TeamsWork - Quản trị công việc & KPI"
+    "full": "TeamsWork - Quáº£n trá»‹ cÃ´ng viá»‡c & KPI"
   },
   "description": {
-    "short": "Quản lý công việc, sprint và KPI nội bộ trong Teams",
-    "full": "TeamsWork tích hợp quản lý công việc, bảng KPI, burndown sprint và nhắc nhở deadline trực tiếp vào Microsoft Teams."
+    "short": "Quáº£n lÃ½ cÃ´ng viá»‡c, sprint vÃ  KPI ná»™i bá»™ trong Teams",
+    "full": "TeamsWork tÃ­ch há»£p quáº£n lÃ½ cÃ´ng viá»‡c, báº£ng KPI, burndown sprint vÃ  nháº¯c nhá»Ÿ deadline trá»±c tiáº¿p vÃ o Microsoft Teams."
   },
   "icons": {
     "outline": "outline.png",
@@ -33,7 +33,7 @@
     },
     {
       "entityId": "teamswork-identity",
-      "name": "Kết nối tài khoản",
+      "name": "Káº¿t ná»‘i tÃ i khoáº£n",
       "contentUrl": "https://REPLACE_WITH_PUBLIC_HOST/teams/tab",
       "websiteUrl": "https://REPLACE_WITH_PUBLIC_HOST/teams/tab",
       "scopes": ["personal"]
