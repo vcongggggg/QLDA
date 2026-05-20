@@ -18,6 +18,61 @@ class UserOut(BaseModel):
     department: str | None = None
 
 
+class RoleOut(BaseModel):
+    slug: str
+    name: str
+    description: str | None = None
+    is_system: bool | int = True
+
+
+class PermissionOut(BaseModel):
+    key: str
+    name: str
+    description: str | None = None
+    category: str
+
+
+class RolePermissionsOut(BaseModel):
+    role: RoleOut
+    permissions: list[PermissionOut]
+
+
+class RolePermissionsUpdate(BaseModel):
+    permission_keys: list[str] = Field(default_factory=list, max_length=100)
+
+
+class RagDocumentCreate(BaseModel):
+    title: str = Field(min_length=2, max_length=160)
+    source_label: str | None = Field(default=None, max_length=120)
+    content: str = Field(min_length=20, max_length=50000)
+
+
+class RagDocumentOut(BaseModel):
+    id: int
+    title: str
+    source_label: str | None = None
+    created_by: int
+    created_at: datetime
+    chunk_count: int = 0
+
+
+class RagQueryRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=1000)
+    limit: int = Field(default=5, ge=1, le=10)
+
+
+class RagQueryMatch(BaseModel):
+    document_id: int
+    document_title: str
+    source_label: str | None = None
+    content: str
+    score: float
+
+
+class RagQueryResponse(BaseModel):
+    matches: list[RagQueryMatch]
+
+
 class TaskCreate(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     description: str | None = None
@@ -373,6 +428,8 @@ class TaskBreakdownRequest(BaseModel):
     text: str = Field(min_length=10, max_length=50000)
     project_context: str | None = Field(default=None, max_length=2000)
     max_tasks: int = Field(default=8, ge=1, le=30)
+    use_rag: bool = True
+    rag_query: str | None = Field(default=None, max_length=1000)
 
 
 class TaskBreakdownItem(BaseModel):
@@ -389,6 +446,8 @@ class TaskBreakdownResponse(BaseModel):
     source: str
     items: list[TaskBreakdownItem]
     warnings: list[str] = []
+    retrieved_context_count: int = 0
+    retrieved_sources: list[str] = []
 
 
 class TaskImportRequest(BaseModel):

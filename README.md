@@ -6,11 +6,12 @@ TeamsWork la ung dung quan ly cong viec, KPI va du an noi bo, co API FastAPI, gi
 
 - Quan ly user, phong ban, du an, sprint va task.
 - Kanban voi trang thai `todo`, `doing`, `done`.
-- RBAC theo vai tro `admin`, `manager`, `staff`, `hr`.
+- RBAC theo vai tro `admin`, `manager`, `staff`, `hr` va bang permission co the cau hinh.
 - KPI hang thang voi diem theo deadline va do kho.
 - Bao cao KPI, tien do du an, sprint review va portfolio.
 - Hang doi thong bao Teams proactive, retry va requeue.
 - AI task breakdown tu text hoac file `.docx`.
+- Kho tri thuc RAG de bo sung ngu canh khi AI phan tich yeu cau.
 - Import task AI da chon vao Kanban.
 - SQLite cho dev local, PostgreSQL cho docker/production-like.
 
@@ -83,6 +84,24 @@ Endpoint lien quan:
 - `POST /ai/task-breakdown/docx`
 - `POST /ai/task-breakdown/import`
 
+Neu bat `use_rag`, backend se truy van kho RAG bang `rag_query` neu co, hoac dung noi dung requirements lam truy van. Ket qua tra ve them `retrieved_context_count` va `retrieved_sources` de UI/API biet AI da dung nguon nao.
+
+## Kho tri thuc RAG
+
+RAG dung cho viec luu spec, bien ban hop, checklist hoac yeu cau nghiep vu de bo sung ngu canh khi tao task bang AI. Tai lieu duoc chia thanh cac chunk nho va truy van bang matching tu khoa noi bo, khong can dich vu vector database trong moi truong local.
+
+Endpoint lien quan:
+
+- `POST /rag/documents`
+- `GET /rag/documents`
+- `DELETE /rag/documents/{document_id}`
+- `POST /rag/query`
+
+Permission lien quan:
+
+- `rag.manage`: them va xoa tai lieu RAG.
+- `rag.query`: xem danh sach tai lieu va truy van RAG.
+
 ## Authentication va RBAC
 
 Production mode dung JWT bearer:
@@ -99,12 +118,35 @@ Local/dev co the dung header fallback:
 X-User-Id: 1
 ```
 
-Quyen co ban:
+Vai tro mac dinh:
 
 - `admin`: quan tri user, seed, audit, bao cao.
 - `manager`: quan ly du an, sprint, task, KPI, AI import.
 - `staff`: xem va cap nhat task/KPI cua minh.
 - `hr`: xem user, KPI va bao cao lien quan.
+
+He thong seed san bang `roles`, `permissions` va `role_permissions`. Cac router moi uu tien `require_permission(...)` de cho phep thay doi quyen theo vai tro ma khong can sua code.
+
+Endpoint RBAC:
+
+- `GET /rbac/roles`
+- `GET /rbac/permissions`
+- `GET /rbac/roles/{role_slug}/permissions`
+- `PUT /rbac/roles/{role_slug}/permissions`
+
+Permission quan trong:
+
+- `roles.view`, `roles.manage`
+- `users.create`, `users.view`
+- `tasks.create`, `tasks.update_any`, `tasks.update_own`
+- `projects.manage`, `projects.view`
+- `sprints.manage`, `sprints.view`
+- `kpi.view`, `kpi.adjust`
+- `reports.export`
+- `ai.preview`, `ai.import`
+- `rag.manage`, `rag.query`
+- `teams.view`, `teams.manage`
+- `monitoring.view`, `monitoring.admin`
 
 ## Seed data
 
@@ -121,6 +163,9 @@ Du lieu mau gom user, phong ban, du an, sprint, task, capacity, risk va weekly s
 
 - `POST /users`, `GET /users`
 - `POST /auth/token`
+- `GET /rbac/roles`, `GET /rbac/permissions`
+- `GET /rbac/roles/{role_slug}/permissions`
+- `PUT /rbac/roles/{role_slug}/permissions`
 - `POST /departments`, `GET /departments`
 - `POST /projects`, `GET /projects`
 - `POST /projects/{project_id}/members`
@@ -136,6 +181,9 @@ Du lieu mau gom user, phong ban, du an, sprint, task, capacity, risk va weekly s
 - `GET /reports/kpi.pdf?month=YYYY-MM`
 - `GET /reports/projects/progress.csv`
 - `GET /reports/projects/progress.xlsx`
+- `POST /rag/documents`, `GET /rag/documents`
+- `DELETE /rag/documents/{document_id}`
+- `POST /rag/query`
 - `GET /portfolio/summary`
 - `GET /monitoring/readiness`
 - `GET /monitoring/metrics`
@@ -166,7 +214,7 @@ pytest -q
 Chay rieng luong API va AI:
 
 ```bash
-pytest tests/test_api_flow.py tests/test_ai_task_breakdown.py
+pytest tests/test_api_flow.py tests/test_ai_task_breakdown.py tests/test_rbac_rag.py
 ```
 
 ## Docker va PostgreSQL

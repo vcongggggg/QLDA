@@ -9,6 +9,7 @@ const state = {
   currentSection: 'dashboard',
   charts: {},
   aiItems: [],
+  rbac: { roles: [], permissions: [], selectedKeys: new Set() },
   activeTaskId: null,
   draggingTaskId: null,
   notificationsOpen: false,
@@ -370,12 +371,12 @@ async function loadProjectOverview() {
           const progress = await api(`/projects/${p.id}/progress`);
           return { ...p, progress };
         } catch {
-          return { ...p, progress: { total_tasks: 0, done_tasks: 0, progress_percent: 0 } };
+          return { ...p, progress: { total_tasks: 0, done_tasks: 0, completion_rate: 0 } };
         }
       })
     );
     el.innerHTML = rows.map(p => {
-      const pct = p.progress?.progress_percent ?? 0;
+      const pct = p.progress?.completion_rate ?? 0;
       const fillCls = pct >= 80 ? 'done' : pct < 30 ? 'warning' : '';
       return `
         <div class="project-row">
@@ -758,7 +759,7 @@ async function loadProjects() {
 }
 
 function projectCard(p) {
-  const pct = p.progress?.progress_percent ?? 0;
+  const pct = p.progress?.completion_rate ?? 0;
   const fillCls = pct >= 80 ? 'done' : pct < 30 ? 'warning' : '';
   const start = p.start_date ? new Date(p.start_date).toLocaleDateString('vi-VN') : '–';
   const end   = p.end_date   ? new Date(p.end_date).toLocaleDateString('vi-VN')   : '–';
@@ -920,6 +921,7 @@ function triggerDownload(url) {
 
 async function loadAI() {
   await populateAiSelectors();
+  await loadRagDocuments();
   renderAiPreview();
 }
 
@@ -953,6 +955,8 @@ async function populateAiSelectors() {
 async function generateAiTasksFromText() {
   const text = document.getElementById('aiRequirementText').value.trim();
   const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
+  const useRag = document.getElementById('aiUseRag')?.checked !== false;
+  const ragQuery = document.getElementById('aiRagQuery')?.value.trim() || null;
   if (text.length < 10) {
     toast('Vui lòng nhập requirements dài hơn 10 ký tự', 'error');
     return;
@@ -960,7 +964,7 @@ async function generateAiTasksFromText() {
   await generateAiTasks(() => api('/ai/task-breakdown', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, max_tasks: maxTasks }),
+    body: JSON.stringify({ text, max_tasks: maxTasks, use_rag: useRag, rag_query: ragQuery }),
   }));
 }
 
@@ -986,7 +990,8 @@ async function generateAiTasks(loader) {
   try {
     const result = await loader();
     state.aiItems = result.items || [];
-    document.getElementById('aiPreviewMeta').textContent = `${state.aiItems.length} task · nguồn: ${result.source}`;
+    const ragMeta = result.retrieved_context_count ? ` · RAG: ${(result.retrieved_sources || []).join(', ')}` : '';
+    document.getElementById('aiPreviewMeta').textContent = `${state.aiItems.length} task · nguồn: ${result.source}${ragMeta}`;
     document.getElementById('aiWarnings').textContent = (result.warnings || []).join(' ');
     renderAiPreview();
     toast('Đã tạo danh sách task đề xuất', 'success');
@@ -1066,6 +1071,68 @@ async function importSelectedAiTasks() {
   }
 }
 
+async function loadRagDocuments() {
+  const el = document.getElementById('ragDocuments');
+  if (!el) return;
+  el.innerHTML = '<div class="skeleton" style="height:96px"></div>';
+  try {
+    const docs = await api('/rag/documents');
+    if (!docs.length) {
+      el.innerHTML = '<div class="empty-state compact">Chưa có tài liệu RAG</div>';
+      return;
+    }
+    el.innerHTML = `
+      <table class="audit-table">
+        <thead><tr><th>Tài liệu</th><th>Nguồn</th><th>Chunks</th><th></th></tr></thead>
+        <tbody>
+          ${docs.map(d => `
+            <tr>
+              <td><strong>${escHtml(d.title)}</strong></td>
+              <td>${escHtml(d.source_label || '-')}</td>
+              <td>${d.chunk_count || 0}</td>
+              <td><button class="btn btn-outline btn-sm" onclick="deleteRagDocument(${d.id})">Xóa</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+async function createRagDocument() {
+  const title = document.getElementById('ragTitle').value.trim();
+  const source = document.getElementById('ragSource').value.trim();
+  const content = document.getElementById('ragContent').value.trim();
+  if (title.length < 2 || content.length < 20) {
+    toast('Nhập tiêu đề và nội dung RAG đủ dài', 'error');
+    return;
+  }
+  try {
+    await api('/rag/documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, source_label: source || null, content }),
+    });
+    document.getElementById('ragTitle').value = '';
+    document.getElementById('ragSource').value = '';
+    document.getElementById('ragContent').value = '';
+    await loadRagDocuments();
+    toast('Đã thêm tài liệu RAG', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function deleteRagDocument(id) {
+  try {
+    await api(`/rag/documents/${id}`, { method: 'DELETE' });
+    await loadRagDocuments();
+    toast('Đã xóa tài liệu RAG', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 // ════════════════════════════════ TEAMS ════════
 
 async function loadTeams() {
@@ -1104,27 +1171,100 @@ async function loadTeams() {
 // ════════════════════════════════ ADMIN ════════
 
 async function loadAdmin() {
-  await Promise.all([loadPlanCompletion(), loadAuditLogs()]);
+  await Promise.all([loadPlanCompletion(), loadAuditLogs(), loadRbacAdmin()]);
+}
+
+async function loadRbacAdmin() {
+  const roleSelect = document.getElementById('rbacRoleSelect');
+  const table = document.getElementById('rbacPermissionTable');
+  if (!roleSelect || !table) return;
+  table.innerHTML = '<div class="skeleton" style="height:120px"></div>';
+  try {
+    const [roles, permissions] = await Promise.all([api('/rbac/roles'), api('/rbac/permissions')]);
+    state.rbac.roles = roles;
+    state.rbac.permissions = permissions;
+    roleSelect.innerHTML = roles.map(r => `<option value="${escHtml(r.slug)}">${escHtml(r.name)} (${escHtml(r.slug)})</option>`).join('');
+    await loadRolePermissions();
+  } catch (e) {
+    table.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadRolePermissions() {
+  const roleSelect = document.getElementById('rbacRoleSelect');
+  const table = document.getElementById('rbacPermissionTable');
+  if (!roleSelect || !table || !roleSelect.value) return;
+  table.innerHTML = '<div class="skeleton" style="height:120px"></div>';
+  try {
+    const result = await api(`/rbac/roles/${encodeURIComponent(roleSelect.value)}/permissions`);
+    state.rbac.selectedKeys = new Set((result.permissions || []).map(p => p.key));
+    renderPermissionTable();
+  } catch (e) {
+    table.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderPermissionTable() {
+  const table = document.getElementById('rbacPermissionTable');
+  const permissions = state.rbac.permissions || [];
+  if (!permissions.length) {
+    table.innerHTML = '<div class="empty-state compact">Chưa có permission</div>';
+    return;
+  }
+  table.innerHTML = `
+    <table class="audit-table">
+      <thead><tr><th>Cho phép</th><th>Permission</th><th>Nhóm</th></tr></thead>
+      <tbody>
+        ${permissions.map(p => `
+          <tr>
+            <td><input type="checkbox" ${state.rbac.selectedKeys.has(p.key) ? 'checked' : ''} onchange="togglePermissionKey('${escHtml(p.key)}', this.checked)" /></td>
+            <td><strong>${escHtml(p.name)}</strong><div class="text-sm text-muted">${escHtml(p.key)}</div></td>
+            <td><span class="tag">${escHtml(p.category)}</span></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function togglePermissionKey(key, checked) {
+  if (checked) state.rbac.selectedKeys.add(key);
+  else state.rbac.selectedKeys.delete(key);
+}
+
+async function saveRolePermissions() {
+  const role = document.getElementById('rbacRoleSelect')?.value;
+  if (!role) return;
+  try {
+    await api(`/rbac/roles/${encodeURIComponent(role)}/permissions`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permission_keys: Array.from(state.rbac.selectedKeys).sort() }),
+    });
+    toast('Đã lưu phân quyền', 'success');
+    await loadRolePermissions();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 async function loadPlanCompletion() {
   const el = document.getElementById('planCompletion');
   try {
     const plan = await api('/plan/completion');
-    const keys = Object.entries(plan).filter(([k]) => k !== 'overall_percent');
+    const completionPercent = plan.completion_percent ?? 0;
+    const items = plan.items ?? [];
     el.innerHTML = `
       <div style="margin-bottom:12px">
         <div class="progress-label">
           <span>Tổng tiến độ</span>
-          <strong>${plan.overall_percent ?? 0}%</strong>
+          <strong>${completionPercent}%</strong>
         </div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${plan.overall_percent ?? 0}%"></div></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${completionPercent}%"></div></div>
       </div>
       <div class="plan-list">
-        ${keys.map(([k, v]) => `
+        ${items.map(item => `
           <div class="plan-item">
-            <span class="plan-check">${icon(v ? 'check-circle' : 'square', 'text-icon')}</span>
-            <span style="color:${v ? 'var(--success)' : 'var(--text-2)'}">${formatPlanKey(k)}</span>
+            <span class="plan-check">${icon(item.done ? 'check-circle' : 'square', 'text-icon')}</span>
+            <span style="color:${item.done ? 'var(--success)' : 'var(--text-2)'}">${escHtml(item.title || formatPlanKey(item.key || ''))}</span>
           </div>`).join('')}
       </div>`;
   } catch (e) {

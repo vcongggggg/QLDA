@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, require_roles
+from app.auth import get_current_user, require_permission
 from app.repository import (
     create_audit_log,
     create_app_notification,
@@ -62,7 +62,7 @@ def _status_label(status: str) -> str:
 
 @router.post("/tasks", response_model=TaskOut)
 def create_task_endpoint(payload: TaskCreate, current_user: dict = Depends(get_current_user)) -> dict:
-    require_roles(current_user, {"admin", "manager"})
+    require_permission(current_user, "tasks.create")
     if payload.difficulty not in {"easy", "medium", "hard"}:
         raise HTTPException(status_code=400, detail="difficulty must be one of easy|medium|hard")
     if not user_exists(payload.assignee_id):
@@ -150,6 +150,10 @@ def update_task_status_endpoint(
     if not task_before:
         raise HTTPException(status_code=404, detail="task not found")
     _ensure_task_visible(task_before, current_user)
+    if int(task_before["assignee_id"]) == int(current_user["id"]):
+        require_permission(current_user, "tasks.update_own")
+    else:
+        require_permission(current_user, "tasks.update_any")
     row = update_task_status(task_id, payload.status)
     if row is None:
         raise HTTPException(status_code=404, detail="task not found")

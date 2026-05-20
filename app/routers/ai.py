@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.ai_task_breakdown import breakdown_requirements, extract_docx_text
-from app.auth import get_current_user, require_roles
+from app.auth import get_current_user, require_permission
+from app.rag import build_rag_context, query_rag
 from app.repository import create_audit_log, create_task, project_exists, sprint_exists, user_exists
 from app.schemas import (
     TaskBreakdownRequest,
@@ -20,10 +21,29 @@ def task_breakdown_endpoint(
     payload: TaskBreakdownRequest,
     current_user: dict = Depends(get_current_user),
 ) -> dict:
-    require_roles(current_user, {"admin", "manager"})
-    result = breakdown_requirements(payload.text, payload.project_context, payload.max_tasks)
-    create_audit_log(current_user["id"], "preview", "ai_task_breakdown", None, f"items={len(result.items)} source={result.source}")
-    return {"source": result.source, "items": result.items, "warnings": result.warnings}
+    require_permission(current_user, "ai.preview")
+    project_context = payload.project_context
+    retrieved_sources: list[str] = []
+    if payload.use_rag:
+        matches = query_rag(payload.rag_query or payload.text, limit=5)
+        retrieved_context, retrieved_sources = build_rag_context(matches)
+        if retrieved_context:
+            project_context = "\n\n".join(part for part in (payload.project_context, retrieved_context) if part)
+    result = breakdown_requirements(payload.text, project_context, payload.max_tasks)
+    create_audit_log(
+        current_user["id"],
+        "preview",
+        "ai_task_breakdown",
+        None,
+        f"items={len(result.items)} source={result.source} rag={len(retrieved_sources)}",
+    )
+    return {
+        "source": result.source,
+        "items": result.items,
+        "warnings": result.warnings,
+        "retrieved_context_count": len(retrieved_sources),
+        "retrieved_sources": retrieved_sources,
+    }
 
 
 @router.post("/task-breakdown/docx", response_model=TaskBreakdownResponse)
@@ -33,7 +53,7 @@ async def task_breakdown_docx_endpoint(
     max_tasks: int = Form(default=8),
     current_user: dict = Depends(get_current_user),
 ) -> dict:
-    require_roles(current_user, {"admin", "manager"})
+    require_permission(current_user, "ai.preview")
     filename = (file.filename or "").lower()
     if not filename.endswith(".docx"):
         raise HTTPException(status_code=400, detail="only .docx files are supported")
@@ -45,9 +65,26 @@ async def task_breakdown_docx_endpoint(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if len(text) < 10:
         raise HTTPException(status_code=400, detail="docx does not contain enough text")
+    retrieved_sources: list[str] = []
+    matches = query_rag(text, limit=5)
+    retrieved_context, retrieved_sources = build_rag_context(matches)
+    if retrieved_context:
+        project_context = "\n\n".join(part for part in (project_context, retrieved_context) if part)
     result = breakdown_requirements(text, project_context, max_tasks)
-    create_audit_log(current_user["id"], "preview", "ai_task_breakdown_docx", None, f"items={len(result.items)} source={result.source}")
-    return {"source": result.source, "items": result.items, "warnings": result.warnings}
+    create_audit_log(
+        current_user["id"],
+        "preview",
+        "ai_task_breakdown_docx",
+        None,
+        f"items={len(result.items)} source={result.source} rag={len(retrieved_sources)}",
+    )
+    return {
+        "source": result.source,
+        "items": result.items,
+        "warnings": result.warnings,
+        "retrieved_context_count": len(retrieved_sources),
+        "retrieved_sources": retrieved_sources,
+    }
 
 
 @router.post("/task-breakdown/import", response_model=TaskImportResponse)
@@ -55,7 +92,7 @@ def import_ai_tasks_endpoint(
     payload: TaskImportRequest,
     current_user: dict = Depends(get_current_user),
 ) -> dict:
-    require_roles(current_user, {"admin", "manager"})
+    require_permission(current_user, "ai.import")
     if not user_exists(payload.assignee_id):
         raise HTTPException(status_code=404, detail="assignee not found")
     if payload.project_id is not None and not project_exists(payload.project_id):

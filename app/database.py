@@ -20,6 +20,31 @@ _SQLITE_SCHEMA_STATEMENTS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS roles (
+        slug TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        is_system INTEGER NOT NULL DEFAULT 1
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS permissions (
+        key TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS role_permissions (
+        role_slug TEXT NOT NULL,
+        permission_key TEXT NOT NULL,
+        PRIMARY KEY (role_slug, permission_key),
+        FOREIGN KEY (role_slug) REFERENCES roles(slug),
+        FOREIGN KEY (permission_key) REFERENCES permissions(key)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS departments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
@@ -214,6 +239,27 @@ _SQLITE_SCHEMA_STATEMENTS = [
         FOREIGN KEY (created_by) REFERENCES users(id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS rag_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        source_label TEXT,
+        created_by INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (created_by) REFERENCES users(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS rag_chunks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        source_label TEXT,
+        chunk_index INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (document_id) REFERENCES rag_documents(id)
+    )
+    """,
 ]
 
 _POSTGRES_SCHEMA_STATEMENTS = [
@@ -225,6 +271,29 @@ _POSTGRES_SCHEMA_STATEMENTS = [
         aad_object_id TEXT UNIQUE,
         role TEXT NOT NULL,
         department TEXT
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS roles (
+        slug TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        is_system BOOLEAN NOT NULL DEFAULT TRUE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS permissions (
+        key TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS role_permissions (
+        role_slug TEXT NOT NULL REFERENCES roles(slug),
+        permission_key TEXT NOT NULL REFERENCES permissions(key),
+        PRIMARY KEY (role_slug, permission_key)
     )
     """,
     """
@@ -399,6 +468,25 @@ _POSTGRES_SCHEMA_STATEMENTS = [
         created_at TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS rag_documents (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        source_label TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS rag_chunks (
+        id SERIAL PRIMARY KEY,
+        document_id INTEGER NOT NULL REFERENCES rag_documents(id),
+        content TEXT NOT NULL,
+        source_label TEXT,
+        chunk_index INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
 ]
 
 _INDEX_STATEMENTS = [
@@ -409,6 +497,8 @@ _INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_app_notifications_user_read_created ON app_notifications(user_id, is_read, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity, entity_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_kpi_adjustments_month_user ON kpi_adjustments(month, user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON role_permissions(permission_key)",
+    "CREATE INDEX IF NOT EXISTS idx_rag_chunks_document ON rag_chunks(document_id, chunk_index)",
 ]
 
 _NO_ROW = object()
@@ -626,6 +716,46 @@ def _normalize_reserved_user_email_domains(conn: DatabaseConnection) -> None:
         )
 
 
+def _seed_rbac_defaults(conn: DatabaseConnection) -> None:
+    from app.permissions import DEFAULT_PERMISSIONS, DEFAULT_ROLE_PERMISSION_KEYS, DEFAULT_ROLES
+
+    for role in DEFAULT_ROLES:
+        conn.execute(
+            """
+            /* no-returning-id */ INSERT INTO roles (slug, name, description, is_system)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(slug) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description
+            """,
+            (role["slug"], role["name"], role["description"], True),
+        )
+
+    for permission in DEFAULT_PERMISSIONS:
+        conn.execute(
+            """
+            /* no-returning-id */ INSERT INTO permissions (key, name, description, category)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description,
+                category = excluded.category
+            """,
+            (permission["key"], permission["name"], permission.get("description"), permission["category"]),
+        )
+
+    for role_slug, permission_keys in DEFAULT_ROLE_PERMISSION_KEYS.items():
+        for permission_key in permission_keys:
+            conn.execute(
+                """
+                /* no-returning-id */ INSERT INTO role_permissions (role_slug, permission_key)
+                VALUES (?, ?)
+                ON CONFLICT(role_slug, permission_key) DO NOTHING
+                """,
+                (role_slug, permission_key),
+            )
+
+
 def init_db() -> None:
     with get_connection() as conn:
         for statement in _schema_statements(conn.dialect):
@@ -648,3 +778,4 @@ def init_db() -> None:
         _ensure_column(conn, "notification_queue", "last_error", "last_error TEXT")
         _ensure_column(conn, "notification_queue", "next_retry_at", "next_retry_at TEXT")
         _normalize_reserved_user_email_domains(conn)
+        _seed_rbac_defaults(conn)

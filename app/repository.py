@@ -71,6 +71,77 @@ def list_users() -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def list_roles() -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM roles ORDER BY slug").fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_permissions() -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM permissions ORDER BY category, key").fetchall()
+    return [dict(r) for r in rows]
+
+
+def role_exists(role_slug: str) -> bool:
+    with get_connection() as conn:
+        row = conn.execute("SELECT slug FROM roles WHERE slug = ?", (role_slug,)).fetchone()
+    return row is not None
+
+
+def permission_keys_exist(permission_keys: list[str]) -> bool:
+    if not permission_keys:
+        return True
+    placeholders = ",".join(["?"] * len(permission_keys))
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT key FROM permissions WHERE key IN ({placeholders})",
+            tuple(permission_keys),
+        ).fetchall()
+    return {str(row["key"]) for row in rows} == set(permission_keys)
+
+
+def list_permissions_for_role(role_slug: str) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT p.*
+            FROM permissions p
+            JOIN role_permissions rp ON rp.permission_key = p.key
+            WHERE rp.role_slug = ?
+            ORDER BY p.category, p.key
+            """,
+            (role_slug,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def replace_role_permissions(role_slug: str, permission_keys: list[str]) -> list[dict[str, Any]]:
+    unique_keys = sorted(set(permission_keys))
+    with get_connection() as conn:
+        conn.execute("DELETE FROM role_permissions WHERE role_slug = ?", (role_slug,))
+        for permission_key in unique_keys:
+            conn.execute(
+                "/* no-returning-id */ INSERT INTO role_permissions (role_slug, permission_key) VALUES (?, ?)",
+                (role_slug, permission_key),
+            )
+    return list_permissions_for_role(role_slug)
+
+
+def role_has_permission(role_slug: str, permission_key: str) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM role_permissions
+            WHERE role_slug = ? AND permission_key = ?
+            LIMIT 1
+            """,
+            (role_slug, permission_key),
+        ).fetchone()
+    return row is not None
+
+
 def count_users() -> int:
     with get_connection() as conn:
         row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
@@ -359,6 +430,74 @@ def create_audit_log(
             """,
             (actor_user_id, action, entity, entity_id, detail, _now_iso()),
         )
+
+
+def create_rag_document(
+    title: str,
+    source_label: str | None,
+    content_chunks: list[str],
+    created_by: int,
+) -> dict[str, Any]:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO rag_documents (title, source_label, created_by, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (title, source_label, created_by, _now_iso()),
+        )
+        document_id = int(cursor.lastrowid)
+        for index, chunk in enumerate(content_chunks):
+            conn.execute(
+                """
+                INSERT INTO rag_chunks (document_id, content, source_label, chunk_index, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (document_id, chunk, source_label, index, _now_iso()),
+            )
+        row = conn.execute("SELECT * FROM rag_documents WHERE id = ?", (document_id,)).fetchone()
+    item = dict(row)
+    item["chunk_count"] = len(content_chunks)
+    return item
+
+
+def list_rag_documents() -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT d.*, COUNT(c.id) AS chunk_count
+            FROM rag_documents d
+            LEFT JOIN rag_chunks c ON c.document_id = d.id
+            GROUP BY d.id, d.title, d.source_label, d.created_by, d.created_at
+            ORDER BY d.id DESC
+            """
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_rag_document(document_id: int) -> bool:
+    with get_connection() as conn:
+        existing = conn.execute("SELECT id FROM rag_documents WHERE id = ?", (document_id,)).fetchone()
+        if not existing:
+            return False
+        conn.execute("DELETE FROM rag_chunks WHERE document_id = ?", (document_id,))
+        conn.execute("DELETE FROM rag_documents WHERE id = ?", (document_id,))
+    return True
+
+
+def list_rag_chunks(limit: int = 500) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT c.*, d.title AS document_title
+            FROM rag_chunks c
+            JOIN rag_documents d ON d.id = c.document_id
+            ORDER BY c.id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def list_audit_logs(limit: int = 100) -> list[dict[str, Any]]:
@@ -914,12 +1053,12 @@ def list_notifications(status: str = "queued", limit: int = 50) -> list[dict[str
     with get_connection() as conn:
         if status == "all":
             rows = conn.execute(
-                "SELECT * FROM notification_queue ORDER BY id ASC LIMIT ?",
+                "SELECT * FROM notification_queue ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM notification_queue WHERE status = ? ORDER BY id ASC LIMIT ?",
+                "SELECT * FROM notification_queue WHERE status = ? ORDER BY id DESC LIMIT ?",
                 (status, limit),
             ).fetchall()
     out: list[dict[str, Any]] = []
@@ -954,7 +1093,7 @@ def list_processable_notifications(limit: int = 50) -> list[dict[str, Any]]:
             FROM notification_queue
             WHERE status = 'queued'
               AND (next_retry_at IS NULL OR next_retry_at <= ?)
-            ORDER BY id ASC
+            ORDER BY CASE WHEN next_retry_at IS NULL THEN 1 ELSE 0 END, attempts DESC, next_retry_at DESC, id DESC
             LIMIT ?
             """,
             (now, limit),

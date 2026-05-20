@@ -5,7 +5,7 @@ from app.settings import settings
 from app.teams_bot import build_text_card, send_card_to_teams_webhook, send_text_to_teams_conversation
 
 
-def process_notification_queue(limit: int = 50) -> dict:
+def process_notification_queue(limit: int = 1000) -> dict:
     queued = list_processable_notifications(limit=limit)
     processed = 0
     sent = 0

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 
-from app.auth import get_current_user, require_roles
+from app.auth import get_current_user, require_permission
 from app.repository import (
     create_audit_log,
     implementation_plan_completion,
@@ -32,13 +32,13 @@ def readiness_probe() -> dict:
 
 @router.get("/monitoring/metrics", response_model=SystemMetricsOut)
 def monitoring_metrics_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "monitoring.view")
     return system_metrics()
 
 
 @router.get("/plan/completion", response_model=PlanCompletionOut)
 def plan_completion_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
-    require_roles(current_user, {"admin", "manager", "hr", "staff"})
+    require_permission(current_user, "projects.view")
     return implementation_plan_completion()
 
 
@@ -47,12 +47,12 @@ def audit_logs_endpoint(
     limit: int = Query(default=100, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
 ) -> list[dict]:
-    require_roles(current_user, {"admin"})
+    require_permission(current_user, "monitoring.admin")
     return list_audit_logs(limit)
 
 
 @router.post("/seed/init")
 def init_seed_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
-    require_roles(current_user, {"admin"})
+    require_permission(current_user, "monitoring.admin")
     create_audit_log(current_user["id"], "seed", "system", None, "seed init")
     return seed_data()

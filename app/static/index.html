@@ -304,6 +304,11 @@
                 <input id="aiDocxFile" class="input" type="file" accept=".docx" />
               </div>
             </div>
+            <label class="check-row">
+              <input id="aiUseRag" type="checkbox" checked />
+              <span>Dùng kho tri thức RAG khi phân tích</span>
+            </label>
+            <input id="aiRagQuery" class="input" type="text" placeholder="Truy vấn RAG tùy chọn; để trống sẽ dùng nội dung requirements" />
             <div class="action-row">
               <button class="btn btn-primary" onclick="generateAiTasksFromText()">Tạo task từ nội dung</button>
               <button class="btn btn-outline" onclick="generateAiTasksFromDocx()">Tạo task từ .docx</button>
@@ -338,6 +343,24 @@
         </div>
         <div id="aiTaskPreview">
           <div class="empty-state"><div>AI</div>Dán requirements hoặc upload .docx để tạo task đề xuất</div>
+        </div>
+      </div>
+      <div class="two-col mt-16">
+        <div class="card">
+          <div class="card-header"><h3><svg class="heading-icon" aria-hidden="true"><use href="#i-database"></use></svg>Kho tri thức RAG</h3></div>
+          <div class="form-stack">
+            <input id="ragTitle" class="input" type="text" placeholder="Tiêu đề tài liệu" />
+            <input id="ragSource" class="input" type="text" placeholder="Nguồn/nhãn tài liệu" />
+            <textarea id="ragContent" class="textarea" rows="7" placeholder="Dán nội dung yêu cầu, biên bản họp, spec, checklist..."></textarea>
+            <button class="btn btn-primary" onclick="createRagDocument()">Thêm vào RAG</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>Tài liệu RAG</h3>
+            <button class="btn btn-outline btn-sm" onclick="loadRagDocuments()"><svg class="btn-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>Tải lại</button>
+          </div>
+          <div id="ragDocuments"><div class="empty-state compact">Chưa tải dữ liệu</div></div>
         </div>
       </div>
     </section>
@@ -411,6 +434,21 @@
           <button class="btn btn-outline btn-sm" onclick="loadAuditLogs()"><svg class="btn-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>Tải lại</button>
         </div>
         <div id="auditTable"></div>
+      </div>
+      <div class="card mt-16">
+        <div class="card-header">
+          <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-target"></use></svg>Phân quyền RBAC</h3>
+          <button class="btn btn-outline btn-sm" onclick="loadRbacAdmin()"><svg class="btn-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>Tải lại</button>
+        </div>
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <select id="rbacRoleSelect" class="select" onchange="loadRolePermissions()"></select>
+          </div>
+          <div class="toolbar-right">
+            <button class="btn btn-primary btn-sm" onclick="saveRolePermissions()">Lưu phân quyền</button>
+          </div>
+        </div>
+        <div id="rbacPermissionTable"></div>
       </div>
     </section>
 

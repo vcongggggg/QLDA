@@ -196,7 +196,7 @@ def list_proactive_notifications(
 
 @router.post("/integrations/teams/proactive/process", response_model=QueueProcessOut)
 def process_proactive_queue(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=1000, ge=1, le=1000),
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     require_roles(current_user, {"admin", "manager", "hr"})

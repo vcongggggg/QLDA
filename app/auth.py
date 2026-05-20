@@ -1,7 +1,7 @@
 from fastapi import Header, HTTPException
 from jose import JWTError, jwt
 
-from app.repository import get_user_by_id
+from app.repository import get_user_by_id, role_has_permission
 from app.settings import settings
 
 
@@ -61,4 +61,10 @@ def get_current_user(
 def require_roles(user: dict, allowed_roles: set[str]) -> None:
     role = user.get("role")
     if role not in allowed_roles:
+        raise HTTPException(status_code=403, detail="forbidden")
+
+
+def require_permission(user: dict, permission_key: str) -> None:
+    role = str(user.get("role") or "")
+    if not role_has_permission(role, permission_key):
         raise HTTPException(status_code=403, detail="forbidden")
