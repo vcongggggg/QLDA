@@ -289,6 +289,20 @@ class SprintCapacityOut(BaseModel):
     created_at: datetime
 
 
+class WorkloadWarningOut(BaseModel):
+    user_id: int
+    user_name: str
+    sprint_id: int
+    sprint_name: str
+    workload_points: int
+    capacity_points: float | None = None
+    open_task_count: int
+    overdue_task_count: int
+    overloaded: bool
+    risk_level: str
+    reasons: list[str]
+
+
 class SprintVelocityOut(BaseModel):
     sprint_id: int
     sprint_name: str
@@ -352,6 +366,55 @@ class SystemMetricsOut(BaseModel):
     open_risks: int
     queued_notifications: int
     failed_notifications: int
+
+
+class OpsFailedQueueItemOut(BaseModel):
+    id: int
+    user_id: int | None = None
+    channel: str
+    status: str
+    attempts: int
+    max_attempts: int
+    last_error_summary: str | None = None
+    next_retry_at: datetime | None = None
+    created_at: datetime
+    sent_at: datetime | None = None
+
+
+class OpsQueueStatusOut(BaseModel):
+    queued_count: int
+    sent_count: int
+    failed_count: int
+    latest_failed_items: list[OpsFailedQueueItemOut]
+
+
+class OpsOverdueProjectOut(BaseModel):
+    project_id: int | None = None
+    project_name: str
+    overdue_count: int
+
+
+class OpsOverdueSprintOut(BaseModel):
+    sprint_id: int | None = None
+    sprint_name: str
+    project_id: int | None = None
+    project_name: str
+    overdue_count: int
+
+
+class OpsOverdueSpikeOut(BaseModel):
+    overdue_count: int
+    threshold: int
+    alert: bool
+    top_projects: list[OpsOverdueProjectOut]
+    top_sprints: list[OpsOverdueSprintOut]
+
+
+class OpsDashboardOut(BaseModel):
+    can_manage_queue: bool
+    audit_logs: list[AuditLogOut]
+    notification_queue: OpsQueueStatusOut
+    overdue_spike: OpsOverdueSpikeOut
 
 
 class NotificationQueueOut(BaseModel):
@@ -443,6 +506,8 @@ class TaskBreakdownItem(BaseModel):
 
 
 class TaskBreakdownResponse(BaseModel):
+    ai_draft_id: int
+    status: str = "draft"
     source: str
     items: list[TaskBreakdownItem]
     warnings: list[str] = []
@@ -450,12 +515,38 @@ class TaskBreakdownResponse(BaseModel):
     retrieved_sources: list[str] = []
 
 
+class AiTaskDraftSummary(BaseModel):
+    id: int
+    source_type: str
+    source_summary: str | None = None
+    source_name: str | None = None
+    status: str
+    reviewer_id: int | None = None
+    reviewed_at: datetime | None = None
+    imported_at: datetime | None = None
+    review_note: str | None = None
+    edit_reason: str | None = None
+    created_by: int
+    created_at: datetime
+    item_count: int = 0
+
+
+class AiTaskDraftDetail(AiTaskDraftSummary):
+    items: list[TaskBreakdownItem]
+
+
+class AiTaskDraftReviewRequest(BaseModel):
+    items: list[TaskBreakdownItem] = Field(min_length=1, max_length=30)
+    review_note: str | None = Field(default=None, max_length=1000)
+    edit_reason: str | None = Field(default=None, max_length=1000)
+
+
 class TaskImportRequest(BaseModel):
+    ai_draft_id: int
     assignee_id: int
     project_id: int | None = None
     sprint_id: int | None = None
     base_deadline: datetime | None = None
-    items: list[TaskBreakdownItem] = Field(min_length=1, max_length=30)
 
 
 class TaskImportResponse(BaseModel):

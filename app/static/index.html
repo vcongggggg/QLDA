@@ -69,6 +69,10 @@
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
       <span>Teams</span>
     </a>
+    <a class="nav-item" data-section="ops" onclick="navigate('ops')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg>
+      <span>Audit & Ops</span>
+    </a>
 
     <div class="nav-divider"></div>
 
@@ -157,15 +161,37 @@
     <!-- ─── KANBAN ─── -->
     <section id="sec-kanban" class="section hidden">
       <div class="toolbar">
-        <div class="toolbar-left">
-          <select id="kanbanProjectFilter" class="select" onchange="loadKanban()">
+        <div class="toolbar-left task-filter-bar">
+          <select id="kanbanProjectFilter" class="select" onchange="onKanbanProjectFilterChange()">
             <option value="">Tất cả dự án</option>
           </select>
+          <select id="kanbanSprintFilter" class="select" onchange="loadKanban()" disabled>
+            <option value="">All sprints</option>
+          </select>
+          <select id="kanbanAssigneeFilter" class="select" onchange="loadKanban()">
+            <option value="">All assignees</option>
+          </select>
+          <select id="kanbanStatusFilter" class="select" onchange="loadKanban()">
+            <option value="">All status</option>
+            <option value="todo">Todo</option>
+            <option value="doing">Doing</option>
+            <option value="done">Done</option>
+          </select>
+          <select id="kanbanOverdueFilter" class="select" onchange="loadKanban()">
+            <option value="">Due state</option>
+            <option value="true">Overdue</option>
+            <option value="false">Not overdue</option>
+          </select>
+          <input id="kanbanKeywordFilter" class="input task-filter-input" type="search" placeholder="Keyword" oninput="loadKanbanDebounced()">
+          <input id="kanbanDeadlineFromFilter" class="input task-filter-date" type="date" onchange="loadKanban()">
+          <input id="kanbanDeadlineToFilter" class="input task-filter-date" type="date" onchange="loadKanban()">
+          <button type="button" class="btn btn-outline btn-compact" onclick="resetKanbanFilters()">Reset</button>
         </div>
         <div class="toolbar-right">
           <span id="kanbanCount" class="text-sm text-muted"></span>
         </div>
       </div>
+      <div id="workloadWarningsPanel" class="workload-panel hidden"></div>
       <div class="kanban-board" id="kanban-board">
         <div class="kanban-col">
           <div class="kanban-col-header todo-header">
@@ -345,6 +371,15 @@
           <div class="empty-state"><div>AI</div>Dán requirements hoặc upload .docx để tạo task đề xuất</div>
         </div>
       </div>
+      <div class="card mt-16">
+        <div class="card-header">
+          <h3>AI drafts</h3>
+          <button class="btn btn-outline btn-sm" onclick="loadAiDrafts()"><svg class="btn-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>Tải lại</button>
+        </div>
+        <div id="aiDraftsTable">
+          <div class="empty-state compact">Chưa tải draft AI</div>
+        </div>
+      </div>
       <div class="two-col mt-16">
         <div class="card">
           <div class="card-header"><h3><svg class="heading-icon" aria-hidden="true"><use href="#i-database"></use></svg>Kho tri thức RAG</h3></div>
@@ -413,6 +448,57 @@
     </section>
 
     <!-- ─── ADMIN ─── -->
+    <!-- Audit & Ops -->
+    <section id="sec-ops" class="section hidden">
+      <div class="stat-grid ops-stat-grid" id="opsStats">
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+      </div>
+
+      <div id="opsAlert" class="ops-alert hidden"></div>
+
+      <div class="card mt-16">
+        <div class="card-header">
+          <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-search"></use></svg>Audit log</h3>
+          <button class="btn btn-outline btn-sm" onclick="loadOpsDashboard()"><svg class="btn-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>Refresh</button>
+        </div>
+        <div class="toolbar ops-filter-bar">
+          <div class="toolbar-left">
+            <input id="opsActorFilter" class="input ops-filter-small" type="number" min="1" placeholder="Actor ID" onchange="loadOpsDashboard()" />
+            <input id="opsActionFilter" class="input ops-filter-small" type="text" placeholder="Action" onchange="loadOpsDashboard()" />
+            <input id="opsEntityFilter" class="input ops-filter-small" type="text" placeholder="Entity type" onchange="loadOpsDashboard()" />
+            <input id="opsKeywordFilter" class="input ops-filter-keyword" type="search" placeholder="Keyword" oninput="loadOpsDashboardDebounced()" />
+            <input id="opsDateFromFilter" class="input task-filter-date" type="date" onchange="loadOpsDashboard()" />
+            <input id="opsDateToFilter" class="input task-filter-date" type="date" onchange="loadOpsDashboard()" />
+            <button type="button" class="btn btn-outline btn-compact" onclick="resetOpsFilters()">Reset</button>
+          </div>
+        </div>
+        <div id="opsAuditTable">
+          <div class="skeleton" style="height:120px"></div>
+        </div>
+      </div>
+
+      <div class="two-col mt-16">
+        <div class="card">
+          <div class="card-header">
+            <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-bell"></use></svg>Failed queue</h3>
+            <button class="btn btn-primary btn-sm hidden" id="opsProcessQueueBtn" onclick="processOpsQueue()">Process</button>
+          </div>
+          <div id="opsFailedQueueTable">
+            <div class="skeleton" style="height:120px"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3><svg class="heading-icon" aria-hidden="true"><use href="#i-alert-triangle"></use></svg>Overdue spike</h3></div>
+          <div id="opsOverdueTables">
+            <div class="skeleton" style="height:120px"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="sec-admin" class="section hidden">
       <div class="two-col">
         <div class="card">
@@ -466,6 +552,20 @@
       <button type="button" class="drawer-close" onclick="closeTaskDetail()" aria-label="Đóng">×</button>
     </div>
     <div id="taskDetailBody" class="task-detail-body"></div>
+  </aside>
+</div>
+
+<!-- AI draft review drawer -->
+<div id="aiDraftOverlay" class="drawer-overlay hidden" onclick="if(event.target===this) closeAiDraftReview()">
+  <aside class="task-detail-drawer" aria-label="AI draft review drawer">
+    <div class="task-detail-header">
+      <div>
+        <div class="task-detail-kicker">Review trước khi import</div>
+        <strong id="aiDraftDrawerTitle">AI Draft</strong>
+      </div>
+      <button type="button" class="drawer-close" onclick="closeAiDraftReview()" aria-label="Đóng">×</button>
+    </div>
+    <div id="aiDraftReviewBody" class="task-detail-body"></div>
   </aside>
 </div>
 

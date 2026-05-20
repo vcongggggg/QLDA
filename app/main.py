@@ -11,6 +11,9 @@ from app.routers import ai, auth, kpi, monitoring, notifications, org, rag, rbac
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    from app.settings import settings
+
+    settings.validate_production_safety()
     init_db()
     yield
 

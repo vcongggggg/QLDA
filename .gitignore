@@ -38,6 +38,7 @@ Thumbs.db
 
 # Temp / extracted junk
 _extracted/
+.tmp/
 *.log
 teams-app-package.zip
 ecc_guide.md

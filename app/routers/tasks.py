@@ -36,6 +36,19 @@ def _parse_dt(value: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _query_datetime_to_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _normalize_query_datetime(value: datetime | None) -> str | None:
+    normalized = _query_datetime_to_utc(value)
+    return normalized.isoformat() if normalized is not None else None
+
+
 def _due_state(task: dict) -> str:
     deadline = _parse_dt(str(task["deadline"]))
     completed_at = task.get("completed_at")
@@ -91,13 +104,35 @@ def list_tasks_endpoint(
     project_id: int | None = Query(default=None),
     sprint_id: int | None = Query(default=None),
     status: str | None = Query(default=None),
+    overdue: bool | None = Query(default=None),
+    keyword: str | None = Query(default=None, max_length=200),
+    deadline_from: datetime | None = Query(default=None),
+    deadline_to: datetime | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ) -> list[dict]:
     if current_user["role"] == "staff":
         assignee_id = current_user["id"]
     if status is not None and status not in {"todo", "doing", "done"}:
         raise HTTPException(status_code=400, detail="status must be one of todo|doing|done")
-    return list_tasks(assignee_id=assignee_id, project_id=project_id, sprint_id=sprint_id, status=status)
+    normalized_deadline_from = _query_datetime_to_utc(deadline_from)
+    normalized_deadline_to = _query_datetime_to_utc(deadline_to)
+    if (
+        normalized_deadline_from is not None
+        and normalized_deadline_to is not None
+        and normalized_deadline_to < normalized_deadline_from
+    ):
+        raise HTTPException(status_code=400, detail="deadline_to must be greater than or equal to deadline_from")
+    cleaned_keyword = keyword.strip() if keyword else None
+    return list_tasks(
+        assignee_id=assignee_id,
+        project_id=project_id,
+        sprint_id=sprint_id,
+        status=status,
+        overdue=overdue,
+        keyword=cleaned_keyword,
+        deadline_from=_normalize_query_datetime(normalized_deadline_from),
+        deadline_to=_normalize_query_datetime(normalized_deadline_to),
+    )
 
 
 @router.get("/tasks/{task_id}", response_model=TaskDetailOut)

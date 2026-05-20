@@ -7,6 +7,8 @@ from typing import Any
 
 import psycopg2
 
+from app.migrations import run_schema_migrations
+
 
 _SQLITE_SCHEMA_STATEMENTS = [
     """
@@ -224,6 +226,25 @@ _SQLITE_SCHEMA_STATEMENTS = [
         detail TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY (actor_user_id) REFERENCES users(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_task_drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_type TEXT NOT NULL CHECK(source_type IN ('text','docx')),
+        source_summary TEXT,
+        source_name TEXT,
+        generated_tasks TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','reviewed','imported')),
+        reviewer_id INTEGER,
+        reviewed_at TEXT,
+        imported_at TEXT,
+        review_note TEXT,
+        edit_reason TEXT,
+        created_by INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (reviewer_id) REFERENCES users(id),
+        FOREIGN KEY (created_by) REFERENCES users(id)
     )
     """,
     """
@@ -458,6 +479,23 @@ _POSTGRES_SCHEMA_STATEMENTS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS ai_task_drafts (
+        id SERIAL PRIMARY KEY,
+        source_type TEXT NOT NULL CHECK(source_type IN ('text','docx')),
+        source_summary TEXT,
+        source_name TEXT,
+        generated_tasks TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','reviewed','imported')),
+        reviewer_id INTEGER REFERENCES users(id),
+        reviewed_at TEXT,
+        imported_at TEXT,
+        review_note TEXT,
+        edit_reason TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS kpi_adjustments (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id),
@@ -487,18 +525,6 @@ _POSTGRES_SCHEMA_STATEMENTS = [
         created_at TEXT NOT NULL
     )
     """,
-]
-
-_INDEX_STATEMENTS = [
-    "CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status_deadline ON tasks(assignee_id, status, deadline)",
-    "CREATE INDEX IF NOT EXISTS idx_tasks_project_status_deadline ON tasks(project_id, status, deadline)",
-    "CREATE INDEX IF NOT EXISTS idx_tasks_sprint_status ON tasks(sprint_id, status)",
-    "CREATE INDEX IF NOT EXISTS idx_notification_queue_status_retry ON notification_queue(status, next_retry_at)",
-    "CREATE INDEX IF NOT EXISTS idx_app_notifications_user_read_created ON app_notifications(user_id, is_read, created_at)",
-    "CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created ON audit_logs(entity, entity_id, created_at)",
-    "CREATE INDEX IF NOT EXISTS idx_kpi_adjustments_month_user ON kpi_adjustments(month, user_id)",
-    "CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON role_permissions(permission_key)",
-    "CREATE INDEX IF NOT EXISTS idx_rag_chunks_document ON rag_chunks(document_id, chunk_index)",
 ]
 
 _NO_ROW = object()
@@ -699,23 +725,6 @@ def _ensure_column(conn: DatabaseConnection, table: str, column: str, definition
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
 
 
-def _normalize_reserved_user_email_domains(conn: DatabaseConnection) -> None:
-    replacements = (
-        ("@local.test", "@example.com"),
-        ("@teamswork.local", "@teamswork.example.com"),
-        ("@aad.local", "@aad.example.com"),
-    )
-    for old_domain, new_domain in replacements:
-        conn.execute(
-            """
-            UPDATE users
-            SET email = REPLACE(email, ?, ?)
-            WHERE email LIKE ?
-            """,
-            (old_domain, new_domain, f"%{old_domain}"),
-        )
-
-
 def _seed_rbac_defaults(conn: DatabaseConnection) -> None:
     from app.permissions import DEFAULT_PERMISSIONS, DEFAULT_ROLE_PERMISSION_KEYS, DEFAULT_ROLES
 
@@ -761,21 +770,5 @@ def init_db() -> None:
         for statement in _schema_statements(conn.dialect):
             conn.execute(statement)
 
-        for statement in _INDEX_STATEMENTS:
-            conn.execute(statement)
-
-        user_cols = _table_columns(conn, "users")
-        if "aad_object_id" not in user_cols:
-            conn.execute("ALTER TABLE users ADD COLUMN aad_object_id TEXT")
-            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_aad_object_id ON users(aad_object_id)")
-
-        _ensure_column(conn, "tasks", "project_id", "project_id INTEGER")
-        _ensure_column(conn, "tasks", "sprint_id", "sprint_id INTEGER")
-        _ensure_column(conn, "tasks", "story_points", "story_points INTEGER NOT NULL DEFAULT 1")
-
-        _ensure_column(conn, "notification_queue", "attempts", "attempts INTEGER NOT NULL DEFAULT 0")
-        _ensure_column(conn, "notification_queue", "max_attempts", "max_attempts INTEGER NOT NULL DEFAULT 3")
-        _ensure_column(conn, "notification_queue", "last_error", "last_error TEXT")
-        _ensure_column(conn, "notification_queue", "next_retry_at", "next_retry_at TEXT")
-        _normalize_reserved_user_email_domains(conn)
+        run_schema_migrations(conn, _table_columns, _ensure_column)
         _seed_rbac_defaults(conn)

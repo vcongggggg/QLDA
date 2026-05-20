@@ -70,18 +70,25 @@ ollama serve
 
 Backend goi API theo chuan OpenAI-compatible `/chat/completions`. Neu model chinh loi, he thong thu model fallback; neu AI local khong san sang, module se dung heuristic local de demo khong bi dung luong.
 
-## Luong AI import task
+## Luong AI review va import task
+
+AI chi de xuat task. Task that trong Kanban chi duoc tao sau khi manager/admin review va import draft.
 
 1. Mo tab AI tren UI.
 2. Dan requirements hoac upload file `.docx`.
-3. Bam tao task de xem danh sach de xuat.
-4. Chon task can import, chon assignee va project neu co.
-5. Bam import de tao task that trong Kanban.
+3. Bam tao task de he thong luu mot AI draft o trang thai `draft`.
+4. Manager/admin mo bang `AI drafts`, review/chinh task de xuat va ghi note/reason neu can.
+5. Sau review, draft chuyen sang `reviewed`.
+6. Chon assignee va project neu co, bam import de tao task that trong Kanban.
+7. Draft da `imported` khong duoc import lai.
 
 Endpoint lien quan:
 
 - `POST /ai/task-breakdown`
 - `POST /ai/task-breakdown/docx`
+- `GET /ai/task-breakdown/drafts`
+- `GET /ai/task-breakdown/drafts/{draft_id}`
+- `PATCH /ai/task-breakdown/drafts/{draft_id}/review`
 - `POST /ai/task-breakdown/import`
 
 Neu bat `use_rag`, backend se truy van kho RAG bang `rag_query` neu co, hoac dung noi dung requirements lam truy van. Ket qua tra ve them `retrieved_context_count` va `retrieved_sources` de UI/API biet AI da dung nguon nao.
@@ -171,6 +178,7 @@ Du lieu mau gom user, phong ban, du an, sprint, task, capacity, risk va weekly s
 - `POST /projects/{project_id}/members`
 - `POST /projects/{project_id}/sprints`
 - `PATCH /sprints/{sprint_id}/status`
+- `GET /sprints/{sprint_id}/workload-warnings`
 - `POST /tasks`, `GET /tasks`
 - `PATCH /tasks/{task_id}/status`
 - `GET /kpi/monthly?month=YYYY-MM`
@@ -187,6 +195,32 @@ Du lieu mau gom user, phong ban, du an, sprint, task, capacity, risk va weekly s
 - `GET /portfolio/summary`
 - `GET /monitoring/readiness`
 - `GET /monitoring/metrics`
+- `GET /monitoring/ops`
+- `GET /audit/logs`
+
+### Query params cho `GET /tasks`
+
+`GET /tasks` ho tro loc nang cao nhung van giu response `TaskOut[]` nhu cu:
+
+- `project_id`, `sprint_id`, `assignee_id`
+- `status`: `todo`, `doing`, `done`
+- `overdue`: `true` de lay task qua han chua done, `false` de loai task dang qua han
+- `keyword`: tim trong `title` va `description`
+- `deadline_from`, `deadline_to`: ISO datetime, loc theo deadline
+
+Vai tro `staff` van chi nhin thay task duoc gan cho chinh minh. Hien tai task chua co field `priority`, nen API chua ho tro filter theo priority.
+
+## Canh bao workload/capacity theo sprint
+
+Endpoint `GET /sprints/{sprint_id}/workload-warnings` tra ve workload theo tung assignee trong sprint:
+
+- `workload_points`: tong `story_points` cua task chua `done` trong sprint.
+- `capacity_points`: MVP tam dung `sprint_capacity_plans.capacity_hours` lam proxy, vi schema chua co cot `capacity_points` rieng.
+- `overloaded=true` khi `workload_points > capacity_points`; neu chua co capacity thi `capacity_points=null` va khong tu danh dau overloaded.
+- `overdue_task_count`: so task chua `done` da qua deadline trong sprint.
+- `risk_level`: `high` khi vua overloaded vua co task qua han, `medium` khi co mot trong hai dieu kien, con lai la `low`.
+
+RBAC: `admin`, `manager`, `hr` xem du lieu sprint/project co quyen truy cap; `staff` chi thay workload cua chinh minh. UI Kanban hien panel `Workload warnings` khi dang loc theo sprint.
 
 ## Microsoft Teams
 
@@ -204,6 +238,36 @@ Da co scaffold tich hop Teams:
 - Requeue failed item: `POST /integrations/teams/proactive/requeue/{notification_id}`
 
 Teams app assets nam trong `teams-app/`, script dong goi nam o `scripts/package_teams_app.py`.
+
+## Audit & Ops dashboard MVP
+
+Audit & Ops la dashboard van hanh toi thieu cho audit log, Teams notification queue va overdue spike. UI nam o tab `Audit & Ops`; API tong hop la:
+
+- `GET /monitoring/ops`
+- `GET /audit/logs`
+
+RBAC:
+
+- `admin`, `manager`, `hr` co `monitoring.view` mac dinh va xem duoc dashboard.
+- `staff` bi chan khoi `/monitoring/ops`.
+- Queue process/requeue van dung endpoint Teams hien co va chi hien nut khi user co quyen privileged.
+
+Filter audit ho tro:
+
+- `actor_id`
+- `action`
+- `entity_type` (map vao cot `audit_logs.entity`)
+- `date_from`, `date_to`
+- `keyword`
+- `limit`
+
+Dashboard tra ve:
+
+- `audit_logs`: audit da loc, detail duoc rut gon/redact.
+- `notification_queue`: `queued_count`, `sent_count`, `failed_count`, `latest_failed_items`.
+- `overdue_spike`: tong task qua han hien tai, top project/sprint, `alert=true` neu vuot nguong.
+
+Nguong overdue mac dinh la `10`, co the doi bang `overdue_threshold`. MVP nay khong tao he audit moi, khong realtime websocket, khong APM, khong them chart library moi. Response khong tra webhook URL, bearer token, client secret, raw provider stack trace hoac payload queue raw.
 
 ## Test
 
@@ -241,3 +305,9 @@ Backup PostgreSQL:
 - `.env.staging.example` va `.env.production.example` cho moi truong trien khai.
 - `DEPLOYMENT_RUNBOOK.md` la checklist go-live.
 - `teams-app/PUBLISH_CHECKLIST.md` la checklist publish Teams app.
+- Production nen dat `APP_ENV=production`; ung dung se chan startup neu van dung JWT secret mac dinh hoac header fallback dev.
+- Smoke check sau deploy:
+
+```bash
+python scripts/smoke_check.py --base-url https://teamswork.example.com --user-id <admin_id> --expect-production-auth
+```

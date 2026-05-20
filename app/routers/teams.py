@@ -320,11 +320,12 @@ def teams_tab_prod_page() -> Response:
 </body></html>""".replace("__APP_BASE_URL__", settings.app_base_url)
     return Response(content=html, media_type="text/html")
 
-    html = f"""<!doctype html>
+    # Legacy production tab implementation removed; keep this function to one response path.
+    _legacy_removed = """
 <html>
 <head>
   <meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
-  <title>TeamsWork Production Tab</title>
+  <title>Legacy TeamsWork Tab Removed</title>
   <script src='https://res.cdn.office.net/teams-js/2.19.0/js/MicrosoftTeams.min.js'></script>
   <style>
     :root{{--brand:#2b579a;--bg:#f4f6fb;--card:#fff;--border:#dde5f0;--text:#1e2a3a}}
@@ -392,4 +393,4 @@ def teams_tab_prod_page() -> Response:
     load();
   </script>
 </body></html>"""
-    return Response(content=html, media_type="text/html")
+    _legacy_removed = _legacy_removed

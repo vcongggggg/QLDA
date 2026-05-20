@@ -121,7 +121,7 @@ def breakdown_requirements(text: str, project_context: str | None = None, max_ta
                 warnings.append(f"AI model {model} failed; trying fallback model {models[-1]}.")
                 continue
         if last_exc is not None:
-            warnings.append(f"AI provider failed; used local fallback: {last_exc}")
+            warnings.append("AI provider failed; used local fallback.")
     else:
         warnings.append("AI_API_KEY is not configured; used local fallback.")
     return BreakdownResult(source="heuristic", items=breakdown_requirements_locally(text, max_tasks), warnings=warnings)

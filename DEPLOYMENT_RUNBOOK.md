@@ -31,12 +31,18 @@ Smoke checklist before pilot:
 - `GET /integrations/teams/summary?month=YYYY-MM` returns task/KPI data for the current user.
 - `POST /integrations/teams/aad/sync` works from the Teams tab.
 - Notification queue can be listed, processed, and failed items can be requeued by `admin`, `manager`, or `hr`.
+- `GET /monitoring/ops` returns Audit & Ops data for `admin`, `manager`, or `hr`, and rejects `staff`.
 - KPI, project progress, sprint review, and portfolio reports download with the expected content type.
 
 ## 5. Authentication Hardening Validation
 - Confirm `AUTH_DISABLE_JWT_VALIDATION=false`.
 - Confirm `AUTH_ALLOW_HEADER_FALLBACK=false`.
+- Confirm `APP_ENV=production`; startup will fail fast if production auth still uses dev fallback or the default JWT secret.
 - Verify protected endpoint rejects missing bearer token.
+- Run the automated smoke check after deploy:
+```bash
+python scripts/smoke_check.py --base-url https://teamswork.example.com --user-id <admin_id> --expect-production-auth
+```
 
 ## 6. Teams Proactive Flow Validation
 1. Call bot callback once from Teams to save conversation reference.
@@ -65,5 +71,8 @@ Run PostgreSQL backup script from a machine with `pg_dump` installed:
 
 ## 9. Post-Deploy Monitoring
 - Poll `/monitoring/metrics` on schedule.
+- Use `/monitoring/ops` or the `Audit & Ops` UI tab for audit filters, queue counts, latest failed queue items, and overdue spike triage.
 - Alert if `failed_notifications` increases continuously.
 - Alert if `overdue_tasks` spikes abnormally.
+- The MVP overdue spike alert turns on when overdue tasks exceed `overdue_threshold` (default `10`); tune the query param for pilot sensitivity.
+- Failed queue rows are sanitized for operators. Use server logs for raw provider diagnostics when needed.
