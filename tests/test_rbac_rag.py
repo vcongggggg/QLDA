@@ -64,8 +64,8 @@ def test_admin_can_update_role_permissions_and_staff_cannot() -> None:
     assert restored.status_code == 200
 
 
-def test_permission_not_role_string_controls_ai_preview() -> None:
-    settings.ai_api_key = ""
+def test_permission_not_role_string_controls_ai_preview(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "ai_api_key", "")
     admin_id, manager_id, _staff_id = _bootstrap()
 
     current = client.get("/rbac/roles/manager/permissions", headers=_hdr(admin_id))
@@ -94,8 +94,8 @@ def test_permission_not_role_string_controls_ai_preview() -> None:
         )
 
 
-def test_rag_document_query_and_ai_breakdown_metadata() -> None:
-    settings.ai_api_key = ""
+def test_rag_document_query_and_ai_breakdown_metadata(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "ai_api_key", "")
     admin_id, manager_id, staff_id = _bootstrap()
 
     staff_create = client.post(

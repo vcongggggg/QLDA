@@ -11,6 +11,7 @@ from app.repository import (
     create_sprint,
     create_task,
     create_user,
+    list_processable_notifications,
     mark_notification_result,
     queue_notification,
     replace_role_permissions,
@@ -96,6 +97,56 @@ def test_ops_dashboard_view_is_controlled_by_permission_not_role_allowlist() -> 
         assert resp.json()["can_manage_queue"] is False
     finally:
         replace_role_permissions("staff", original_keys)
+
+
+def test_ops_dashboard_queue_management_flag_is_permission_based() -> None:
+    admin, _manager, _hr, staff = _bootstrap()
+    original_permissions = client.get(
+        "/rbac/roles/staff/permissions",
+        headers=_hdr(int(admin["id"])),
+    ).json()["permissions"]
+    original_keys = [item["key"] for item in original_permissions]
+    try:
+        replace_role_permissions("staff", [*original_keys, "monitoring.view", "teams.manage"])
+
+        resp = client.get("/monitoring/ops", headers=_hdr(int(staff["id"])))
+
+        assert resp.status_code == 200
+        assert resp.json()["can_manage_queue"] is True
+    finally:
+        replace_role_permissions("staff", original_keys)
+
+
+def test_processable_notifications_prioritize_new_then_oldest_due_retry() -> None:
+    _admin, _manager, _hr, staff = _bootstrap()
+    with get_connection() as conn:
+        conn.execute("UPDATE notification_queue SET status = 'sent' WHERE status = 'queued'")
+
+    first_new = queue_notification(int(staff["id"]), "teams", {"type": "message", "text": "first-new"})
+    due_later = queue_notification(int(staff["id"]), "teams", {"type": "message", "text": "due-later"})
+    due_earlier = queue_notification(int(staff["id"]), "teams", {"type": "message", "text": "due-earlier"})
+    second_new = queue_notification(int(staff["id"]), "teams", {"type": "message", "text": "second-new"})
+    future_retry = queue_notification(int(staff["id"]), "teams", {"type": "message", "text": "future"})
+
+    now = datetime.now(timezone.utc)
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE notification_queue SET attempts = 4, next_retry_at = ? WHERE id = ?",
+            ((now - timedelta(minutes=5)).isoformat(), due_later["id"]),
+        )
+        conn.execute(
+            "UPDATE notification_queue SET attempts = 1, next_retry_at = ? WHERE id = ?",
+            ((now - timedelta(minutes=10)).isoformat(), due_earlier["id"]),
+        )
+        conn.execute(
+            "UPDATE notification_queue SET attempts = 9, next_retry_at = ? WHERE id = ?",
+            ((now + timedelta(hours=1)).isoformat(), future_retry["id"]),
+        )
+
+    rows = list_processable_notifications(limit=10)
+    ids = [int(row["id"]) for row in rows if row["payload"]["text"] in {"first-new", "second-new", "due-later", "due-earlier", "future"}]
+
+    assert ids == [int(first_new["id"]), int(second_new["id"]), int(due_earlier["id"]), int(due_later["id"])]
 
 
 def test_audit_filters_work_on_ops_and_audit_endpoint() -> None:
@@ -211,3 +262,11 @@ def test_static_ui_exposes_audit_ops_section() -> None:
     assert "/monitoring/ops" in app_js
     assert "can_manage_queue" in app_js
     assert "requeueOpsItem" in app_js
+
+
+def test_static_ai_docx_preview_sends_rag_options() -> None:
+    app_js = Path("app/static/app.js").read_text(encoding="utf-8")
+
+    assert "function getRagOptions()" in app_js
+    assert "form.append('use_rag', String(useRag));" in app_js
+    assert "form.append('rag_query', ragQuery);" in app_js

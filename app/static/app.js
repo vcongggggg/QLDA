@@ -1011,11 +1011,17 @@ async function populateAiSelectors() {
   }
 }
 
+function getRagOptions() {
+  return {
+    useRag: document.getElementById('aiUseRag')?.checked !== false,
+    ragQuery: document.getElementById('aiRagQuery')?.value.trim() || '',
+  };
+}
+
 async function generateAiTasksFromText() {
   const text = document.getElementById('aiRequirementText').value.trim();
   const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
-  const useRag = document.getElementById('aiUseRag')?.checked !== false;
-  const ragQuery = document.getElementById('aiRagQuery')?.value.trim() || null;
+  const { useRag, ragQuery } = getRagOptions();
   if (text.length < 10) {
     toast('Vui lòng nhập requirements dài hơn 10 ký tự', 'error');
     return;
@@ -1030,6 +1036,7 @@ async function generateAiTasksFromText() {
 async function generateAiTasksFromDocx() {
   const file = document.getElementById('aiDocxFile').files[0];
   const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
+  const { useRag, ragQuery } = getRagOptions();
   if (!file) {
     toast('Vui lòng chọn file .docx', 'error');
     return;
@@ -1037,6 +1044,10 @@ async function generateAiTasksFromDocx() {
   const form = new FormData();
   form.append('file', file);
   form.append('max_tasks', String(maxTasks));
+  form.append('use_rag', String(useRag));
+  if (ragQuery) {
+    form.append('rag_query', ragQuery);
+  }
   await generateAiTasks(() => api('/ai/task-breakdown/docx', {
     method: 'POST',
     body: form,

@@ -64,7 +64,11 @@ def require_roles(user: dict, allowed_roles: set[str]) -> None:
         raise HTTPException(status_code=403, detail="forbidden")
 
 
-def require_permission(user: dict, permission_key: str) -> None:
+def has_permission(user: dict, permission_key: str) -> bool:
     role = str(user.get("role") or "")
-    if not role_has_permission(role, permission_key):
+    return role_has_permission(role, permission_key)
+
+
+def require_permission(user: dict, permission_key: str) -> None:
+    if not has_permission(user, permission_key):
         raise HTTPException(status_code=403, detail="forbidden")

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from io import BytesIO
 
+import pytest
 from docx import Document
 from fastapi.testclient import TestClient
 
@@ -28,6 +29,11 @@ def _bootstrap() -> tuple[int, int, int]:
     return int(admin["id"]), int(manager["id"]), int(staff["id"])
 
 
+@pytest.fixture
+def disable_ai(monkeypatch):
+    monkeypatch.setattr(settings, "ai_api_key", "")
+
+
 def test_local_breakdown_extracts_actionable_tasks() -> None:
     text = """
     He thong can cho phep quan ly tao task, keo tha Kanban va xuat bao cao KPI.
@@ -43,10 +49,10 @@ def test_local_breakdown_extracts_actionable_tasks() -> None:
 
 
 def test_ai_breakdown_uses_fallback_model_when_primary_fails(monkeypatch) -> None:
-    settings.ai_provider = "openai_compatible"
-    settings.ai_api_key = "ollama"
-    settings.ai_model = "qwen3:8b"
-    settings.ai_fallback_model = "qwen2.5:7b"
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    monkeypatch.setattr(settings, "ai_api_key", "ollama")
+    monkeypatch.setattr(settings, "ai_model", "qwen3:8b")
+    monkeypatch.setattr(settings, "ai_fallback_model", "qwen2.5:7b")
     called_models: list[str | None] = []
 
     def fake_breakdown(text: str, project_context: str | None, max_tasks: int, model: str | None = None):
@@ -73,8 +79,7 @@ def test_ai_breakdown_uses_fallback_model_when_primary_fails(monkeypatch) -> Non
     assert any("trying fallback model qwen2.5:7b" in warning for warning in result.warnings)
 
 
-def test_task_breakdown_preview_review_and_import_flow() -> None:
-    settings.ai_api_key = ""
+def test_task_breakdown_preview_review_and_import_flow(disable_ai) -> None:
     _admin_id, manager_id, staff_id = _bootstrap()
     before_count = len(list_tasks(assignee_id=staff_id))
     text = """
@@ -153,8 +158,7 @@ def test_task_breakdown_preview_review_and_import_flow() -> None:
     assert import_again.status_code == 400
 
 
-def test_task_breakdown_docx_creates_draft() -> None:
-    settings.ai_api_key = ""
+def test_task_breakdown_docx_creates_draft(disable_ai) -> None:
     _admin_id, manager_id, _staff_id = _bootstrap()
     doc = Document()
     doc.add_paragraph("Xay dung module import AI draft cho manager review truoc khi tao task that.")
@@ -186,8 +190,7 @@ def test_task_breakdown_docx_creates_draft() -> None:
     assert detail.json()["source_name"] == "ai-draft-review.docx"
 
 
-def test_task_breakdown_docx_does_not_query_rag_when_disabled(monkeypatch) -> None:
-    settings.ai_api_key = ""
+def test_task_breakdown_docx_does_not_query_rag_when_disabled(monkeypatch, disable_ai) -> None:
     _admin_id, manager_id, _staff_id = _bootstrap()
     doc = Document()
     doc.add_paragraph("Xay dung docx endpoint khong goi RAG khi use_rag bi tat.")
@@ -218,8 +221,7 @@ def test_task_breakdown_docx_does_not_query_rag_when_disabled(monkeypatch) -> No
     assert preview.json()["retrieved_context_count"] == 0
 
 
-def test_task_breakdown_docx_queries_rag_with_custom_query_when_enabled(monkeypatch) -> None:
-    settings.ai_api_key = ""
+def test_task_breakdown_docx_queries_rag_with_custom_query_when_enabled(monkeypatch, disable_ai) -> None:
     _admin_id, manager_id, _staff_id = _bootstrap()
     doc = Document()
     doc.add_paragraph("Xay dung docx endpoint goi RAG khi use_rag duoc bat.")
@@ -261,8 +263,7 @@ def test_task_breakdown_docx_queries_rag_with_custom_query_when_enabled(monkeypa
     assert "custom-rag-source" in preview.json()["retrieved_sources"]
 
 
-def test_staff_cannot_generate_or_import_ai_tasks() -> None:
-    settings.ai_api_key = ""
+def test_staff_cannot_generate_or_import_ai_tasks(disable_ai) -> None:
     _admin_id, _manager_id, staff_id = _bootstrap()
 
     preview = client.post(

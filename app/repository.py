@@ -1415,7 +1415,9 @@ def list_processable_notifications(limit: int = 50) -> list[dict[str, Any]]:
             FROM notification_queue
             WHERE status = 'queued'
               AND (next_retry_at IS NULL OR next_retry_at <= ?)
-            ORDER BY CASE WHEN next_retry_at IS NULL THEN 1 ELSE 0 END, attempts DESC, next_retry_at DESC, id DESC
+            ORDER BY CASE WHEN next_retry_at IS NULL THEN 0 ELSE 1 END,
+                     next_retry_at ASC,
+                     id ASC
             LIMIT ?
             """,
             (now, limit),

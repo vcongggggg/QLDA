@@ -4,7 +4,7 @@
 
 - TeamsWork hiện có FastAPI app, static web UI, Microsoft Teams tab, RBAC theo permission, audit log, KPI, reports, AI task breakdown và RAG keyword-based.
 - Task filtering đã tồn tại ở `GET /tasks`: `project_id`, `sprint_id`, `assignee_id`, `status`, `overdue`, `keyword`, `deadline_from`, `deadline_to`; có test trong `tests/test_task_filters.py`.
-- AI task workflow đã có backend draft/review/import: `ai_task_drafts`, endpoint list/detail/review/import, audit log, test trong `tests/test_ai_task_breakdown.py`. UI hiện còn cần cập nhật vì flow import trong `app/static/app.js` chưa gửi `ai_draft_id`.
+- AI task workflow đã có draft/review/import: `ai_task_drafts`, endpoint list/detail/review/import, audit log, test trong `tests/test_ai_task_breakdown.py`. UI đã gửi `ai_draft_id` khi review/import.
 - Workload/capacity hiện có `sprint_capacity_plans` và API capacity theo sprint, nhưng chưa thấy warning/threshold chính thức.
 - Audit/Ops hiện có `/monitoring/metrics`, `/audit/logs`, Teams queue stats, Admin UI hiển thị audit logs; chưa có dashboard ops chuyên dụng với filter/drilldown.
 - RAG hiện nhận text thủ công qua `POST /rag/documents`, chunk keyword matching trong `app/rag.py`; chưa thấy upload `.docx`/`.pdf` cho RAG, permission theo tài liệu, hay embedding/vector search.

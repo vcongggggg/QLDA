@@ -10,6 +10,7 @@ from app.repository import (
     create_sprint,
     create_task,
     create_user,
+    replace_role_permissions,
     update_task_status,
     upsert_sprint_capacity,
 )
@@ -190,3 +191,20 @@ def test_staff_cannot_view_workload_for_inaccessible_project() -> None:
     resp = client.get(f"/sprints/{data['sprint_id']}/workload-warnings", headers=_hdr(data["outsider_id"]))
 
     assert resp.status_code == 403
+
+
+def test_sprint_workload_warnings_require_sprints_view_permission() -> None:
+    data = _seed_workload_case()
+    original = client.get(
+        "/rbac/roles/staff/permissions",
+        headers=_hdr(data["admin_id"]),
+    ).json()["permissions"]
+    original_keys = [item["key"] for item in original]
+    try:
+        replace_role_permissions("staff", [key for key in original_keys if key != "sprints.view"])
+
+        resp = client.get(f"/sprints/{data['sprint_id']}/workload-warnings", headers=_hdr(data["staff_over_id"]))
+
+        assert resp.status_code == 403
+    finally:
+        replace_role_permissions("staff", original_keys)

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, has_permission, require_permission
 from app.repository import (
     create_audit_log,
     implementation_plan_completion,
@@ -61,7 +61,7 @@ def monitoring_ops_endpoint(
 ) -> dict:
     require_permission(current_user, "monitoring.view")
     return {
-        "can_manage_queue": current_user["role"] in {"admin", "manager", "hr"},
+        "can_manage_queue": has_permission(current_user, "teams.manage"),
         "audit_logs": list_audit_logs(
             limit=limit,
             actor_id=actor_id,
