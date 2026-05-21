@@ -231,9 +231,10 @@ def test_task_breakdown_docx_queries_rag_with_custom_query_when_enabled(monkeypa
     buffer.seek(0)
     called_queries: list[str] = []
 
-    def fake_query_rag(query: str, limit: int = 5) -> list[dict]:
+    def fake_query_rag(query: str, limit: int = 5, current_user: dict | None = None) -> list[dict]:
         called_queries.append(query)
         assert limit == 5
+        assert current_user is not None
         return [
             {
                 "source_label": "custom-rag-source",

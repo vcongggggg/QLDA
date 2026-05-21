@@ -19,6 +19,9 @@ INDEX_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_kpi_adjustments_month_user ON kpi_adjustments(month, user_id)",
     "CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON role_permissions(permission_key)",
     "CREATE INDEX IF NOT EXISTS idx_rag_chunks_document ON rag_chunks(document_id, chunk_index)",
+    "CREATE INDEX IF NOT EXISTS idx_rag_documents_project ON rag_documents(project_id)",
+    "CREATE INDEX IF NOT EXISTS idx_rag_document_permissions_project ON rag_document_permissions(project_id)",
+    "CREATE INDEX IF NOT EXISTS idx_rag_chunk_embeddings_chunk ON rag_chunk_embeddings(chunk_id)",
     "CREATE INDEX IF NOT EXISTS idx_ai_task_drafts_status_created ON ai_task_drafts(status, created_at)",
 )
 
@@ -156,9 +159,97 @@ def _create_ai_task_drafts(conn: Any, _: TableColumns, __: EnsureColumn) -> None
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_task_drafts_status_created ON ai_task_drafts(status, created_at)")
 
 
+def _phase5_rag_schema(conn: Any, table_columns: TableColumns, ensure_column: EnsureColumn) -> None:
+    from app.settings import settings
+
+    use_pgvector = (
+        conn.dialect == "postgresql"
+        and settings.rag_embedding_enabled
+        and settings.rag_vector_backend == "pgvector"
+    )
+    if use_pgvector:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+
+    ensure_column(conn, "rag_documents", "project_id", "project_id INTEGER")
+    ensure_column(conn, "rag_documents", "storage_path", "storage_path TEXT")
+    ensure_column(conn, "rag_chunks", "char_count", "char_count INTEGER NOT NULL DEFAULT 0")
+    ensure_column(conn, "rag_chunks", "token_estimate", "token_estimate INTEGER NOT NULL DEFAULT 0")
+
+    if conn.dialect == "postgresql":
+        embedding_column = "embedding vector(1536)" if use_pgvector else "embedding TEXT"
+        conn.execute(
+            f"""
+            CREATE TABLE IF NOT EXISTS rag_chunk_embeddings (
+                id SERIAL PRIMARY KEY,
+                chunk_id INTEGER NOT NULL REFERENCES rag_chunks(id),
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                dim INTEGER NOT NULL,
+                version TEXT NOT NULL,
+                {embedding_column},
+                created_at TEXT NOT NULL,
+                UNIQUE (chunk_id, provider, model, version)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rag_document_permissions (
+                id SERIAL PRIMARY KEY,
+                document_id INTEGER NOT NULL REFERENCES rag_documents(id),
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                user_id INTEGER REFERENCES users(id),
+                role_slug TEXT,
+                access_level TEXT NOT NULL DEFAULT 'query',
+                created_at TEXT NOT NULL,
+                UNIQUE (document_id, project_id, user_id, role_slug)
+            )
+            """
+        )
+    else:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rag_chunk_embeddings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chunk_id INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                dim INTEGER NOT NULL,
+                version TEXT NOT NULL,
+                embedding_json TEXT,
+                created_at TEXT NOT NULL,
+                UNIQUE (chunk_id, provider, model, version),
+                FOREIGN KEY (chunk_id) REFERENCES rag_chunks(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rag_document_permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_id INTEGER NOT NULL,
+                project_id INTEGER NOT NULL,
+                user_id INTEGER,
+                role_slug TEXT,
+                access_level TEXT NOT NULL DEFAULT 'query',
+                created_at TEXT NOT NULL,
+                UNIQUE (document_id, project_id, user_id, role_slug),
+                FOREIGN KEY (document_id) REFERENCES rag_documents(id),
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_documents_project ON rag_documents(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_document_permissions_project ON rag_document_permissions(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_chunk_embeddings_chunk ON rag_chunk_embeddings(chunk_id)")
+
+
 MIGRATIONS = (
     Migration(1, "legacy_compat_columns", _legacy_compat_columns),
     Migration(2, "operational_indexes", _operational_indexes),
     Migration(3, "normalize_reserved_user_email_domains", _normalize_reserved_user_email_domains),
     Migration(4, "create_ai_task_drafts", _create_ai_task_drafts),
+    Migration(5, "phase5_rag_schema", _phase5_rag_schema),
 )

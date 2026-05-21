@@ -265,8 +265,11 @@ _SQLITE_SCHEMA_STATEMENTS = [
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT NOT NULL,
         source_label TEXT,
+        project_id INTEGER NOT NULL,
+        storage_path TEXT,
         created_by INTEGER NOT NULL,
         created_at TEXT NOT NULL,
+        FOREIGN KEY (project_id) REFERENCES projects(id),
         FOREIGN KEY (created_by) REFERENCES users(id)
     )
     """,
@@ -277,8 +280,39 @@ _SQLITE_SCHEMA_STATEMENTS = [
         content TEXT NOT NULL,
         source_label TEXT,
         chunk_index INTEGER NOT NULL,
+        char_count INTEGER NOT NULL DEFAULT 0,
+        token_estimate INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         FOREIGN KEY (document_id) REFERENCES rag_documents(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS rag_chunk_embeddings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chunk_id INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        dim INTEGER NOT NULL,
+        version TEXT NOT NULL,
+        embedding_json TEXT,
+        created_at TEXT NOT NULL,
+        UNIQUE (chunk_id, provider, model, version),
+        FOREIGN KEY (chunk_id) REFERENCES rag_chunks(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS rag_document_permissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        document_id INTEGER NOT NULL,
+        project_id INTEGER NOT NULL,
+        user_id INTEGER,
+        role_slug TEXT,
+        access_level TEXT NOT NULL DEFAULT 'query',
+        created_at TEXT NOT NULL,
+        UNIQUE (document_id, project_id, user_id, role_slug),
+        FOREIGN KEY (document_id) REFERENCES rag_documents(id),
+        FOREIGN KEY (project_id) REFERENCES projects(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
     )
     """,
 ]
@@ -511,6 +545,8 @@ _POSTGRES_SCHEMA_STATEMENTS = [
         id SERIAL PRIMARY KEY,
         title TEXT NOT NULL,
         source_label TEXT,
+        project_id INTEGER NOT NULL REFERENCES projects(id),
+        storage_path TEXT,
         created_by INTEGER NOT NULL REFERENCES users(id),
         created_at TEXT NOT NULL
     )
@@ -522,7 +558,34 @@ _POSTGRES_SCHEMA_STATEMENTS = [
         content TEXT NOT NULL,
         source_label TEXT,
         chunk_index INTEGER NOT NULL,
+        char_count INTEGER NOT NULL DEFAULT 0,
+        token_estimate INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS rag_chunk_embeddings (
+        id SERIAL PRIMARY KEY,
+        chunk_id INTEGER NOT NULL REFERENCES rag_chunks(id),
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        dim INTEGER NOT NULL,
+        version TEXT NOT NULL,
+        {rag_embedding_column},
+        created_at TEXT NOT NULL,
+        UNIQUE (chunk_id, provider, model, version)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS rag_document_permissions (
+        id SERIAL PRIMARY KEY,
+        document_id INTEGER NOT NULL REFERENCES rag_documents(id),
+        project_id INTEGER NOT NULL REFERENCES projects(id),
+        user_id INTEGER REFERENCES users(id),
+        role_slug TEXT,
+        access_level TEXT NOT NULL DEFAULT 'query',
+        created_at TEXT NOT NULL,
+        UNIQUE (document_id, project_id, user_id, role_slug)
     )
     """,
 ]
@@ -699,7 +762,17 @@ def get_connection() -> DatabaseConnection:
 
 def _schema_statements(dialect: str) -> list[str]:
     if dialect == "postgresql":
-        return _POSTGRES_SCHEMA_STATEMENTS
+        from app.settings import settings
+
+        use_pgvector = settings.rag_embedding_enabled and settings.rag_vector_backend == "pgvector"
+        embedding_column = "embedding vector(1536)" if use_pgvector else "embedding TEXT"
+        statements = [
+            statement.format(rag_embedding_column=embedding_column)
+            for statement in _POSTGRES_SCHEMA_STATEMENTS
+        ]
+        if use_pgvector:
+            return ["CREATE EXTENSION IF NOT EXISTS vector", *statements]
+        return statements
     return _SQLITE_SCHEMA_STATEMENTS
 
 

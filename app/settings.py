@@ -88,6 +88,35 @@ class Settings:
             )
         )
 
+        self.rag_vector_backend = overrides.get("rag_vector_backend", os.getenv("RAG_VECTOR_BACKEND", "pgvector"))
+        self.rag_embedding_enabled = parse_bool(
+            overrides.get("rag_embedding_enabled", os.getenv("RAG_EMBEDDING_ENABLED")),
+            default=False,
+        )
+        self.rag_embedding_provider = overrides.get(
+            "rag_embedding_provider",
+            os.getenv("RAG_EMBEDDING_PROVIDER", "openai_compatible"),
+        )
+        self.rag_embedding_model = overrides.get(
+            "rag_embedding_model",
+            os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-small"),
+        )
+        self.rag_embedding_dim = int(
+            overrides.get("rag_embedding_dim", os.getenv("RAG_EMBEDDING_DIM", "1536"))
+        )
+        self.rag_score_threshold = float(
+            overrides.get("rag_score_threshold", os.getenv("RAG_SCORE_THRESHOLD", "0.45"))
+        )
+        self.rag_search_limit = int(overrides.get("rag_search_limit", os.getenv("RAG_SEARCH_LIMIT", "5")))
+        self.rag_storage_root = overrides.get(
+            "rag_storage_root",
+            os.getenv("RAG_STORAGE_ROOT", ".data/rag_uploads"),
+        )
+        self.rag_pdf_enabled = parse_bool(
+            overrides.get("rag_pdf_enabled", os.getenv("RAG_PDF_ENABLED")),
+            default=False,
+        )
+
     def validate_production_safety(self) -> None:
         if self.app_env != "production":
             return
