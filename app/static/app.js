@@ -987,6 +987,7 @@ async function loadAI() {
 async function populateAiSelectors() {
   const assignee = document.getElementById('aiAssigneeSelect');
   const project = document.getElementById('aiProjectSelect');
+  const ragProject = document.getElementById('ragProjectSelect');
   if (!assignee || !project) return;
 
   if (assignee.options.length === 0) {
@@ -1006,6 +1007,12 @@ async function populateAiSelectors() {
         opt.value = p.id;
         opt.textContent = p.name;
         project.appendChild(opt);
+        if (ragProject) {
+          const ragOpt = document.createElement('option');
+          ragOpt.value = p.id;
+          ragOpt.textContent = p.name;
+          ragProject.appendChild(ragOpt);
+        }
       });
     } catch (_) {}
   }
@@ -1503,8 +1510,9 @@ async function resetKanbanFilters() {
 async function createRagDocument() {
   const title = document.getElementById('ragTitle').value.trim();
   const source = document.getElementById('ragSource').value.trim();
+  const projectId = document.getElementById('ragProjectSelect')?.value;
   const content = document.getElementById('ragContent').value.trim();
-  if (title.length < 2 || content.length < 20) {
+  if (title.length < 2 || content.length < 20 || !projectId) {
     toast('Nhập tiêu đề và nội dung RAG đủ dài', 'error');
     return;
   }
@@ -1512,7 +1520,7 @@ async function createRagDocument() {
     await api('/rag/documents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, source_label: source || null, content }),
+      body: JSON.stringify({ title, source_label: source || null, project_id: Number(projectId), content }),
     });
     document.getElementById('ragTitle').value = '';
     document.getElementById('ragSource').value = '';

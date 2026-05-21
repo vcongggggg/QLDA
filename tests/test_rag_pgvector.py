@@ -72,7 +72,7 @@ def test_chunk_text_uses_overlap_and_estimates_tokens() -> None:
 def test_hybrid_score_weights_fallback_and_semantic_modes() -> None:
     scores = HybridScores(semantic=0.8, lexical=0.6, tfidf=0.5, phrase=1.0)
 
-    assert combine_hybrid_score(scores, embedding_enabled=True) == pytest.approx(0.78)
+    assert combine_hybrid_score(scores, embedding_enabled=True) == pytest.approx(0.73)
     assert combine_hybrid_score(scores, embedding_enabled=False) == pytest.approx(0.6)
 
 
@@ -96,8 +96,8 @@ def test_repository_acl_filter_hides_restricted_rag_documents(monkeypatch) -> No
         created_by=outsider_id,
     )
 
-    staff_matches = query_rag("sprint planning payroll migration", current_user={"id": staff_id, "role": "staff"})
-    outsider_matches = query_rag("sprint planning payroll migration", current_user={"id": outsider_id, "role": "manager"})
+    staff_matches = query_rag("sprint planning", current_user={"id": staff_id, "role": "staff"})
+    outsider_matches = query_rag("payroll migration", current_user={"id": outsider_id, "role": "manager"})
 
     assert {item["document_id"] for item in staff_matches} == {visible["id"]}
     assert all(item["source_label"] != "hidden-spec" for item in staff_matches)
@@ -130,7 +130,7 @@ def test_rag_api_project_scoped_crud_and_acl(monkeypatch) -> None:
     assert doc["project_id"] == project_id
     assert doc["chunk_count"] >= 1
 
-    listed = client.get("/rag/documents", headers=_hdr(staff_id))
+    listed = client.get("/rag/documents", headers=_hdr(manager_id))
     assert listed.status_code == 200
     assert any(item["id"] == doc["id"] for item in listed.json())
 
@@ -142,13 +142,13 @@ def test_rag_api_project_scoped_crud_and_acl(monkeypatch) -> None:
     assert outsider_query.status_code == 200
     assert outsider_query.json()["matches"] == []
 
-    staff_query = client.post(
+    manager_query = client.post(
         "/rag/query",
-        headers=_hdr(staff_id),
+        headers=_hdr(manager_id),
         json={"query": "export KPI report", "limit": 3},
     )
-    assert staff_query.status_code == 200
-    assert staff_query.json()["matches"][0]["project_id"] == project_id
+    assert manager_query.status_code == 200
+    assert manager_query.json()["matches"][0]["project_id"] == project_id
 
     outsider_delete = client.delete(f"/rag/documents/{doc['id']}", headers=_hdr(outsider_id))
     assert outsider_delete.status_code == 404

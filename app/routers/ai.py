@@ -56,7 +56,7 @@ def task_breakdown_endpoint(
     project_context = payload.project_context
     retrieved_sources: list[str] = []
     if payload.use_rag:
-        matches = query_rag(payload.rag_query or payload.text, limit=5)
+        matches = query_rag(payload.rag_query or payload.text, limit=5, current_user=current_user)
         retrieved_context, retrieved_sources = build_rag_context(matches)
         if retrieved_context:
             project_context = "\n\n".join(part for part in (payload.project_context, retrieved_context) if part)
@@ -109,7 +109,7 @@ async def task_breakdown_docx_endpoint(
         raise HTTPException(status_code=400, detail="docx does not contain enough text")
     retrieved_sources: list[str] = []
     if use_rag:
-        matches = query_rag(rag_query or text, limit=5)
+        matches = query_rag(rag_query or text, limit=5, current_user=current_user)
         retrieved_context, retrieved_sources = build_rag_context(matches)
         if retrieved_context:
             project_context = "\n\n".join(part for part in (project_context, retrieved_context) if part)

@@ -95,7 +95,25 @@ Neu bat `use_rag`, backend se truy van kho RAG bang `rag_query` neu co, hoac dun
 
 ## Kho tri thuc RAG
 
-RAG dung cho viec luu spec, bien ban hop, checklist hoac yeu cau nghiep vu de bo sung ngu canh khi tao task bang AI. Tai lieu duoc chia thanh cac chunk nho va truy van bang matching tu khoa noi bo, khong can dich vu vector database trong moi truong local.
+RAG dung cho viec luu spec, bien ban hop, checklist hoac yeu cau nghiep vu de bo sung ngu canh khi tao task bang AI. Tai lieu duoc chia thanh chunk co overlap va bat buoc gan `project_id` de backend loc theo quyen project.
+
+Local/dev co the chay SQLite voi `RAG_EMBEDDING_ENABLED=false`; he thong dung lexical/BM25 + TF-IDF fallback va khong can pgvector. PostgreSQL production-like co the bat `RAG_VECTOR_BACKEND=pgvector` va `RAG_EMBEDDING_ENABLED=true` de dung OpenAI-compatible embeddings qua `AI_BASE_URL`/`AI_API_KEY`. Chi tiet: `docs/PHASE_5_RAG_PGVECTOR.md`.
+
+Bien moi:
+
+```env
+RAG_VECTOR_BACKEND=pgvector
+RAG_EMBEDDING_ENABLED=false
+RAG_EMBEDDING_PROVIDER=openai_compatible
+RAG_EMBEDDING_MODEL=text-embedding-3-small
+RAG_EMBEDDING_DIM=1536
+RAG_SCORE_THRESHOLD=0.45
+RAG_SEARCH_LIMIT=5
+RAG_STORAGE_ROOT=.data/rag_uploads
+RAG_PDF_ENABLED=false
+```
+
+Gioi han hien tai: chua OCR, PDF optional va dang tat mac dinh, embeddings optional.
 
 Endpoint lien quan:
 

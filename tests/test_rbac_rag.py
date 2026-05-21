@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.database import init_db
 from app.main import app
-from app.repository import create_user
+from app.repository import add_project_member, create_project, create_user
 from app.settings import settings
 
 
@@ -15,17 +15,19 @@ def _hdr(user_id: int) -> dict:
     return {"X-User-Id": str(user_id)}
 
 
-def _bootstrap() -> tuple[int, int, int]:
+def _bootstrap() -> tuple[int, int, int, int]:
     init_db()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     admin = create_user("RBAC Admin", f"rbac.admin.{stamp}@example.com", "admin", "PMO")
     manager = create_user("RBAC Manager", f"rbac.manager.{stamp}@example.com", "manager", "PMO")
     staff = create_user("RBAC Staff", f"rbac.staff.{stamp}@example.com", "staff", "Engineering")
-    return int(admin["id"]), int(manager["id"]), int(staff["id"])
+    project = create_project(f"RBAC RAG Project {stamp}", None, None, int(manager["id"]), None, None, "active")
+    add_project_member(int(project["id"]), int(staff["id"]), "member")
+    return int(admin["id"]), int(manager["id"]), int(staff["id"]), int(project["id"])
 
 
 def test_admin_can_update_role_permissions_and_staff_cannot() -> None:
-    admin_id, _manager_id, staff_id = _bootstrap()
+    admin_id, _manager_id, staff_id, _project_id = _bootstrap()
 
     roles = client.get("/rbac/roles", headers=_hdr(admin_id))
     assert roles.status_code == 200
@@ -66,7 +68,7 @@ def test_admin_can_update_role_permissions_and_staff_cannot() -> None:
 
 def test_permission_not_role_string_controls_ai_preview(monkeypatch) -> None:
     monkeypatch.setattr(settings, "ai_api_key", "")
-    admin_id, manager_id, _staff_id = _bootstrap()
+    admin_id, manager_id, _staff_id, _project_id = _bootstrap()
 
     current = client.get("/rbac/roles/manager/permissions", headers=_hdr(admin_id))
     assert current.status_code == 200
@@ -96,12 +98,12 @@ def test_permission_not_role_string_controls_ai_preview(monkeypatch) -> None:
 
 def test_rag_document_query_and_ai_breakdown_metadata(monkeypatch) -> None:
     monkeypatch.setattr(settings, "ai_api_key", "")
-    admin_id, manager_id, staff_id = _bootstrap()
+    admin_id, manager_id, staff_id, project_id = _bootstrap()
 
     staff_create = client.post(
         "/rag/documents",
         headers=_hdr(staff_id),
-        json={"title": "Should fail", "content": "staff cannot manage rag documents"},
+        json={"title": "Should fail", "project_id": project_id, "content": "staff cannot manage rag documents"},
     )
     assert staff_create.status_code == 403
 
@@ -111,6 +113,7 @@ def test_rag_document_query_and_ai_breakdown_metadata(monkeypatch) -> None:
         json={
             "title": "KPI report requirements",
             "source_label": "demo-spec",
+            "project_id": project_id,
             "content": (
                 "Manager can export KPI report to CSV and XLSX. "
                 "The implementation must keep human approval before importing AI tasks."
