@@ -2,13 +2,15 @@ from datetime import timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, require_roles
+from app.auth import get_current_user, require_permission, require_roles
 from app.deps import require_project_access
 from app.repository import (
     assign_tasks_to_sprint,
     create_audit_log,
     create_sprint,
+    get_sprint_by_id,
     list_sprint_capacities,
+    list_sprint_workload_warnings,
     list_sprints,
     project_exists,
     sprint_burndown_points,
@@ -27,6 +29,7 @@ from app.schemas import (
     SprintStatusUpdate,
     SprintTaskAssign,
     SprintVelocityOut,
+    WorkloadWarningOut,
 )
 
 router = APIRouter(tags=["sprints"])
@@ -132,6 +135,20 @@ def list_sprint_capacity_endpoint(sprint_id: int, current_user: dict = Depends(g
     if not sprint_exists(sprint_id):
         raise HTTPException(status_code=404, detail="sprint not found")
     return list_sprint_capacities(sprint_id)
+
+
+@router.get("/sprints/{sprint_id}/workload-warnings", response_model=list[WorkloadWarningOut])
+def sprint_workload_warnings_endpoint(
+    sprint_id: int,
+    current_user: dict = Depends(get_current_user),
+) -> list[dict]:
+    require_permission(current_user, "sprints.view")
+    sprint = get_sprint_by_id(sprint_id)
+    if not sprint:
+        raise HTTPException(status_code=404, detail="sprint not found")
+    require_project_access(current_user, int(sprint["project_id"]))
+    user_id = int(current_user["id"]) if current_user["role"] == "staff" else None
+    return list_sprint_workload_warnings(sprint_id, user_id=user_id)
 
 
 @router.get("/sprints/{sprint_id}/review-summary")

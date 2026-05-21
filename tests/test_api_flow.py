@@ -160,7 +160,10 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
 
     progress_resp = client.get(f"/projects/{project_id}/progress", headers=_hdr(manager_id))
     assert progress_resp.status_code == 200
-    assert progress_resp.json()["project_id"] == project_id
+    progress_payload = progress_resp.json()
+    assert progress_payload["project_id"] == project_id
+    assert progress_payload["completion_rate"] == 100.0
+    assert "progress_percent" not in progress_payload
 
     burndown_resp = client.get(f"/sprints/{sprint_id}/burndown", headers=_hdr(manager_id))
     assert burndown_resp.status_code == 200
@@ -302,6 +305,9 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
     completion_payload = completion_resp.json()
     assert "completion_percent" in completion_payload
     assert 0 <= completion_payload["completion_percent"] <= 100
+    assert "overall_percent" not in completion_payload
+    assert completion_payload["items"]
+    assert all("done" in item and "title" in item and "key" in item for item in completion_payload["items"])
 
     readiness_resp = client.get("/monitoring/readiness")
     assert readiness_resp.status_code == 200

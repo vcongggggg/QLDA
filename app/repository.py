@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import json
+import re
 from typing import Any
 
 from app.database import get_connection
@@ -7,6 +8,30 @@ from app.database import get_connection
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+_SECRET_PATTERNS = (
+    re.compile(r"https?://\S+", re.IGNORECASE),
+    re.compile(r"bearer\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE),
+    re.compile(r"(client[_-]?secret|api[_-]?key|token|authorization)\s*[:=]\s*\S+", re.IGNORECASE),
+    re.compile(r"webhook[_-]?url\s*[:=]\s*\S+", re.IGNORECASE),
+    re.compile(r"\b\S*webhook[_-]?url\S*\b", re.IGNORECASE),
+)
+
+
+def _redact_operational_text(value: str | None, max_length: int = 180) -> str | None:
+    if not value:
+        return None
+    cleaned = str(value).replace("\r", " ").replace("\n", " ")
+    traceback_at = cleaned.lower().find("traceback")
+    if traceback_at >= 0:
+        cleaned = cleaned[:traceback_at] + "provider error"
+    for pattern in _SECRET_PATTERNS:
+        cleaned = pattern.sub("[redacted]", cleaned)
+    cleaned = " ".join(cleaned.split())
+    if len(cleaned) > max_length:
+        cleaned = cleaned[: max_length - 3].rstrip() + "..."
+    return cleaned or "redacted"
 
 
 def create_user(
@@ -71,6 +96,77 @@ def list_users() -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def list_roles() -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM roles ORDER BY slug").fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_permissions() -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM permissions ORDER BY category, key").fetchall()
+    return [dict(r) for r in rows]
+
+
+def role_exists(role_slug: str) -> bool:
+    with get_connection() as conn:
+        row = conn.execute("SELECT slug FROM roles WHERE slug = ?", (role_slug,)).fetchone()
+    return row is not None
+
+
+def permission_keys_exist(permission_keys: list[str]) -> bool:
+    if not permission_keys:
+        return True
+    placeholders = ",".join(["?"] * len(permission_keys))
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"SELECT key FROM permissions WHERE key IN ({placeholders})",
+            tuple(permission_keys),
+        ).fetchall()
+    return {str(row["key"]) for row in rows} == set(permission_keys)
+
+
+def list_permissions_for_role(role_slug: str) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT p.*
+            FROM permissions p
+            JOIN role_permissions rp ON rp.permission_key = p.key
+            WHERE rp.role_slug = ?
+            ORDER BY p.category, p.key
+            """,
+            (role_slug,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def replace_role_permissions(role_slug: str, permission_keys: list[str]) -> list[dict[str, Any]]:
+    unique_keys = sorted(set(permission_keys))
+    with get_connection() as conn:
+        conn.execute("DELETE FROM role_permissions WHERE role_slug = ?", (role_slug,))
+        for permission_key in unique_keys:
+            conn.execute(
+                "/* no-returning-id */ INSERT INTO role_permissions (role_slug, permission_key) VALUES (?, ?)",
+                (role_slug, permission_key),
+            )
+    return list_permissions_for_role(role_slug)
+
+
+def role_has_permission(role_slug: str, permission_key: str) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT 1
+            FROM role_permissions
+            WHERE role_slug = ? AND permission_key = ?
+            LIMIT 1
+            """,
+            (role_slug, permission_key),
+        ).fetchone()
+    return row is not None
+
+
 def count_users() -> int:
     with get_connection() as conn:
         row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
@@ -112,6 +208,10 @@ def list_tasks(
     status: str | None = None,
     project_id: int | None = None,
     sprint_id: int | None = None,
+    overdue: bool | None = None,
+    keyword: str | None = None,
+    deadline_from: str | None = None,
+    deadline_to: str | None = None,
 ) -> list[dict[str, Any]]:
     query = "SELECT * FROM tasks WHERE 1=1"
     params: list[Any] = []
@@ -127,6 +227,22 @@ def list_tasks(
     if sprint_id is not None:
         query += " AND sprint_id = ?"
         params.append(sprint_id)
+    if overdue is True:
+        query += " AND status != 'done' AND deadline < ?"
+        params.append(_now_iso())
+    elif overdue is False:
+        query += " AND (status = 'done' OR deadline >= ?)"
+        params.append(_now_iso())
+    if keyword:
+        query += " AND (LOWER(title) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ?)"
+        term = f"%{keyword.lower()}%"
+        params.extend([term, term])
+    if deadline_from is not None:
+        query += " AND deadline >= ?"
+        params.append(deadline_from)
+    if deadline_to is not None:
+        query += " AND deadline <= ?"
+        params.append(deadline_to)
     query += " ORDER BY deadline ASC"
     with get_connection() as conn:
         rows = conn.execute(query, tuple(params)).fetchall()
@@ -361,19 +477,234 @@ def create_audit_log(
         )
 
 
-def list_audit_logs(limit: int = 100) -> list[dict[str, Any]]:
+def _decode_ai_task_draft(row: dict[str, Any]) -> dict[str, Any]:
+    item = dict(row)
+    raw_tasks = item.pop("generated_tasks", "[]")
+    try:
+        item["items"] = json.loads(raw_tasks or "[]")
+    except json.JSONDecodeError:
+        item["items"] = []
+    item["item_count"] = len(item["items"])
+    return item
+
+
+def create_ai_task_draft(
+    source_type: str,
+    source_summary: str | None,
+    source_name: str | None,
+    generated_tasks: list[dict[str, Any]],
+    created_by: int,
+) -> dict[str, Any]:
+    now = _now_iso()
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO ai_task_drafts
+            (source_type, source_summary, source_name, generated_tasks, status, reviewer_id, reviewed_at, imported_at, review_note, edit_reason, created_by, created_at)
+            VALUES (?, ?, ?, ?, 'draft', NULL, NULL, NULL, NULL, NULL, ?, ?)
+            """,
+            (
+                source_type,
+                source_summary,
+                source_name,
+                json.dumps(generated_tasks, ensure_ascii=True),
+                created_by,
+                now,
+            ),
+        )
+        row = conn.execute("SELECT * FROM ai_task_drafts WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return _decode_ai_task_draft(dict(row))
+
+
+def list_ai_task_drafts(status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    query = "SELECT * FROM ai_task_drafts"
+    params: list[Any] = []
+    if status is not None:
+        query += " WHERE status = ?"
+        params.append(status)
+    query += " ORDER BY id DESC LIMIT ?"
+    params.append(limit)
+    with get_connection() as conn:
+        rows = conn.execute(query, tuple(params)).fetchall()
+    return [_decode_ai_task_draft(dict(row)) for row in rows]
+
+
+def get_ai_task_draft(draft_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM ai_task_drafts WHERE id = ?", (draft_id,)).fetchone()
+    return _decode_ai_task_draft(dict(row)) if row else None
+
+
+def review_ai_task_draft(
+    draft_id: int,
+    generated_tasks: list[dict[str, Any]],
+    reviewer_id: int,
+    review_note: str | None,
+    edit_reason: str | None,
+) -> dict[str, Any] | None:
+    now = _now_iso()
+    with get_connection() as conn:
+        existing = conn.execute("SELECT id FROM ai_task_drafts WHERE id = ?", (draft_id,)).fetchone()
+        if not existing:
+            return None
+        conn.execute(
+            """
+            UPDATE ai_task_drafts
+            SET generated_tasks = ?,
+                status = 'reviewed',
+                reviewer_id = ?,
+                reviewed_at = ?,
+                review_note = ?,
+                edit_reason = ?
+            WHERE id = ?
+            """,
+            (
+                json.dumps(generated_tasks, ensure_ascii=True),
+                reviewer_id,
+                now,
+                review_note,
+                edit_reason,
+                draft_id,
+            ),
+        )
+        row = conn.execute("SELECT * FROM ai_task_drafts WHERE id = ?", (draft_id,)).fetchone()
+    return _decode_ai_task_draft(dict(row)) if row else None
+
+
+def mark_ai_task_draft_imported(draft_id: int) -> dict[str, Any] | None:
+    now = _now_iso()
+    with get_connection() as conn:
+        existing = conn.execute("SELECT id FROM ai_task_drafts WHERE id = ?", (draft_id,)).fetchone()
+        if not existing:
+            return None
+        conn.execute(
+            "UPDATE ai_task_drafts SET status = 'imported', imported_at = ? WHERE id = ?",
+            (now, draft_id),
+        )
+        row = conn.execute("SELECT * FROM ai_task_drafts WHERE id = ?", (draft_id,)).fetchone()
+    return _decode_ai_task_draft(dict(row)) if row else None
+
+
+def create_rag_document(
+    title: str,
+    source_label: str | None,
+    content_chunks: list[str],
+    created_by: int,
+) -> dict[str, Any]:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO rag_documents (title, source_label, created_by, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (title, source_label, created_by, _now_iso()),
+        )
+        document_id = int(cursor.lastrowid)
+        for index, chunk in enumerate(content_chunks):
+            conn.execute(
+                """
+                INSERT INTO rag_chunks (document_id, content, source_label, chunk_index, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (document_id, chunk, source_label, index, _now_iso()),
+            )
+        row = conn.execute("SELECT * FROM rag_documents WHERE id = ?", (document_id,)).fetchone()
+    item = dict(row)
+    item["chunk_count"] = len(content_chunks)
+    return item
+
+
+def list_rag_documents() -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT al.*, u.full_name AS actor_name
-            FROM audit_logs al
-            LEFT JOIN users u ON u.id = al.actor_user_id
-            ORDER BY al.id DESC
+            SELECT d.*, COUNT(c.id) AS chunk_count
+            FROM rag_documents d
+            LEFT JOIN rag_chunks c ON c.document_id = d.id
+            GROUP BY d.id, d.title, d.source_label, d.created_by, d.created_at
+            ORDER BY d.id DESC
+            """
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_rag_document(document_id: int) -> bool:
+    with get_connection() as conn:
+        existing = conn.execute("SELECT id FROM rag_documents WHERE id = ?", (document_id,)).fetchone()
+        if not existing:
+            return False
+        conn.execute("DELETE FROM rag_chunks WHERE document_id = ?", (document_id,))
+        conn.execute("DELETE FROM rag_documents WHERE id = ?", (document_id,))
+    return True
+
+
+def list_rag_chunks(limit: int = 500) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT c.*, d.title AS document_title
+            FROM rag_chunks c
+            JOIN rag_documents d ON d.id = c.document_id
+            ORDER BY c.id DESC
             LIMIT ?
             """,
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def list_audit_logs(
+    limit: int = 100,
+    actor_id: int | None = None,
+    action: str | None = None,
+    entity_type: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    keyword: str | None = None,
+) -> list[dict[str, Any]]:
+    query = """
+        SELECT al.*, u.full_name AS actor_name
+        FROM audit_logs al
+        LEFT JOIN users u ON u.id = al.actor_user_id
+        WHERE 1=1
+    """
+    params: list[Any] = []
+    if actor_id is not None:
+        query += " AND al.actor_user_id = ?"
+        params.append(actor_id)
+    if action:
+        query += " AND al.action = ?"
+        params.append(action)
+    if entity_type:
+        query += " AND al.entity = ?"
+        params.append(entity_type)
+    if date_from:
+        query += " AND al.created_at >= ?"
+        params.append(date_from)
+    if date_to:
+        query += " AND al.created_at <= ?"
+        params.append(date_to)
+    if keyword:
+        query += """
+            AND (
+                LOWER(COALESCE(al.detail, '')) LIKE ?
+                OR LOWER(al.action) LIKE ?
+                OR LOWER(al.entity) LIKE ?
+                OR LOWER(COALESCE(u.full_name, '')) LIKE ?
+            )
+        """
+        term = f"%{keyword.lower()}%"
+        params.extend([term, term, term, term])
+    query += " ORDER BY al.id DESC LIMIT ?"
+    params.append(limit)
+    with get_connection() as conn:
+        rows = conn.execute(query, tuple(params)).fetchall()
+    output: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        item["detail"] = _redact_operational_text(item.get("detail"))
+        output.append(item)
+    return output
 
 
 def create_kpi_adjustment(
@@ -701,6 +1032,106 @@ def list_sprint_capacities(sprint_id: int) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def list_sprint_workload_warnings(sprint_id: int, user_id: int | None = None) -> list[dict[str, Any]]:
+    sprint = get_sprint_by_id(sprint_id)
+    if not sprint:
+        return []
+
+    task_query = """
+        SELECT
+            t.assignee_id AS user_id,
+            u.full_name AS user_name,
+            SUM(t.story_points) AS workload_points,
+            COUNT(*) AS open_task_count,
+            SUM(CASE WHEN t.deadline < ? THEN 1 ELSE 0 END) AS overdue_task_count
+        FROM tasks t
+        JOIN users u ON u.id = t.assignee_id
+        WHERE t.sprint_id = ?
+          AND t.status != 'done'
+    """
+    task_params: list[Any] = [_now_iso(), sprint_id]
+    if user_id is not None:
+        task_query += " AND t.assignee_id = ?"
+        task_params.append(user_id)
+    task_query += " GROUP BY t.assignee_id, u.full_name"
+
+    capacity_query = """
+        SELECT
+            scp.user_id,
+            u.full_name AS user_name,
+            scp.capacity_hours AS capacity_points
+        FROM sprint_capacity_plans scp
+        JOIN users u ON u.id = scp.user_id
+        WHERE scp.sprint_id = ?
+    """
+    capacity_params: list[Any] = [sprint_id]
+    if user_id is not None:
+        capacity_query += " AND scp.user_id = ?"
+        capacity_params.append(user_id)
+
+    rows_by_user: dict[int, dict[str, Any]] = {}
+    with get_connection() as conn:
+        task_rows = conn.execute(task_query, tuple(task_params)).fetchall()
+        capacity_rows = conn.execute(capacity_query, tuple(capacity_params)).fetchall()
+
+    for row in capacity_rows:
+        uid = int(row["user_id"])
+        rows_by_user[uid] = {
+            "user_id": uid,
+            "user_name": row["user_name"],
+            "sprint_id": int(sprint["id"]),
+            "sprint_name": sprint["name"],
+            "workload_points": 0,
+            "capacity_points": float(row["capacity_points"]) if row["capacity_points"] is not None else None,
+            "open_task_count": 0,
+            "overdue_task_count": 0,
+        }
+
+    for row in task_rows:
+        uid = int(row["user_id"])
+        item = rows_by_user.setdefault(
+            uid,
+            {
+                "user_id": uid,
+                "user_name": row["user_name"],
+                "sprint_id": int(sprint["id"]),
+                "sprint_name": sprint["name"],
+                "workload_points": 0,
+                "capacity_points": None,
+                "open_task_count": 0,
+                "overdue_task_count": 0,
+            },
+        )
+        item["workload_points"] = int(row["workload_points"] or 0)
+        item["open_task_count"] = int(row["open_task_count"] or 0)
+        item["overdue_task_count"] = int(row["overdue_task_count"] or 0)
+
+    output: list[dict[str, Any]] = []
+    for item in rows_by_user.values():
+        capacity_points = item["capacity_points"]
+        overloaded = capacity_points is not None and item["workload_points"] > capacity_points
+        overdue_count = int(item["overdue_task_count"] or 0)
+        reasons: list[str] = []
+        if overloaded:
+            reasons.append("workload exceeds capacity")
+        if overdue_count == 1:
+            reasons.append("1 overdue open task")
+        elif overdue_count > 1:
+            reasons.append(f"{overdue_count} overdue open tasks")
+        risk_level = "high" if overloaded and overdue_count > 0 else "medium" if overloaded or overdue_count > 0 else "low"
+        output.append(
+            {
+                **item,
+                "overloaded": overloaded,
+                "risk_level": risk_level,
+                "reasons": reasons,
+            }
+        )
+
+    risk_order = {"high": 0, "medium": 1, "low": 2}
+    return sorted(output, key=lambda item: (risk_order.get(str(item["risk_level"]), 3), item["user_name"]))
+
+
 def sprint_velocity_history(project_id: int) -> list[dict[str, Any]]:
     with get_connection() as conn:
         sprints = conn.execute(
@@ -914,12 +1345,12 @@ def list_notifications(status: str = "queued", limit: int = 50) -> list[dict[str
     with get_connection() as conn:
         if status == "all":
             rows = conn.execute(
-                "SELECT * FROM notification_queue ORDER BY id ASC LIMIT ?",
+                "SELECT * FROM notification_queue ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM notification_queue WHERE status = ? ORDER BY id ASC LIMIT ?",
+                "SELECT * FROM notification_queue WHERE status = ? ORDER BY id DESC LIMIT ?",
                 (status, limit),
             ).fetchall()
     out: list[dict[str, Any]] = []
@@ -945,6 +1376,36 @@ def count_notifications_by_status() -> dict[str, int]:
     return counts
 
 
+def latest_failed_notification_items(limit: int = 5) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, user_id, channel, status, attempts, max_attempts, last_error, next_retry_at, created_at, sent_at
+            FROM notification_queue
+            WHERE status = 'failed'
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    output: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        item["last_error_summary"] = _redact_operational_text(item.pop("last_error", None))
+        output.append(item)
+    return output
+
+
+def notification_queue_status(limit_failed: int = 5) -> dict[str, Any]:
+    counts = count_notifications_by_status()
+    return {
+        "queued_count": counts["queued"],
+        "sent_count": counts["sent"],
+        "failed_count": counts["failed"],
+        "latest_failed_items": latest_failed_notification_items(limit=limit_failed),
+    }
+
+
 def list_processable_notifications(limit: int = 50) -> list[dict[str, Any]]:
     now = _now_iso()
     with get_connection() as conn:
@@ -954,7 +1415,9 @@ def list_processable_notifications(limit: int = 50) -> list[dict[str, Any]]:
             FROM notification_queue
             WHERE status = 'queued'
               AND (next_retry_at IS NULL OR next_retry_at <= ?)
-            ORDER BY id ASC
+            ORDER BY CASE WHEN next_retry_at IS NULL THEN 0 ELSE 1 END,
+                     next_retry_at ASC,
+                     id ASC
             LIMIT ?
             """,
             (now, limit),
@@ -1055,6 +1518,73 @@ def requeue_notification(notification_id: int) -> dict[str, Any] | None:
     item = dict(row)
     item["payload"] = json.loads(item["payload"])
     return item
+
+
+def overdue_spike_summary(threshold: int = 10, limit: int = 5) -> dict[str, Any]:
+    now = _now_iso()
+    with get_connection() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM tasks WHERE status != 'done' AND deadline < ?",
+            (now,),
+        ).fetchone()["c"]
+        project_rows = conn.execute(
+            """
+            SELECT
+                t.project_id AS project_id,
+                COALESCE(p.name, 'Unassigned') AS project_name,
+                COUNT(*) AS overdue_count
+            FROM tasks t
+            LEFT JOIN projects p ON p.id = t.project_id
+            WHERE t.status != 'done' AND t.deadline < ?
+            GROUP BY t.project_id, p.name
+            ORDER BY overdue_count DESC, t.project_id DESC
+            LIMIT ?
+            """,
+            (now, limit),
+        ).fetchall()
+        sprint_rows = conn.execute(
+            """
+            SELECT
+                t.sprint_id AS sprint_id,
+                COALESCE(s.name, 'Unassigned') AS sprint_name,
+                t.project_id AS project_id,
+                COALESCE(p.name, 'Unassigned') AS project_name,
+                COUNT(*) AS overdue_count
+            FROM tasks t
+            LEFT JOIN sprints s ON s.id = t.sprint_id
+            LEFT JOIN projects p ON p.id = t.project_id
+            WHERE t.status != 'done' AND t.deadline < ?
+            GROUP BY t.sprint_id, s.name, t.project_id, p.name
+            ORDER BY overdue_count DESC, t.sprint_id DESC
+            LIMIT ?
+            """,
+            (now, limit),
+        ).fetchall()
+
+    overdue_count = int(total or 0)
+    return {
+        "overdue_count": overdue_count,
+        "threshold": threshold,
+        "alert": overdue_count > threshold,
+        "top_projects": [
+            {
+                "project_id": row["project_id"],
+                "project_name": row["project_name"],
+                "overdue_count": int(row["overdue_count"] or 0),
+            }
+            for row in project_rows
+        ],
+        "top_sprints": [
+            {
+                "sprint_id": row["sprint_id"],
+                "sprint_name": row["sprint_name"],
+                "project_id": row["project_id"],
+                "project_name": row["project_name"],
+                "overdue_count": int(row["overdue_count"] or 0),
+            }
+            for row in sprint_rows
+        ],
+    }
 
 
 def system_metrics() -> dict[str, Any]:

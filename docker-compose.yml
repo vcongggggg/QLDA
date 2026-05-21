@@ -6,6 +6,7 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL_DOCKER:-postgresql://teamswork:teamswork@postgres:5432/teamswork}
+      - APP_ENV=${APP_ENV:-development}
       - AUTH_DISABLE_JWT_VALIDATION=${AUTH_DISABLE_JWT_VALIDATION:-true}
       - AUTH_ALLOW_HEADER_FALLBACK=${AUTH_ALLOW_HEADER_FALLBACK:-true}
       - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-dev-secret-change-me}

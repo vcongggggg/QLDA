@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, require_roles
+from app.auth import get_current_user, require_permission
 from app.kpi import calculate_monthly_kpi, compute_dashboard_metrics
 from app.repository import (
     all_tasks_with_users,
@@ -50,7 +50,7 @@ def create_kpi_adjustment_endpoint(
     payload: KPIAdjustmentCreate,
     current_user: dict = Depends(get_current_user),
 ) -> dict:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "kpi.adjust")
     if not user_exists(payload.user_id):
         raise HTTPException(status_code=404, detail="target user not found")
     item = create_kpi_adjustment(

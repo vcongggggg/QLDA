@@ -7,8 +7,13 @@ const state = {
   userId: localStorage.getItem('tw_uid') || '1',
   month: new Date().toISOString().slice(0, 7),
   currentSection: 'dashboard',
+  currentUserRole: null,
   charts: {},
   aiItems: [],
+  aiDrafts: [],
+  activeAiDraftId: null,
+  activeAiDraft: null,
+  rbac: { roles: [], permissions: [], selectedKeys: new Set() },
   activeTaskId: null,
   draggingTaskId: null,
   notificationsOpen: false,
@@ -76,12 +81,16 @@ async function loadCurrentUser() {
       role: me.role,
       avatar: me.full_name.charAt(0).toUpperCase(),
     });
+    state.currentUserRole = me.role;
+    updateKanbanAssigneeVisibility();
   } catch (_) {
     setCurrentUserDisplay({
       name: `User ${state.userId}`,
       role: 'Unknown',
       avatar: 'U',
     });
+    state.currentUserRole = null;
+    updateKanbanAssigneeVisibility();
   }
 }
 
@@ -103,6 +112,7 @@ const TITLES = {
   reports:   'Báo cáo',
   ai:        'AI – Phân rã yêu cầu thành task',
   teams:     'Tích hợp Microsoft Teams',
+  ops:       'Audit & Ops',
   admin:     'Quản trị hệ thống',
 };
 
@@ -132,6 +142,7 @@ function loadSection(section) {
     case 'reports':   setupReports();  break;
     case 'ai':        loadAI();        break;
     case 'teams':     loadTeams();     break;
+    case 'ops':       loadOpsDashboard(); break;
     case 'admin':     loadAdmin();     break;
   }
 }
@@ -370,12 +381,12 @@ async function loadProjectOverview() {
           const progress = await api(`/projects/${p.id}/progress`);
           return { ...p, progress };
         } catch {
-          return { ...p, progress: { total_tasks: 0, done_tasks: 0, progress_percent: 0 } };
+          return { ...p, progress: { total_tasks: 0, done_tasks: 0, completion_rate: 0 } };
         }
       })
     );
     el.innerHTML = rows.map(p => {
-      const pct = p.progress?.progress_percent ?? 0;
+      const pct = p.progress?.completion_rate ?? 0;
       const fillCls = pct >= 80 ? 'done' : pct < 30 ? 'warning' : '';
       return `
         <div class="project-row">
@@ -489,23 +500,6 @@ function initKanbanDragDrop() {
 // ════════════════════════════════ KANBAN ═══════
 
 async function loadKanban() {
-  // Populate project filter
-  const sel = document.getElementById('kanbanProjectFilter');
-  if (sel.options.length === 1) {
-    try {
-      const projects = await api('/projects');
-      projects.forEach(p => {
-        const o = document.createElement('option');
-        o.value = p.id; o.textContent = p.name;
-        sel.appendChild(o);
-      });
-    } catch (_) {}
-  }
-
-  const projectId = sel.value;
-  let url = '/tasks';
-  if (projectId) url += `?project_id=${projectId}`;
-
   const cols = {
     todo:  document.getElementById('col-todo'),
     doing: document.getElementById('col-doing'),
@@ -515,7 +509,10 @@ async function loadKanban() {
   Object.values(cols).forEach(c => { c.innerHTML = '<div class="skeleton" style="height:64px;margin:4px 0"></div>'; });
 
   try {
+    await loadKanbanFilterOptions();
+    const url = buildKanbanTaskUrl();
     const tasks = await api(url);
+    await loadWorkloadWarnings();
     const grouped = { todo: [], doing: [], done: [] };
     tasks.forEach(t => { if (grouped[t.status]) grouped[t.status].push(t); });
 
@@ -536,6 +533,68 @@ async function loadKanban() {
     Object.values(cols).forEach(c => {
       c.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${e.message}</div>`;
     });
+  }
+}
+
+async function loadWorkloadWarnings() {
+  const panel = document.getElementById('workloadWarningsPanel');
+  const sprintId = document.getElementById('kanbanSprintFilter')?.value;
+  if (!panel) return;
+  if (!sprintId) {
+    panel.classList.add('hidden');
+    panel.innerHTML = '';
+    return;
+  }
+
+  panel.classList.remove('hidden');
+  panel.innerHTML = '<div class="skeleton" style="height:76px"></div>';
+  try {
+    const rows = await api(`/sprints/${sprintId}/workload-warnings`);
+    const warnings = rows.filter(row => row.risk_level !== 'low' || row.overloaded || row.overdue_task_count > 0);
+    if (!warnings.length) {
+      panel.innerHTML = `
+        <div class="workload-header">
+          <h3>${icon('alert-triangle', 'heading-icon')}Workload warnings</h3>
+        </div>
+        <div class="empty-state compact">Không có cảnh báo quá tải</div>`;
+      return;
+    }
+
+    panel.innerHTML = `
+      <div class="workload-header">
+        <h3>${icon('alert-triangle', 'heading-icon')}Workload warnings</h3>
+        <span class="tag ${warnings.some(row => row.risk_level === 'high') ? 'tag-red' : 'tag-yellow'}">${warnings.length} cảnh báo</span>
+      </div>
+      <div class="workload-table-wrap">
+        <table class="rank-table workload-table">
+          <thead>
+            <tr>
+              <th>Nhân sự</th>
+              <th>Workload</th>
+              <th>Capacity</th>
+              <th>Task mở</th>
+              <th>Quá hạn</th>
+              <th>Risk</th>
+              <th>Lý do</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${warnings.map(row => `
+              <tr class="workload-risk-${escHtml(row.risk_level)}">
+                <td><strong>${escHtml(row.user_name || `User ${row.user_id}`)}</strong></td>
+                <td>${Number(row.workload_points || 0)}</td>
+                <td>${row.capacity_points == null ? '-' : Number(row.capacity_points).toFixed(1)}</td>
+                <td>${Number(row.open_task_count || 0)}</td>
+                <td>${Number(row.overdue_task_count || 0)}</td>
+                <td><span class="tag ${row.risk_level === 'high' ? 'tag-red' : 'tag-yellow'}">${escHtml(row.risk_level)}</span></td>
+                <td>${(row.reasons || []).map(escHtml).join(', ') || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    panel.innerHTML = `<div class="empty-state compact">${icon('alert-triangle', 'empty-icon')}${escHtml(e.message)}</div>`;
   }
 }
 
@@ -758,7 +817,7 @@ async function loadProjects() {
 }
 
 function projectCard(p) {
-  const pct = p.progress?.progress_percent ?? 0;
+  const pct = p.progress?.completion_rate ?? 0;
   const fillCls = pct >= 80 ? 'done' : pct < 30 ? 'warning' : '';
   const start = p.start_date ? new Date(p.start_date).toLocaleDateString('vi-VN') : '–';
   const end   = p.end_date   ? new Date(p.end_date).toLocaleDateString('vi-VN')   : '–';
@@ -920,6 +979,8 @@ function triggerDownload(url) {
 
 async function loadAI() {
   await populateAiSelectors();
+  await loadAiDrafts();
+  await loadRagDocuments();
   renderAiPreview();
 }
 
@@ -950,9 +1011,17 @@ async function populateAiSelectors() {
   }
 }
 
+function getRagOptions() {
+  return {
+    useRag: document.getElementById('aiUseRag')?.checked !== false,
+    ragQuery: document.getElementById('aiRagQuery')?.value.trim() || '',
+  };
+}
+
 async function generateAiTasksFromText() {
   const text = document.getElementById('aiRequirementText').value.trim();
   const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
+  const { useRag, ragQuery } = getRagOptions();
   if (text.length < 10) {
     toast('Vui lòng nhập requirements dài hơn 10 ký tự', 'error');
     return;
@@ -960,13 +1029,14 @@ async function generateAiTasksFromText() {
   await generateAiTasks(() => api('/ai/task-breakdown', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, max_tasks: maxTasks }),
+    body: JSON.stringify({ text, max_tasks: maxTasks, use_rag: useRag, rag_query: ragQuery }),
   }));
 }
 
 async function generateAiTasksFromDocx() {
   const file = document.getElementById('aiDocxFile').files[0];
   const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
+  const { useRag, ragQuery } = getRagOptions();
   if (!file) {
     toast('Vui lòng chọn file .docx', 'error');
     return;
@@ -974,6 +1044,10 @@ async function generateAiTasksFromDocx() {
   const form = new FormData();
   form.append('file', file);
   form.append('max_tasks', String(maxTasks));
+  form.append('use_rag', String(useRag));
+  if (ragQuery) {
+    form.append('rag_query', ragQuery);
+  }
   await generateAiTasks(() => api('/ai/task-breakdown/docx', {
     method: 'POST',
     body: form,
@@ -986,8 +1060,12 @@ async function generateAiTasks(loader) {
   try {
     const result = await loader();
     state.aiItems = result.items || [];
-    document.getElementById('aiPreviewMeta').textContent = `${state.aiItems.length} task · nguồn: ${result.source}`;
+    state.activeAiDraftId = result.ai_draft_id || null;
+    state.activeAiDraft = state.activeAiDraftId ? { id: state.activeAiDraftId, status: result.status || 'draft', items: state.aiItems } : null;
+    const ragMeta = result.retrieved_context_count ? ` · RAG: ${(result.retrieved_sources || []).join(', ')}` : '';
+    document.getElementById('aiPreviewMeta').textContent = `${state.aiItems.length} task · nguồn: ${result.source}${ragMeta}`;
     document.getElementById('aiWarnings').textContent = (result.warnings || []).join(' ');
+    await loadAiDrafts();
     renderAiPreview();
     toast('Đã tạo danh sách task đề xuất', 'success');
   } catch (e) {
@@ -1066,6 +1144,396 @@ async function importSelectedAiTasks() {
   }
 }
 
+async function loadAiDrafts() {
+  const el = document.getElementById('aiDraftsTable');
+  if (!el) return;
+  el.innerHTML = '<div class="skeleton" style="height:96px"></div>';
+  try {
+    const drafts = await api('/ai/task-breakdown/drafts');
+    state.aiDrafts = drafts || [];
+    renderAiDrafts();
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderAiDrafts() {
+  const el = document.getElementById('aiDraftsTable');
+  if (!el) return;
+  if (!state.aiDrafts.length) {
+    el.innerHTML = '<div class="empty-state compact">Chưa có AI draft</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="kpi-table ai-drafts-table">
+      <thead>
+        <tr><th>Batch</th><th>Nguồn</th><th>Task</th><th>Status</th><th>Tạo lúc</th><th>Reviewer</th><th></th></tr>
+      </thead>
+      <tbody>
+        ${state.aiDrafts.map(d => `
+          <tr>
+            <td><strong>#${d.id}</strong><div class="text-sm text-muted">${escHtml(d.source_name || d.source_summary || '')}</div></td>
+            <td>${aiSourceLabel(d.source_type)}</td>
+            <td>${d.item_count || 0}</td>
+            <td><span class="badge badge-${aiStatusClass(d.status)}">${aiStatusLabel(d.status)}</span></td>
+            <td>${safeDate(d.created_at)}</td>
+            <td>${d.reviewer_id ? `User ${d.reviewer_id}` : '-'}</td>
+            <td>
+              <div class="action-row compact-actions">
+                <button class="btn btn-outline btn-sm" onclick="openAiDraftReview(${d.id})">Review</button>
+                ${d.status !== 'imported' ? `<button class="btn btn-primary btn-sm" onclick="importAiDraft(${d.id})">Import</button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function openAiDraftReview(draftId) {
+  const overlay = document.getElementById('aiDraftOverlay');
+  const body = document.getElementById('aiDraftReviewBody');
+  if (!overlay || !body) return;
+  overlay.classList.remove('hidden');
+  body.innerHTML = '<div class="skeleton" style="height:180px"></div>';
+  try {
+    const draft = await api(`/ai/task-breakdown/drafts/${draftId}`);
+    state.activeAiDraftId = draft.id;
+    state.activeAiDraft = draft;
+    state.aiItems = draft.items || [];
+    document.getElementById('aiPreviewMeta').textContent = `${state.aiItems.length} task · draft #${draft.id} · ${aiStatusLabel(draft.status)}`;
+    renderAiPreview();
+    renderAiDraftReview(draft);
+  } catch (e) {
+    body.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+function closeAiDraftReview() {
+  const overlay = document.getElementById('aiDraftOverlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+function renderAiDraftReview(draft) {
+  const title = document.getElementById('aiDraftDrawerTitle');
+  const body = document.getElementById('aiDraftReviewBody');
+  if (!body) return;
+  if (title) title.textContent = `AI Draft #${draft.id}`;
+  body.innerHTML = `
+    <div class="task-detail-section">
+      <div class="task-detail-status-row">
+        <span class="badge badge-${aiStatusClass(draft.status)}">${aiStatusLabel(draft.status)}</span>
+        <span class="tag">${aiSourceLabel(draft.source_type)}</span>
+      </div>
+      <p class="task-detail-description">${escHtml(draft.source_summary || draft.source_name || '')}</p>
+    </div>
+    <div class="task-detail-section ai-review-items">
+      ${(draft.items || []).map((item, i) => aiReviewItemRow(item, i)).join('')}
+    </div>
+    <div class="task-detail-section form-stack">
+      <label class="field-label">Review note</label>
+      <textarea id="aiReviewNote" class="textarea" rows="3">${escHtml(draft.review_note || '')}</textarea>
+      <label class="field-label">Edit reason</label>
+      <textarea id="aiEditReason" class="textarea" rows="3">${escHtml(draft.edit_reason || '')}</textarea>
+      <div class="action-row">
+        <button class="btn btn-primary" onclick="saveAiDraftReview(${draft.id})">Review</button>
+        ${draft.status !== 'imported' ? `<button class="btn btn-outline" onclick="importAiDraft(${draft.id})">Import</button>` : ''}
+        <button class="btn btn-outline" onclick="closeAiDraftReview()">Close</button>
+      </div>
+    </div>`;
+}
+
+function aiReviewItemRow(item, i) {
+  return `
+    <div class="ai-review-item" data-ai-review-index="${i}">
+      <label class="check-row">
+        <input id="aiReviewSelected${i}" type="checkbox" ${item.selected !== false ? 'checked' : ''} />
+        <span>Import</span>
+      </label>
+      <input id="aiReviewTitle${i}" class="input" type="text" value="${escHtml(item.title || '')}" />
+      <textarea id="aiReviewDesc${i}" class="textarea" rows="2">${escHtml(item.description || '')}</textarea>
+      <div class="inline-fields">
+        <select id="aiReviewDifficulty${i}" class="select">
+          ${['easy', 'medium', 'hard'].map(d => `<option value="${d}" ${item.difficulty === d ? 'selected' : ''}>${diffLabel(d)}</option>`).join('')}
+        </select>
+        <input id="aiReviewPoints${i}" class="input" type="number" min="1" max="13" value="${Number(item.story_points || 3)}" />
+        <input id="aiReviewOffset${i}" class="input" type="number" min="1" max="90" value="${Number(item.deadline_offset_days || 7)}" />
+      </div>
+      <input id="aiReviewRationale${i}" class="input" type="text" value="${escHtml(item.rationale || '')}" />
+    </div>`;
+}
+
+function collectAiReviewItems() {
+  const rows = [...document.querySelectorAll('[data-ai-review-index]')];
+  return rows.map(row => {
+    const i = row.dataset.aiReviewIndex;
+    return {
+      title: document.getElementById(`aiReviewTitle${i}`).value.trim(),
+      description: document.getElementById(`aiReviewDesc${i}`).value.trim() || null,
+      difficulty: document.getElementById(`aiReviewDifficulty${i}`).value,
+      story_points: Number(document.getElementById(`aiReviewPoints${i}`).value || 3),
+      deadline_offset_days: Number(document.getElementById(`aiReviewOffset${i}`).value || 7),
+      rationale: document.getElementById(`aiReviewRationale${i}`).value.trim() || null,
+      selected: document.getElementById(`aiReviewSelected${i}`).checked,
+    };
+  });
+}
+
+async function saveAiDraftReview(draftId) {
+  const items = collectAiReviewItems();
+  if (!items.length || items.some(item => !item.title)) {
+    toast('Vui lòng giữ ít nhất một task có tiêu đề', 'error');
+    return;
+  }
+  try {
+    const draft = await api(`/ai/task-breakdown/drafts/${draftId}/review`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items,
+        review_note: document.getElementById('aiReviewNote').value.trim() || null,
+        edit_reason: document.getElementById('aiEditReason').value.trim() || null,
+      }),
+    });
+    state.aiItems = draft.items || [];
+    state.activeAiDraft = draft;
+    renderAiPreview();
+    renderAiDraftReview(draft);
+    await loadAiDrafts();
+    toast('Đã review AI draft', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function importAiDraft(draftId) {
+  const assigneeId = Number(document.getElementById('aiAssigneeSelect').value);
+  const projectRaw = document.getElementById('aiProjectSelect').value;
+  if (!draftId) {
+    toast('Chưa chọn AI draft để import', 'error');
+    return;
+  }
+  if (!assigneeId) {
+    toast('Vui lòng chọn người phụ trách', 'error');
+    return;
+  }
+  try {
+    const result = await api('/ai/task-breakdown/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ai_draft_id: draftId,
+        assignee_id: assigneeId,
+        project_id: projectRaw ? Number(projectRaw) : null,
+        sprint_id: null,
+      }),
+    });
+    toast(`Đã import ${result.created_count} task vào Kanban`, 'success');
+    state.aiItems = [];
+    state.activeAiDraftId = null;
+    state.activeAiDraft = null;
+    renderAiPreview();
+    document.getElementById('aiPreviewMeta').textContent = 'Đã import xong';
+    closeAiDraftReview();
+    await loadAiDrafts();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function aiStatusClass(status) {
+  return { draft: 'draft', reviewed: 'reviewed', imported: 'imported' }[status] || 'todo';
+}
+
+function aiStatusLabel(status) {
+  return { draft: 'Draft', reviewed: 'Reviewed', imported: 'Imported' }[status] || status;
+}
+
+function aiSourceLabel(source) {
+  return source === 'docx' ? 'DOCX' : 'Text';
+}
+
+async function importSelectedAiTasks() {
+  await importAiDraft(state.activeAiDraftId);
+}
+
+async function loadRagDocuments() {
+  const el = document.getElementById('ragDocuments');
+  if (!el) return;
+  el.innerHTML = '<div class="skeleton" style="height:96px"></div>';
+  try {
+    const docs = await api('/rag/documents');
+    if (!docs.length) {
+      el.innerHTML = '<div class="empty-state compact">Chưa có tài liệu RAG</div>';
+      return;
+    }
+    el.innerHTML = `
+      <table class="audit-table">
+        <thead><tr><th>Tài liệu</th><th>Nguồn</th><th>Chunks</th><th></th></tr></thead>
+        <tbody>
+          ${docs.map(d => `
+            <tr>
+              <td><strong>${escHtml(d.title)}</strong></td>
+              <td>${escHtml(d.source_label || '-')}</td>
+              <td>${d.chunk_count || 0}</td>
+              <td><button class="btn btn-outline btn-sm" onclick="deleteRagDocument(${d.id})">Xóa</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+let kanbanDebounceTimer = null;
+
+function loadKanbanDebounced() {
+  clearTimeout(kanbanDebounceTimer);
+  kanbanDebounceTimer = setTimeout(() => loadKanban(), 250);
+}
+
+async function onKanbanProjectFilterChange() {
+  await loadKanbanSprints();
+  await loadKanban();
+}
+
+function updateKanbanAssigneeVisibility() {
+  const assignee = document.getElementById('kanbanAssigneeFilter');
+  if (!assignee) return;
+  const isStaff = state.currentUserRole === 'staff';
+  assignee.style.display = isStaff ? 'none' : '';
+  assignee.disabled = isStaff;
+  if (isStaff) assignee.value = '';
+}
+
+async function loadKanbanFilterOptions() {
+  updateKanbanAssigneeVisibility();
+  const project = document.getElementById('kanbanProjectFilter');
+  if (project && project.options.length === 1) {
+    try {
+      const projects = await api('/projects');
+      projects.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = p.name;
+        project.appendChild(option);
+      });
+    } catch (_) {}
+  }
+
+  const assignee = document.getElementById('kanbanAssigneeFilter');
+  if (assignee && !assignee.disabled && assignee.options.length === 1) {
+    try {
+      const users = await api('/users');
+      users.forEach(u => {
+        const option = document.createElement('option');
+        option.value = u.id;
+        option.textContent = `${u.full_name} (${u.role})`;
+        assignee.appendChild(option);
+      });
+    } catch (_) {
+      assignee.disabled = true;
+    }
+  }
+
+  await loadKanbanSprints(false);
+}
+
+async function loadKanbanSprints(resetValue = true) {
+  const project = document.getElementById('kanbanProjectFilter');
+  const sprint = document.getElementById('kanbanSprintFilter');
+  if (!project || !sprint) return;
+  const previous = resetValue ? '' : sprint.value;
+  sprint.innerHTML = '<option value="">All sprints</option>';
+  sprint.disabled = true;
+  if (!project.value) return;
+
+  try {
+    const sprints = await api(`/projects/${project.value}/sprints`);
+    sprints.forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = item.name;
+      sprint.appendChild(option);
+    });
+    sprint.disabled = false;
+    if (previous && Array.from(sprint.options).some(option => option.value === previous)) {
+      sprint.value = previous;
+    }
+  } catch (_) {}
+}
+
+function buildKanbanTaskUrl() {
+  const params = new URLSearchParams();
+  const projectId = document.getElementById('kanbanProjectFilter')?.value;
+  const sprintId = document.getElementById('kanbanSprintFilter')?.value;
+  const assignee = document.getElementById('kanbanAssigneeFilter');
+  const status = document.getElementById('kanbanStatusFilter')?.value;
+  const overdue = document.getElementById('kanbanOverdueFilter')?.value;
+  const keyword = document.getElementById('kanbanKeywordFilter')?.value.trim();
+  const deadlineFrom = document.getElementById('kanbanDeadlineFromFilter')?.value;
+  const deadlineTo = document.getElementById('kanbanDeadlineToFilter')?.value;
+
+  if (projectId) params.set('project_id', projectId);
+  if (sprintId) params.set('sprint_id', sprintId);
+  if (assignee && !assignee.disabled && assignee.value) params.set('assignee_id', assignee.value);
+  if (status) params.set('status', status);
+  if (overdue) params.set('overdue', overdue);
+  if (keyword) params.set('keyword', keyword);
+  if (deadlineFrom) params.set('deadline_from', new Date(`${deadlineFrom}T00:00:00Z`).toISOString());
+  if (deadlineTo) params.set('deadline_to', new Date(`${deadlineTo}T23:59:59Z`).toISOString());
+
+  const query = params.toString();
+  return query ? `/tasks?${query}` : '/tasks';
+}
+
+async function resetKanbanFilters() {
+  ['kanbanProjectFilter', 'kanbanAssigneeFilter', 'kanbanStatusFilter', 'kanbanOverdueFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['kanbanKeywordFilter', 'kanbanDeadlineFromFilter', 'kanbanDeadlineToFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  await loadKanbanSprints();
+  await loadKanban();
+}
+
+async function createRagDocument() {
+  const title = document.getElementById('ragTitle').value.trim();
+  const source = document.getElementById('ragSource').value.trim();
+  const content = document.getElementById('ragContent').value.trim();
+  if (title.length < 2 || content.length < 20) {
+    toast('Nhập tiêu đề và nội dung RAG đủ dài', 'error');
+    return;
+  }
+  try {
+    await api('/rag/documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, source_label: source || null, content }),
+    });
+    document.getElementById('ragTitle').value = '';
+    document.getElementById('ragSource').value = '';
+    document.getElementById('ragContent').value = '';
+    await loadRagDocuments();
+    toast('Đã thêm tài liệu RAG', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function deleteRagDocument(id) {
+  try {
+    await api(`/rag/documents/${id}`, { method: 'DELETE' });
+    await loadRagDocuments();
+    toast('Đã xóa tài liệu RAG', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 // ════════════════════════════════ TEAMS ════════
 
 async function loadTeams() {
@@ -1103,28 +1571,291 @@ async function loadTeams() {
 
 // ════════════════════════════════ ADMIN ════════
 
+// Audit & Ops
+let opsDebounceTimer = null;
+
+function buildOpsUrl() {
+  const params = new URLSearchParams();
+  const actor = document.getElementById('opsActorFilter')?.value;
+  const action = document.getElementById('opsActionFilter')?.value.trim();
+  const entity = document.getElementById('opsEntityFilter')?.value.trim();
+  const keyword = document.getElementById('opsKeywordFilter')?.value.trim();
+  const dateFrom = document.getElementById('opsDateFromFilter')?.value;
+  const dateTo = document.getElementById('opsDateToFilter')?.value;
+  if (actor) params.set('actor_id', actor);
+  if (action) params.set('action', action);
+  if (entity) params.set('entity_type', entity);
+  if (keyword) params.set('keyword', keyword);
+  if (dateFrom) params.set('date_from', new Date(`${dateFrom}T00:00:00Z`).toISOString());
+  if (dateTo) params.set('date_to', new Date(`${dateTo}T23:59:59Z`).toISOString());
+  params.set('limit', '100');
+  const query = params.toString();
+  return query ? `/monitoring/ops?${query}` : '/monitoring/ops';
+}
+
+function loadOpsDashboardDebounced() {
+  clearTimeout(opsDebounceTimer);
+  opsDebounceTimer = setTimeout(() => loadOpsDashboard(), 250);
+}
+
+function setOpsLoading() {
+  const stats = document.getElementById('opsStats');
+  if (stats) {
+    stats.innerHTML = `
+      <div class="stat-card skeleton"></div>
+      <div class="stat-card skeleton"></div>
+      <div class="stat-card skeleton"></div>
+      <div class="stat-card skeleton"></div>`;
+  }
+  ['opsAuditTable', 'opsFailedQueueTable', 'opsOverdueTables'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<div class="skeleton" style="height:120px"></div>';
+  });
+}
+
+async function loadOpsDashboard() {
+  const alert = document.getElementById('opsAlert');
+  if (alert) alert.classList.add('hidden');
+  setOpsLoading();
+  try {
+    const data = await api(buildOpsUrl());
+    renderOpsStats(data);
+    renderOpsAudit(data.audit_logs || []);
+    renderOpsQueue(data.notification_queue || {}, Boolean(data.can_manage_queue));
+    renderOpsOverdue(data.overdue_spike || {});
+  } catch (e) {
+    const message = escHtml(e.message || 'Cannot load Audit & Ops');
+    const stats = document.getElementById('opsStats');
+    if (stats) stats.innerHTML = `<div class="stat-card"><div class="empty-state compact">${message}</div></div>`;
+    ['opsAuditTable', 'opsFailedQueueTable', 'opsOverdueTables'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = `<div class="empty-state compact">${message}</div>`;
+    });
+  }
+}
+
+function renderOpsStats(data) {
+  const queue = data.notification_queue || {};
+  const spike = data.overdue_spike || {};
+  const cards = [
+    { icon: 'bell', label: 'Queued', value: queue.queued_count || 0, cls: 'warning' },
+    { icon: 'check-circle', label: 'Sent', value: queue.sent_count || 0, cls: 'success' },
+    { icon: 'x-circle', label: 'Failed', value: queue.failed_count || 0, cls: 'danger' },
+    { icon: 'alert-triangle', label: 'Overdue', value: spike.overdue_count || 0, cls: spike.alert ? 'danger' : 'neutral' },
+  ];
+  const stats = document.getElementById('opsStats');
+  if (!stats) return;
+  stats.innerHTML = cards.map(card => `
+    <div class="stat-card ops-stat-card ${card.cls}">
+      <div class="stat-icon">${icon(card.icon, 'stat-svg')}</div>
+      <div class="stat-value">${card.value}</div>
+      <div class="stat-label">${escHtml(card.label)}</div>
+    </div>`).join('');
+}
+
+function renderOpsAudit(logs) {
+  const el = document.getElementById('opsAuditTable');
+  if (!el) return;
+  if (!logs.length) {
+    el.innerHTML = '<div class="empty-state compact">No audit logs match the current filters.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="audit-table">
+      <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Entity</th><th>Detail</th></tr></thead>
+      <tbody>
+        ${logs.map(log => `
+          <tr>
+            <td style="white-space:nowrap">${fmtDateTime(log.created_at)}</td>
+            <td>${escHtml(log.actor_name || (log.actor_user_id ? `User ${log.actor_user_id}` : 'System'))}</td>
+            <td><code>${escHtml(log.action)}</code></td>
+            <td><code>${escHtml(log.entity)}${log.entity_id ? ' #' + escHtml(log.entity_id) : ''}</code></td>
+            <td>${escHtml(log.detail || '-')}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderOpsQueue(queue, canManage) {
+  const processBtn = document.getElementById('opsProcessQueueBtn');
+  if (processBtn) processBtn.classList.toggle('hidden', !canManage);
+  const el = document.getElementById('opsFailedQueueTable');
+  if (!el) return;
+  const items = queue.latest_failed_items || [];
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state compact">No failed queue items.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="audit-table ops-queue-table">
+      <thead><tr><th>ID</th><th>User</th><th>Attempts</th><th>Error</th><th></th></tr></thead>
+      <tbody>
+        ${items.map(item => `
+          <tr>
+            <td><span class="badge badge-hard">#${item.id}</span></td>
+            <td>${escHtml(item.user_id || '-')}</td>
+            <td>${escHtml(item.attempts)}/${escHtml(item.max_attempts)}</td>
+            <td>${escHtml(item.last_error_summary || '-')}</td>
+            <td>${canManage ? `<button class="btn btn-outline btn-sm" onclick="requeueOpsItem(${Number(item.id)})">Requeue</button>` : ''}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderOpsOverdue(spike) {
+  const alert = document.getElementById('opsAlert');
+  if (alert) {
+    alert.textContent = spike.alert
+      ? `Overdue spike alert: ${spike.overdue_count || 0} tasks exceed threshold ${spike.threshold || 0}.`
+      : '';
+    alert.classList.toggle('hidden', !spike.alert);
+  }
+  const el = document.getElementById('opsOverdueTables');
+  if (!el) return;
+  const projects = spike.top_projects || [];
+  const sprints = spike.top_sprints || [];
+  if (!projects.length && !sprints.length) {
+    el.innerHTML = '<div class="empty-state compact">No overdue tasks.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="ops-table-stack">
+      <table class="audit-table">
+        <thead><tr><th>Project</th><th>Overdue</th></tr></thead>
+        <tbody>${projects.map(item => `
+          <tr><td>${escHtml(item.project_name || 'Unassigned')}</td><td><span class="badge badge-hard">${item.overdue_count}</span></td></tr>`).join('')}</tbody>
+      </table>
+      <table class="audit-table">
+        <thead><tr><th>Sprint</th><th>Project</th><th>Overdue</th></tr></thead>
+        <tbody>${sprints.map(item => `
+          <tr><td>${escHtml(item.sprint_name || 'Unassigned')}</td><td>${escHtml(item.project_name || 'Unassigned')}</td><td><span class="badge badge-hard">${item.overdue_count}</span></td></tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+async function processOpsQueue() {
+  try {
+    await api('/integrations/teams/proactive/process', { method: 'POST' });
+    await loadOpsDashboard();
+    toast('Queue processed', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function requeueOpsItem(id) {
+  try {
+    await api(`/integrations/teams/proactive/requeue/${id}`, { method: 'POST' });
+    await loadOpsDashboard();
+    toast('Notification requeued', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function resetOpsFilters() {
+  ['opsActorFilter', 'opsActionFilter', 'opsEntityFilter', 'opsKeywordFilter', 'opsDateFromFilter', 'opsDateToFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  await loadOpsDashboard();
+}
+
 async function loadAdmin() {
-  await Promise.all([loadPlanCompletion(), loadAuditLogs()]);
+  await Promise.all([loadPlanCompletion(), loadAuditLogs(), loadRbacAdmin()]);
+}
+
+async function loadRbacAdmin() {
+  const roleSelect = document.getElementById('rbacRoleSelect');
+  const table = document.getElementById('rbacPermissionTable');
+  if (!roleSelect || !table) return;
+  table.innerHTML = '<div class="skeleton" style="height:120px"></div>';
+  try {
+    const [roles, permissions] = await Promise.all([api('/rbac/roles'), api('/rbac/permissions')]);
+    state.rbac.roles = roles;
+    state.rbac.permissions = permissions;
+    roleSelect.innerHTML = roles.map(r => `<option value="${escHtml(r.slug)}">${escHtml(r.name)} (${escHtml(r.slug)})</option>`).join('');
+    await loadRolePermissions();
+  } catch (e) {
+    table.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadRolePermissions() {
+  const roleSelect = document.getElementById('rbacRoleSelect');
+  const table = document.getElementById('rbacPermissionTable');
+  if (!roleSelect || !table || !roleSelect.value) return;
+  table.innerHTML = '<div class="skeleton" style="height:120px"></div>';
+  try {
+    const result = await api(`/rbac/roles/${encodeURIComponent(roleSelect.value)}/permissions`);
+    state.rbac.selectedKeys = new Set((result.permissions || []).map(p => p.key));
+    renderPermissionTable();
+  } catch (e) {
+    table.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderPermissionTable() {
+  const table = document.getElementById('rbacPermissionTable');
+  const permissions = state.rbac.permissions || [];
+  if (!permissions.length) {
+    table.innerHTML = '<div class="empty-state compact">Chưa có permission</div>';
+    return;
+  }
+  table.innerHTML = `
+    <table class="audit-table">
+      <thead><tr><th>Cho phép</th><th>Permission</th><th>Nhóm</th></tr></thead>
+      <tbody>
+        ${permissions.map(p => `
+          <tr>
+            <td><input type="checkbox" ${state.rbac.selectedKeys.has(p.key) ? 'checked' : ''} onchange="togglePermissionKey('${escHtml(p.key)}', this.checked)" /></td>
+            <td><strong>${escHtml(p.name)}</strong><div class="text-sm text-muted">${escHtml(p.key)}</div></td>
+            <td><span class="tag">${escHtml(p.category)}</span></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function togglePermissionKey(key, checked) {
+  if (checked) state.rbac.selectedKeys.add(key);
+  else state.rbac.selectedKeys.delete(key);
+}
+
+async function saveRolePermissions() {
+  const role = document.getElementById('rbacRoleSelect')?.value;
+  if (!role) return;
+  try {
+    await api(`/rbac/roles/${encodeURIComponent(role)}/permissions`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permission_keys: Array.from(state.rbac.selectedKeys).sort() }),
+    });
+    toast('Đã lưu phân quyền', 'success');
+    await loadRolePermissions();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 async function loadPlanCompletion() {
   const el = document.getElementById('planCompletion');
   try {
     const plan = await api('/plan/completion');
-    const keys = Object.entries(plan).filter(([k]) => k !== 'overall_percent');
+    const completionPercent = plan.completion_percent ?? 0;
+    const items = plan.items ?? [];
     el.innerHTML = `
       <div style="margin-bottom:12px">
         <div class="progress-label">
           <span>Tổng tiến độ</span>
-          <strong>${plan.overall_percent ?? 0}%</strong>
+          <strong>${completionPercent}%</strong>
         </div>
-        <div class="progress-bar"><div class="progress-fill" style="width:${plan.overall_percent ?? 0}%"></div></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${completionPercent}%"></div></div>
       </div>
       <div class="plan-list">
-        ${keys.map(([k, v]) => `
+        ${items.map(item => `
           <div class="plan-item">
-            <span class="plan-check">${icon(v ? 'check-circle' : 'square', 'text-icon')}</span>
-            <span style="color:${v ? 'var(--success)' : 'var(--text-2)'}">${formatPlanKey(k)}</span>
+            <span class="plan-check">${icon(item.done ? 'check-circle' : 'square', 'text-icon')}</span>
+            <span style="color:${item.done ? 'var(--success)' : 'var(--text-2)'}">${escHtml(item.title || formatPlanKey(item.key || ''))}</span>
           </div>`).join('')}
       </div>`;
   } catch (e) {

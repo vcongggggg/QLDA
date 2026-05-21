@@ -196,7 +196,7 @@ def list_proactive_notifications(
 
 @router.post("/integrations/teams/proactive/process", response_model=QueueProcessOut)
 def process_proactive_queue(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=1000, ge=1, le=1000),
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     require_roles(current_user, {"admin", "manager", "hr"})
@@ -318,78 +318,4 @@ def teams_tab_prod_page() -> Response:
     $('refresh').onclick=load;$('retryBtn').onclick=load;$('reloadQueueBtn').onclick=loadQueue;$('queueFilter').onchange=loadQueue;$('processQueueBtn').onclick=processQueue;load();
   </script>
 </body></html>""".replace("__APP_BASE_URL__", settings.app_base_url)
-    return Response(content=html, media_type="text/html")
-
-    html = f"""<!doctype html>
-<html>
-<head>
-  <meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
-  <title>TeamsWork Production Tab</title>
-  <script src='https://res.cdn.office.net/teams-js/2.19.0/js/MicrosoftTeams.min.js'></script>
-  <style>
-    :root{{--brand:#2b579a;--bg:#f4f6fb;--card:#fff;--border:#dde5f0;--text:#1e2a3a}}
-    *{{box-sizing:border-box}}body{{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}}
-    .wrap{{max-width:1100px;margin:0 auto;padding:16px}}
-    .head{{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}}
-    .logo{{font-size:20px;font-weight:700;color:var(--brand)}}
-    .btn{{border:1px solid var(--brand);background:#fff;color:var(--brand);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:13px}}
-    .grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}}
-    .card{{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}}
-    .k{{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px}}
-    .v{{font-size:26px;font-weight:700;color:var(--brand);margin-top:2px}}
-    .board{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}
-    .col{{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px}}
-    .col h3{{margin:0 0 10px 0;font-size:13px;font-weight:600;color:#374151;display:flex;align-items:center;gap:6px}}
-    .badge{{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}}
-    .badge-todo{{background:#f3f4f6;color:#6b7280}}.badge-doing{{background:#fef3c7;color:#d97706}}.badge-done{{background:#d1fae5;color:#059669}}
-    .task{{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:#fafbff}}
-    .task .t{{font-size:13px;font-weight:600;margin-bottom:4px}}.task .m{{font-size:11px;color:#6b7280}}
-    @media(max-width:900px){{.grid{{grid-template-columns:repeat(2,1fr)}}.board{{grid-template-columns:1fr}}}}
-  </style>
-</head>
-<body>
-  <div class='wrap'>
-    <div class='head'>
-      <div class='logo'>📋 TeamsWork</div>
-      <button class='btn' id='refresh'>↻ Làm mới</button>
-    </div>
-    <div class='grid'>
-      <div class='card'><div class='k'>Tổng công việc</div><div class='v' id='total'>-</div></div>
-      <div class='card'><div class='k'>Hoàn thành</div><div class='v' id='done' style='color:#059669'>-</div></div>
-      <div class='card'><div class='k'>Quá hạn</div><div class='v' id='overdue' style='color:#dc2626'>-</div></div>
-      <div class='card'><div class='k'>KPI trung bình</div><div class='v' id='kpi'>-</div></div>
-    </div>
-    <div class='board'>
-      <div class='col'><h3><span class='badge badge-todo'>To Do</span></h3><div id='col-todo'></div></div>
-      <div class='col'><h3><span class='badge badge-doing'>Đang làm</span></h3><div id='col-doing'></div></div>
-      <div class='col'><h3><span class='badge badge-done'>Hoàn thành</span></h3><div id='col-done'></div></div>
-    </div>
-  </div>
-  <script>
-    const month=new Date().toISOString().slice(0,7);
-    function card(t){{return`<div class="task"><div class="t">${{t.title}}</div><div class="m">SP: ${{t.story_points}} · Deadline: ${{(t.deadline||'').slice(0,10)}}</div></div>`;}}
-    async function load(){{
-      let uid=localStorage.getItem('tw_uid')||'1';
-      const h={{'X-User-Id':uid}};
-      try{{
-        await microsoftTeams.app.initialize();
-        const tok=await microsoftTeams.authentication.getAuthToken({{resources:[]}});
-        const me=await fetch('{settings.app_base_url}/integrations/teams/aad/sync',{{method:'POST',headers:{{Authorization:'Bearer '+tok}}}});
-        if(me.ok){{const u=await me.json();uid=String(u.id);localStorage.setItem('tw_uid',uid);h['X-User-Id']=uid;h['Authorization']='Bearer '+tok;}}
-      }}catch(_){{}}
-      const summary=await fetch('{settings.app_base_url}/integrations/teams/summary?month='+month,{{headers:h}}).then(r=>r.json()).catch(()=>({{dashboard:{{}},tasks:[]}}));
-      const d=summary.dashboard||{{}};
-      document.getElementById('total').textContent=d.total_tasks??'-';
-      document.getElementById('done').textContent=d.done_tasks??'-';
-      document.getElementById('overdue').textContent=d.overdue_tasks??'-';
-      document.getElementById('kpi').textContent=d.avg_kpi_score??'-';
-      const tasks=summary.tasks||[];
-      document.getElementById('col-todo').innerHTML=tasks.filter(t=>t.status==='todo').map(card).join('');
-      document.getElementById('col-doing').innerHTML=tasks.filter(t=>t.status==='doing').map(card).join('');
-      document.getElementById('col-done').innerHTML=tasks.filter(t=>t.status==='done').map(card).join('');
-    }}
-    document.getElementById('refresh').onclick=load;
-    load();
-  </script>
-</body></html>"""
     return Response(content=html, media_type="text/html")

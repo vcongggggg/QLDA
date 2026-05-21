@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
-from app.auth import get_current_user, require_roles
+from app.auth import get_current_user, require_permission
 from app.kpi import calculate_monthly_kpi
 from app.reporting import (
     build_kpi_csv,
@@ -38,7 +38,7 @@ def _kpi_rows(month: str, current_user: dict) -> list[dict]:
 
 @router.get("/kpi.csv")
 def kpi_report_csv(month: str = Query(description="YYYY-MM"), current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     content = build_kpi_csv(_kpi_rows(month, current_user))
     return Response(content=content, media_type="text/csv",
                     headers={"Content-Disposition": f"attachment; filename=teamswork-kpi-{month}.csv"})
@@ -46,7 +46,7 @@ def kpi_report_csv(month: str = Query(description="YYYY-MM"), current_user: dict
 
 @router.get("/kpi.xlsx")
 def kpi_report_xlsx(month: str = Query(description="YYYY-MM"), current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     content = build_kpi_xlsx(_kpi_rows(month, current_user))
     return Response(content=content,
                     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -55,7 +55,7 @@ def kpi_report_xlsx(month: str = Query(description="YYYY-MM"), current_user: dic
 
 @router.get("/kpi.pdf")
 def kpi_report_pdf(month: str = Query(description="YYYY-MM"), current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     content = build_kpi_pdf(_kpi_rows(month, current_user), month)
     return Response(content=content, media_type="application/pdf",
                     headers={"Content-Disposition": f"attachment; filename=teamswork-kpi-{month}.pdf"})
@@ -63,7 +63,7 @@ def kpi_report_pdf(month: str = Query(description="YYYY-MM"), current_user: dict
 
 @router.get("/portfolio/summary.csv")
 def portfolio_csv(current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     content = build_portfolio_csv(portfolio_summary())
     return Response(content=content, media_type="text/csv",
                     headers={"Content-Disposition": "attachment; filename=teamswork-portfolio-summary.csv"})
@@ -71,7 +71,7 @@ def portfolio_csv(current_user: dict = Depends(get_current_user)) -> Response:
 
 @router.get("/portfolio/summary.xlsx")
 def portfolio_xlsx(current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     content = build_portfolio_xlsx(portfolio_summary())
     return Response(content=content,
                     media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -80,7 +80,7 @@ def portfolio_xlsx(current_user: dict = Depends(get_current_user)) -> Response:
 
 @router.get("/projects/progress.csv")
 def project_progress_csv(current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     rows = [project_progress(p["id"]) for p in list_projects()]
     content = build_project_progress_csv(rows)
     return Response(content=content, media_type="text/csv",
@@ -89,7 +89,7 @@ def project_progress_csv(current_user: dict = Depends(get_current_user)) -> Resp
 
 @router.get("/projects/progress.xlsx")
 def project_progress_xlsx(current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     rows = [project_progress(p["id"]) for p in list_projects()]
     content = build_project_progress_xlsx(rows)
     return Response(content=content,
@@ -99,7 +99,7 @@ def project_progress_xlsx(current_user: dict = Depends(get_current_user)) -> Res
 
 @router.get("/sprints/{sprint_id}/review.csv")
 def sprint_review_csv(sprint_id: int, current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     if not sprint_exists(sprint_id):
         raise HTTPException(status_code=404, detail="sprint not found")
     content = build_sprint_review_csv(sprint_review_summary(sprint_id))
@@ -109,7 +109,7 @@ def sprint_review_csv(sprint_id: int, current_user: dict = Depends(get_current_u
 
 @router.get("/sprints/{sprint_id}/review.xlsx")
 def sprint_review_xlsx(sprint_id: int, current_user: dict = Depends(get_current_user)) -> Response:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "reports.export")
     if not sprint_exists(sprint_id):
         raise HTTPException(status_code=404, detail="sprint not found")
     content = build_sprint_review_xlsx(sprint_review_summary(sprint_id))

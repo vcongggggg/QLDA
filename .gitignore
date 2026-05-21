@@ -10,6 +10,8 @@ ENV/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+test-results/
+.last-run.json
 htmlcov/
 .coverage
 coverage.xml
@@ -38,6 +40,7 @@ Thumbs.db
 
 # Temp / extracted junk
 _extracted/
+.tmp/
 *.log
 teams-app-package.zip
 ecc_guide.md
@@ -48,3 +51,5 @@ everything-claude-code/
 *.xlsx
 PLAN.md
 read_docx_v2.py
+
+everything-claude-code/  # Thư mục chứa code đã trích xuất từ Claude, không cần thiết để chạy ứng dụng
