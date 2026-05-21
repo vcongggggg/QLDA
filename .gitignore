@@ -10,6 +10,8 @@ ENV/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+test-results/
+.last-run.json
 htmlcov/
 .coverage
 coverage.xml

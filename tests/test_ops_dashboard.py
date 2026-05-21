@@ -13,6 +13,7 @@ from app.repository import (
     create_user,
     mark_notification_result,
     queue_notification,
+    replace_role_permissions,
 )
 
 
@@ -77,6 +78,24 @@ def test_privileged_roles_can_view_ops_dashboard_and_staff_is_blocked() -> None:
 
     staff_queue = client.post("/integrations/teams/proactive/process", headers=_hdr(int(staff["id"])))
     assert staff_queue.status_code == 403
+
+
+def test_ops_dashboard_view_is_controlled_by_permission_not_role_allowlist() -> None:
+    admin, _manager, _hr, staff = _bootstrap()
+    original_permissions = client.get(
+        "/rbac/roles/staff/permissions",
+        headers=_hdr(int(admin["id"])),
+    ).json()["permissions"]
+    original_keys = [item["key"] for item in original_permissions]
+    try:
+        replace_role_permissions("staff", [*original_keys, "monitoring.view"])
+
+        resp = client.get("/monitoring/ops", headers=_hdr(int(staff["id"])))
+
+        assert resp.status_code == 200
+        assert resp.json()["can_manage_queue"] is False
+    finally:
+        replace_role_permissions("staff", original_keys)
 
 
 def test_audit_filters_work_on_ops_and_audit_endpoint() -> None:

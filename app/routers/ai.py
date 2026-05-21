@@ -91,6 +91,8 @@ async def task_breakdown_docx_endpoint(
     file: UploadFile = File(...),
     project_context: str | None = Form(default=None),
     max_tasks: int = Form(default=8),
+    use_rag: bool = Form(default=False),
+    rag_query: str | None = Form(default=None),
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     require_permission(current_user, "ai.preview")
@@ -106,10 +108,11 @@ async def task_breakdown_docx_endpoint(
     if len(text) < 10:
         raise HTTPException(status_code=400, detail="docx does not contain enough text")
     retrieved_sources: list[str] = []
-    matches = query_rag(text, limit=5)
-    retrieved_context, retrieved_sources = build_rag_context(matches)
-    if retrieved_context:
-        project_context = "\n\n".join(part for part in (project_context, retrieved_context) if part)
+    if use_rag:
+        matches = query_rag(rag_query or text, limit=5)
+        retrieved_context, retrieved_sources = build_rag_context(matches)
+        if retrieved_context:
+            project_context = "\n\n".join(part for part in (project_context, retrieved_context) if part)
     result = breakdown_requirements(text, project_context, max_tasks)
     draft = create_ai_task_draft(
         source_type="docx",

@@ -18,6 +18,21 @@ def _load_dotenv_if_present() -> None:
 _load_dotenv_if_present()
 
 
+def parse_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    return default
+
+
 class Settings:
     def __init__(self, **overrides: Any) -> None:
         self.app_env = str(overrides.get("app_env", os.getenv("APP_ENV", "development"))).lower()
@@ -26,17 +41,19 @@ class Settings:
 
         self.auth_jwt_secret = overrides.get("auth_jwt_secret", os.getenv("AUTH_JWT_SECRET", "dev-secret-change-me"))
         self.auth_jwt_algorithm = overrides.get("auth_jwt_algorithm", os.getenv("AUTH_JWT_ALGORITHM", "HS256"))
-        self.auth_disable_jwt_validation = bool(
+        self.auth_disable_jwt_validation = parse_bool(
             overrides.get(
                 "auth_disable_jwt_validation",
-                os.getenv("AUTH_DISABLE_JWT_VALIDATION", "true").lower() == "true",
-            )
+                os.getenv("AUTH_DISABLE_JWT_VALIDATION"),
+            ),
+            default=True,
         )
-        self.auth_allow_header_fallback = bool(
+        self.auth_allow_header_fallback = parse_bool(
             overrides.get(
                 "auth_allow_header_fallback",
-                os.getenv("AUTH_ALLOW_HEADER_FALLBACK", "true").lower() == "true",
-            )
+                os.getenv("AUTH_ALLOW_HEADER_FALLBACK"),
+            ),
+            default=True,
         )
 
         self.teams_client_id = overrides.get("teams_client_id", os.getenv("TEAMS_CLIENT_ID", ""))
@@ -48,11 +65,12 @@ class Settings:
         )
         self.teams_channel_id = overrides.get("teams_channel_id", os.getenv("TEAMS_CHANNEL_ID", ""))
         self.teams_service_url = overrides.get("teams_service_url", os.getenv("TEAMS_SERVICE_URL", ""))
-        self.teams_disable_jwt_validation = bool(
+        self.teams_disable_jwt_validation = parse_bool(
             overrides.get(
                 "teams_disable_jwt_validation",
-                os.getenv("TEAMS_DISABLE_JWT_VALIDATION", "false").lower() == "true",
-            )
+                os.getenv("TEAMS_DISABLE_JWT_VALIDATION"),
+            ),
+            default=False,
         )
         self.teams_proactive_mode = overrides.get("teams_proactive_mode", os.getenv("TEAMS_PROACTIVE_MODE", "webhook"))
         self.teams_bot_app_id = overrides.get("teams_bot_app_id", os.getenv("TEAMS_BOT_APP_ID", ""))

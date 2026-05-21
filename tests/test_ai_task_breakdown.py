@@ -186,6 +186,81 @@ def test_task_breakdown_docx_creates_draft() -> None:
     assert detail.json()["source_name"] == "ai-draft-review.docx"
 
 
+def test_task_breakdown_docx_does_not_query_rag_when_disabled(monkeypatch) -> None:
+    settings.ai_api_key = ""
+    _admin_id, manager_id, _staff_id = _bootstrap()
+    doc = Document()
+    doc.add_paragraph("Xay dung docx endpoint khong goi RAG khi use_rag bi tat.")
+    doc.add_paragraph("Noi dung du dai de tao task breakdown bang heuristic fallback.")
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+
+    def fail_query_rag(*_args, **_kwargs):
+        raise AssertionError("query_rag should not be called")
+
+    monkeypatch.setattr("app.routers.ai.query_rag", fail_query_rag)
+
+    preview = client.post(
+        "/ai/task-breakdown/docx",
+        headers=_hdr(manager_id),
+        files={
+            "file": (
+                "no-rag.docx",
+                buffer.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+        data={"max_tasks": "3", "use_rag": "false"},
+    )
+
+    assert preview.status_code == 200
+    assert preview.json()["retrieved_context_count"] == 0
+
+
+def test_task_breakdown_docx_queries_rag_with_custom_query_when_enabled(monkeypatch) -> None:
+    settings.ai_api_key = ""
+    _admin_id, manager_id, _staff_id = _bootstrap()
+    doc = Document()
+    doc.add_paragraph("Xay dung docx endpoint goi RAG khi use_rag duoc bat.")
+    doc.add_paragraph("Noi dung du dai de tao task breakdown bang heuristic fallback.")
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    called_queries: list[str] = []
+
+    def fake_query_rag(query: str, limit: int = 5) -> list[dict]:
+        called_queries.append(query)
+        assert limit == 5
+        return [
+            {
+                "source_label": "custom-rag-source",
+                "content": "Context tu RAG cho docx task breakdown.",
+                "score": 1.0,
+            }
+        ]
+
+    monkeypatch.setattr("app.routers.ai.query_rag", fake_query_rag)
+
+    preview = client.post(
+        "/ai/task-breakdown/docx",
+        headers=_hdr(manager_id),
+        files={
+            "file": (
+                "with-rag.docx",
+                buffer.getvalue(),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+        data={"max_tasks": "3", "use_rag": "true", "rag_query": "custom query from form"},
+    )
+
+    assert preview.status_code == 200
+    assert called_queries == ["custom query from form"]
+    assert preview.json()["retrieved_context_count"] == 1
+    assert "custom-rag-source" in preview.json()["retrieved_sources"]
+
+
 def test_staff_cannot_generate_or_import_ai_tasks() -> None:
     settings.ai_api_key = ""
     _admin_id, _manager_id, staff_id = _bootstrap()

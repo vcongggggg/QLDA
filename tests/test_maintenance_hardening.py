@@ -4,6 +4,7 @@ import pytest
 
 from app.database import get_connection, init_db
 from app.settings import Settings
+from app.settings import parse_bool
 
 
 def test_teams_production_tab_has_single_response_path() -> None:
@@ -48,6 +49,26 @@ def test_production_settings_accept_secure_auth_config() -> None:
     )
 
     settings.validate_production_safety()
+
+
+def test_parse_bool_handles_string_false_and_true_values() -> None:
+    false_values = ["false", "0", "no", "off", "FALSE", " Off "]
+    true_values = ["true", "1", "yes", "on", "TRUE", " On "]
+
+    assert all(parse_bool(value, default=True) is False for value in false_values)
+    assert all(parse_bool(value, default=False) is True for value in true_values)
+
+
+def test_settings_bool_overrides_parse_strings() -> None:
+    settings = Settings(
+        auth_disable_jwt_validation="false",
+        auth_allow_header_fallback="0",
+        teams_disable_jwt_validation="no",
+    )
+
+    assert settings.auth_disable_jwt_validation is False
+    assert settings.auth_allow_header_fallback is False
+    assert settings.teams_disable_jwt_validation is False
 
 
 def test_smoke_check_script_exists() -> None:

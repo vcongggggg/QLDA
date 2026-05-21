@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.auth import get_current_user, require_permission
 from app.repository import (
@@ -60,8 +60,6 @@ def monitoring_ops_endpoint(
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     require_permission(current_user, "monitoring.view")
-    if current_user["role"] not in {"admin", "manager", "hr"}:
-        raise HTTPException(status_code=403, detail="forbidden")
     return {
         "can_manage_queue": current_user["role"] in {"admin", "manager", "hr"},
         "audit_logs": list_audit_logs(
