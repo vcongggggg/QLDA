@@ -5,6 +5,7 @@
 Audit nay danh gia codebase hien tai de lap ke hoach seed full demo data va seed RAG. Tai lieu nay chi la ke hoach; khong thay doi code ung dung, schema, migration, seeder hay test.
 
 Nguon da audit:
+
 - `app/database.py`: schema SQLite/PostgreSQL, `init_db()`, seed RBAC va auth demo account mac dinh.
 - `app/migrations.py`: migration bo sung cot/index, RAG pgvector, auth/RBAC/department.
 - `app/repository.py`: data access, quan he nghiep vu, ACL RAG.
@@ -66,12 +67,14 @@ Codebase khong dung ORM. Schema duoc khai bao bang SQL thu cong trong `app/datab
 ### `init_db()` trong `app/database.py`
 
 Chay khi FastAPI startup va trong tests. Thu tu:
+
 1. Tao schema theo dialect SQLite/PostgreSQL.
 2. Chay migrations 1-6.
 3. `_seed_rbac_defaults(conn)`: upsert roles, permissions, role_permissions.
 4. `_seed_auth_demo_accounts(conn)`: upsert departments auth co ban va 6 account demo.
 
 Tinh chat:
+
 - RBAC defaults idempotent bang `ON CONFLICT`.
 - Auth demo accounts idempotent theo `LOWER(email)`, co update profile va set active.
 - Email trong migration co logic normalize reserved domain tu `@teamswork.local` sang `@teamswork.example.com`, nhung `_seed_auth_demo_accounts` van khai bao email `@teamswork.local`. Can canh giac neu chay migration truoc seed va seed lai sau do.
@@ -79,6 +82,7 @@ Tinh chat:
 ### `seed_auth_demo_accounts()` trong `app/seed.py`
 
 Seeder public cho auth demo accounts, duoc tests goi truc tiep. Tuong tu `_seed_auth_demo_accounts`, nhung:
+
 - Co set `password_hash = COALESCE(password_hash, new_hash)` khi user ton tai.
 - Tao 5 departments mac dinh: `ADM`, `PMO`, `ENG`, `HR`, `AUD`.
 - Tao/cap nhat 6 account: Admin, Manager, Leader, Member, HR, Auditor.
@@ -88,6 +92,7 @@ Seeder public cho auth demo accounts, duoc tests goi truc tiep. Tuong tu `_seed_
 Seeder demo rong, dang duoc expose qua `POST /seed/init` va test bang `tests/test_demo_seed.py`.
 
 Thu tu hien tai:
+
 1. `reset_demo_data(conn)`: DELETE cac bang trong `DEMO_TABLES`.
 2. `seed_departments`: tao 7 department demo.
 3. `seed_users`: tao 20 user demo.
@@ -104,6 +109,7 @@ Thu tu hien tai:
 14. Tra ve summary counts.
 
 Counts ky vong tu tests:
+
 - `users`: 20
 - `departments`: 7
 - `projects`: 3
@@ -172,6 +178,7 @@ Khong nen seed lai 3 bang RBAC trong full demo seed, tru khi la buoc upsert idem
 ### Departments, teams, projects
 
 Codebase hien chua co table `teams` rieng. Khai niem team duoc bieu dien bang:
+
 - `departments`: co cau to chuc.
 - `project_members`: team theo tung project.
 - `project_members.role`: role trong du an (`project_manager`, `business_analyst`, `backend_developer`, `qa_tester`, ...).
@@ -283,6 +290,7 @@ Khong nen dat seed trong migrations, vi demo data co tinh van hanh, khong phai s
 - `DELETE` khong co namespace marker, khong phan biet demo vs production/user-created data.
 
 Bien phap:
+
 - Them guard moi truong: chi cho reset khi `APP_ENV != production` hoac co flag explicit.
 - Them `demo_namespace`/`source_label` convention de seed theo namespace.
 - Default seed moi nen la upsert idempotent, reset chi la option ro rang.
@@ -301,6 +309,7 @@ Bien phap:
 - `users.email`, `departments.code`, `roles.slug`, `permissions.key` co unique keys nen phu hop upsert.
 
 Bien phap:
+
 - Dung deterministic demo keys:
   - User: email.
   - Department: code.
@@ -342,6 +351,7 @@ Muc tieu: moi role dang nhap thay duoc man hinh chinh, co du lieu dung quyen, va
 ### Admin (`ADMIN` / `admin`)
 
 Nen seed:
+
 - 1 admin active co password demo.
 - Du lieu tren tat ca departments/projects.
 - Audit logs da co nhieu action: seed, create project, update task, import AI, KPI adjust.
@@ -350,6 +360,7 @@ Nen seed:
 - RAG docs tren tat ca projects de admin query all.
 
 Demo scenarios:
+
 - Xem users, roles, permissions.
 - Chay seed endpoint trong local/demo.
 - Xem audit/ops.
@@ -359,6 +370,7 @@ Demo scenarios:
 ### Manager (`MANAGER` / `manager`)
 
 Nen seed:
+
 - 3 managers, moi nguoi quan ly 1 project.
 - Moi project co 7 sprints, task phan bo done/doing/todo, co overdue.
 - Project members gom BA, UX, backend, frontend/mobile, QA.
@@ -368,6 +380,7 @@ Nen seed:
 - RAG docs project-scoped cho project cua manager.
 
 Demo scenarios:
+
 - Manager chi thay project minh quan ly/member.
 - Tao task, sprint, risk, weekly status.
 - Review/import AI draft.
@@ -377,12 +390,14 @@ Demo scenarios:
 ### Leader (`LEADER`)
 
 Nen seed:
+
 - 2 leaders trong Engineering/QA, la project member va assignee nhieu tasks.
 - Gan vai tro project_members nhu `tech_lead`, `qa_lead`.
 - Tasks cua team co workload warning va capacity.
 - RAG query permission qua project membership.
 
 Demo scenarios:
+
 - Xem kanban/project duoc tham gia.
 - Cap nhat task team/own theo permission hien co.
 - Xem KPI team neu permission cho phep.
@@ -391,6 +406,7 @@ Demo scenarios:
 ### Member (`MEMBER` / `staff`)
 
 Nen seed:
+
 - 6-10 members thuoc WEB/MOB/QA/BA/UX.
 - Moi member co:
   - 2-4 tasks done on time.
@@ -402,6 +418,7 @@ Nen seed:
 - Capacity trong sprint active.
 
 Demo scenarios:
+
 - Chi xem task/KPI cua minh.
 - Cap nhat own task status.
 - Xem notifications.
@@ -411,6 +428,7 @@ Demo scenarios:
 ### HR (`HR` / `hr`)
 
 Nen seed:
+
 - 1-2 HR users.
 - Departments co `manager_user_id`, member counts ro rang.
 - KPI adjustments do HR/admin tao cho mot so users.
@@ -418,6 +436,7 @@ Nen seed:
 - Khong can lam project member nhung HR duoc ACL project access theo `require_project_access`.
 
 Demo scenarios:
+
 - Xem users/departments.
 - Tao/deactivate user trong demo.
 - Xem KPI all/team va reports.
@@ -426,12 +445,14 @@ Demo scenarios:
 ### Auditor (`AUDITOR`)
 
 Nen seed:
+
 - 1 auditor active.
 - Audit logs da co du lieu da dang.
 - Reports va ops read-only.
 - Khong seed project membership neu muon demo read-only qua permission, khong qua membership.
 
 Demo scenarios:
+
 - Xem audit logs theo filter.
 - Export/read reports all.
 - Khong tao/sua task/project/user.
@@ -546,6 +567,7 @@ Tong hop ly: 20-24 users. Neu muon giu tests hien tai, `seed_data()` cu van 20 u
 ### ACL seed
 
 Recommended:
+
 - Moi document co default row `user_id=NULL`, `role_slug=NULL`, `access_level='query'` gan `project_id`.
 - Project manager/member xem duoc qua project ACL.
 - Them user-specific grant chi khi can demo document rieng.
