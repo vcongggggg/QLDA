@@ -65,7 +65,7 @@ def _make_failed_notification(user_id: int) -> dict:
 def test_privileged_roles_can_view_ops_dashboard_and_staff_is_blocked() -> None:
     admin, manager, hr, staff = _bootstrap()
 
-    for user in (admin, manager, hr):
+    for user in (admin, hr):
         resp = client.get("/monitoring/ops", headers=_hdr(int(user["id"])))
         assert resp.status_code == 200
         payload = resp.json()
@@ -73,6 +73,9 @@ def test_privileged_roles_can_view_ops_dashboard_and_staff_is_blocked() -> None:
         assert "notification_queue" in payload
         assert "overdue_spike" in payload
         assert payload["can_manage_queue"] is True
+
+    manager_resp = client.get("/monitoring/ops", headers=_hdr(int(manager["id"])))
+    assert manager_resp.status_code == 403
 
     staff_resp = client.get("/monitoring/ops", headers=_hdr(int(staff["id"])))
     assert staff_resp.status_code == 403
@@ -89,7 +92,7 @@ def test_ops_dashboard_view_is_controlled_by_permission_not_role_allowlist() -> 
     ).json()["permissions"]
     original_keys = [item["key"] for item in original_permissions]
     try:
-        replace_role_permissions("staff", [*original_keys, "monitoring.view"])
+        replace_role_permissions("staff", [*original_keys, "OPS_VIEW"])
 
         resp = client.get("/monitoring/ops", headers=_hdr(int(staff["id"])))
 
@@ -107,7 +110,7 @@ def test_ops_dashboard_queue_management_flag_is_permission_based() -> None:
     ).json()["permissions"]
     original_keys = [item["key"] for item in original_permissions]
     try:
-        replace_role_permissions("staff", [*original_keys, "monitoring.view", "teams.manage"])
+        replace_role_permissions("staff", [*original_keys, "OPS_VIEW", "teams.manage"])
 
         resp = client.get("/monitoring/ops", headers=_hdr(int(staff["id"])))
 
@@ -150,7 +153,7 @@ def test_processable_notifications_prioritize_new_then_oldest_due_retry() -> Non
 
 
 def test_audit_filters_work_on_ops_and_audit_endpoint() -> None:
-    admin, manager, _hr, _staff = _bootstrap()
+    admin, manager, hr, _staff = _bootstrap()
     now = datetime.now(timezone.utc)
     create_audit_log(int(manager["id"]), "ops_filter_match", "task", 101, "needle detail for ops dashboard")
     create_audit_log(int(admin["id"]), "ops_filter_other", "project", 202, "other detail")
@@ -163,7 +166,7 @@ def test_audit_filters_work_on_ops_and_audit_endpoint() -> None:
         "date_from": (now - timedelta(minutes=2)).isoformat(),
         "date_to": (now + timedelta(minutes=2)).isoformat(),
     }
-    ops_resp = client.get("/monitoring/ops", params=params, headers=_hdr(int(manager["id"])))
+    ops_resp = client.get("/monitoring/ops", params=params, headers=_hdr(int(hr["id"])))
     assert ops_resp.status_code == 200
     ops_logs = ops_resp.json()["audit_logs"]
     assert ops_logs
@@ -178,7 +181,7 @@ def test_audit_filters_work_on_ops_and_audit_endpoint() -> None:
 
 
 def test_ops_dashboard_queue_counts_overdue_spike_and_redaction() -> None:
-    _admin, manager, _hr, staff = _bootstrap()
+    _admin, manager, hr, staff = _bootstrap()
     project = create_project("Ops Spike Project", None, None, int(manager["id"]), None, None, "active")
     sprint = create_sprint(
         int(project["id"]),
@@ -205,7 +208,7 @@ def test_ops_dashboard_queue_counts_overdue_spike_and_redaction() -> None:
     resp = client.get(
         "/monitoring/ops",
         params={"overdue_threshold": 1, "failed_limit": 10},
-        headers=_hdr(int(manager["id"])),
+        headers=_hdr(int(hr["id"])),
     )
     assert resp.status_code == 200
     payload = resp.json()
@@ -239,14 +242,14 @@ def test_ops_dashboard_queue_counts_overdue_spike_and_redaction() -> None:
 
 
 def test_latest_failed_items_do_not_expose_direct_db_secrets() -> None:
-    _admin, manager, _hr, staff = _bootstrap()
+    _admin, _manager, hr, staff = _bootstrap()
     failed = _make_failed_notification(int(staff["id"]))
     with get_connection() as conn:
         raw = conn.execute("SELECT payload, last_error FROM notification_queue WHERE id = ?", (failed["id"],)).fetchone()
     assert "secret-webhook" in raw["payload"]
     assert "Traceback" in raw["last_error"]
 
-    resp = client.get("/monitoring/ops", headers=_hdr(int(manager["id"])))
+    resp = client.get("/monitoring/ops", headers=_hdr(int(hr["id"])))
     assert resp.status_code == 200
     assert "secret-webhook" not in resp.text
     assert "Traceback" not in resp.text

@@ -184,6 +184,16 @@ X-User-Id: <admin_id>
 
 Du lieu mau gom user, phong ban, du an, sprint, task, capacity, risk va weekly status.
 
+Full demo seed idempotent cho local/dev/demo:
+
+```bash
+python scripts/seed_full_demo.py --upsert
+python scripts/seed_full_demo.py --rag-only
+python scripts/seed_full_demo.py --reset-demo
+```
+
+Xem chi tiet tai `docs/DEMO_SEED.md`. `--reset-demo` chi danh cho local/dev/demo; khong seed secret, token, webhook hoac service URL that.
+
 ## Endpoint chinh
 
 - `POST /users`, `GET /users`

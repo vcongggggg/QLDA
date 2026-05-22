@@ -2,7 +2,7 @@ from datetime import timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, require_roles
+from app.auth import get_current_user, require_permission, require_roles
 from app.deps import require_project_access
 from app.repository import (
     add_project_member,
@@ -17,11 +17,14 @@ from app.repository import (
     list_projects,
     list_weekly_status_updates,
     create_department,
+    get_department_by_id,
+    list_department_members,
     project_exists,
     project_progress,
     portfolio_summary,
     sprint_velocity_history,
     sprint_exists,
+    update_department,
     user_exists,
 )
 from app.schemas import (
@@ -37,6 +40,8 @@ from app.schemas import (
     SprintVelocityOut,
     WeeklyStatusCreate,
     WeeklyStatusOut,
+    DepartmentUpdate,
+    UserOut,
 )
 
 router = APIRouter(tags=["org"])
@@ -46,9 +51,11 @@ router = APIRouter(tags=["org"])
 
 @router.post("/departments", response_model=DepartmentOut)
 def create_department_endpoint(payload: DepartmentCreate, current_user: dict = Depends(get_current_user)) -> dict:
-    require_roles(current_user, {"admin", "manager"})
+    require_permission(current_user, "DEPARTMENT_MANAGE")
+    if payload.manager_user_id is not None and not user_exists(payload.manager_user_id):
+        raise HTTPException(status_code=404, detail="manager user not found")
     try:
-        dep = create_department(payload.name, payload.code)
+        dep = create_department(payload.name, payload.code, payload.description, payload.manager_user_id)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     create_audit_log(current_user["id"], "create", "department", dep["id"], dep["code"])
@@ -57,8 +64,49 @@ def create_department_endpoint(payload: DepartmentCreate, current_user: dict = D
 
 @router.get("/departments", response_model=list[DepartmentOut])
 def list_departments_endpoint(current_user: dict = Depends(get_current_user)) -> list[dict]:
-    require_roles(current_user, {"admin", "manager", "hr"})
+    require_permission(current_user, "DEPARTMENT_VIEW")
     return list_departments()
+
+
+@router.put("/departments/{department_id}", response_model=DepartmentOut)
+def update_department_endpoint(
+    department_id: int,
+    payload: DepartmentUpdate,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    require_permission(current_user, "DEPARTMENT_MANAGE")
+    if payload.manager_user_id is not None and not user_exists(payload.manager_user_id):
+        raise HTTPException(status_code=404, detail="manager user not found")
+    dep = update_department(
+        department_id,
+        name=payload.name,
+        code=payload.code,
+        description=payload.description,
+        manager_user_id=payload.manager_user_id,
+        is_active=payload.is_active,
+    )
+    if not dep:
+        raise HTTPException(status_code=404, detail="department not found")
+    create_audit_log(current_user["id"], "update", "department", dep["id"], dep["code"])
+    return dep
+
+
+@router.delete("/departments/{department_id}", response_model=DepartmentOut)
+def soft_delete_department_endpoint(department_id: int, current_user: dict = Depends(get_current_user)) -> dict:
+    require_permission(current_user, "DEPARTMENT_MANAGE")
+    dep = update_department(department_id, is_active=False)
+    if not dep:
+        raise HTTPException(status_code=404, detail="department not found")
+    create_audit_log(current_user["id"], "deactivate", "department", department_id, dep["code"])
+    return dep
+
+
+@router.get("/departments/{department_id}/members", response_model=list[UserOut])
+def department_members_endpoint(department_id: int, current_user: dict = Depends(get_current_user)) -> list[dict]:
+    require_permission(current_user, "DEPARTMENT_VIEW")
+    if not get_department_by_id(department_id):
+        raise HTTPException(status_code=404, detail="department not found")
+    return list_department_members(department_id)
 
 
 # ── Projects ───────────────────────────────────────────────────────────────────

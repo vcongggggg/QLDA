@@ -5,6 +5,9 @@
 // ── State ──────────────────────────────────────
 const state = {
   userId: localStorage.getItem('tw_uid') || '1',
+  accessToken: localStorage.getItem('tw_access_token') || '',
+  currentUser: null,
+  permissions: new Set(),
   month: new Date().toISOString().slice(0, 7),
   currentSection: 'dashboard',
   currentUserRole: null,
@@ -17,6 +20,56 @@ const state = {
   activeTaskId: null,
   draggingTaskId: null,
   notificationsOpen: false,
+  loginMessage: '',
+  adminUsers: { rows: [], search: '', role: '', department: '', status: '', sort: 'name', dir: 'asc', page: 1, pageSize: 8 },
+  adminDepartments: { rows: [], search: '', status: '', sort: 'name', dir: 'asc', page: 1, pageSize: 8 },
+};
+
+const ROLE_NAV_POLICY = {
+  ADMIN:   ['dashboard', 'projects', 'kanban', 'teams', 'kpi', 'reports', 'ai', 'ops', 'admin'],
+  MANAGER: ['dashboard', 'projects', 'kanban', 'teams', 'kpi', 'reports', 'ai'],
+  LEADER:  ['dashboard', 'projects', 'kanban', 'teams', 'kpi', 'reports', 'ai'],
+  MEMBER:  ['dashboard', 'kanban', 'kpi'],
+  HR:      ['dashboard', 'admin', 'kpi', 'reports', 'teams'],
+  AUDITOR: ['dashboard', 'reports', 'ops'],
+};
+
+const ROLE_NAV_LABELS = {
+  MEMBER: { kanban: 'My Tasks', kpi: 'My KPI' },
+  ADMIN: { admin: 'Quản trị' },
+};
+
+const ROLE_COLORS = {
+  ADMIN: 'role-admin',
+  MANAGER: 'role-manager',
+  LEADER: 'role-leader',
+  MEMBER: 'role-member',
+  HR: 'role-hr',
+  AUDITOR: 'role-auditor',
+};
+
+const MODULE_VIEW_PERMISSIONS = {
+  dashboard: ['DASHBOARD_VIEW'],
+  kanban: ['KANBAN_VIEW'],
+  projects: ['PROJECT_VIEW'],
+  kpi: ['KPI_VIEW_OWN', 'KPI_VIEW_TEAM', 'KPI_VIEW_ALL'],
+  reports: ['REPORT_VIEW_TEAM', 'REPORT_VIEW_ALL'],
+  ai: ['AI_TASK_VIEW'],
+  teams: ['TEAM_VIEW'],
+  ops: ['AUDIT_VIEW', 'OPS_VIEW'],
+  admin: ['USER_VIEW', 'ROLE_VIEW', 'DEPARTMENT_VIEW'],
+};
+
+const ACTION_PERMISSIONS = {
+  taskUpdate: ['KANBAN_UPDATE_OWN_TASK', 'KANBAN_MANAGE_TEAM', 'KANBAN_MANAGE_ALL', 'tasks.update_own', 'tasks.update_any'],
+  reportExport: ['REPORT_EXPORT', 'reports.export'],
+  aiGenerate: ['AI_TASK_GENERATE', 'ai.preview'],
+  aiReview: ['AI_TASK_REVIEW', 'ai.import'],
+  aiImport: ['AI_TASK_IMPORT', 'ai.import'],
+  ragManage: ['rag.manage'],
+  opsManage: ['OPS_MANAGE', 'monitoring.admin', 'teams.manage'],
+  seed: ['monitoring.admin'],
+  roleManage: ['ROLE_MANAGE', 'roles.manage'],
 };
 
 function icon(name, className = 'ui-icon') {
@@ -24,15 +77,16 @@ function icon(name, className = 'ui-icon') {
 }
 
 // ── Init ───────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const mp = document.getElementById('monthPicker');
   if (mp) mp.value = state.month;
 
-  document.getElementById('userIdInput').value = state.userId;
-  loadCurrentUser();
-  loadNotificationCount();
+  const userInput = document.getElementById('userIdInput');
+  if (userInput) userInput.value = state.userId;
+  const devSwitcher = document.getElementById('devUserSwitcher');
+  if (devSwitcher && isDevAuthEnabled()) devSwitcher.classList.remove('hidden');
+  await bootAuth();
   initKanbanDragDrop();
-  navigate('dashboard');
 
   document.addEventListener('click', (e) => {
     const wrap = document.querySelector('.notification-wrap');
@@ -42,19 +96,61 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+window.addEventListener('hashchange', () => {
+  if (!state.currentUser) return;
+  navigate(requestedSectionFromUrl() || firstAllowedSection() || 'dashboard', { replace: true });
+});
+
 // ── API Helper ─────────────────────────────────
 async function api(path, opts = {}) {
-  const headers = { 'X-User-Id': state.userId, ...opts.headers };
+  const headers = { ...opts.headers };
+  if (state.accessToken) headers.Authorization = `Bearer ${state.accessToken}`;
+  else if (isDevAuthEnabled()) headers['X-User-Id'] = state.userId;
   try {
     const res = await fetch(path, { ...opts, headers });
+    if (res.status === 401 && state.currentUser) {
+      logout({ expired: true });
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || `HTTP ${res.status}`);
+      const message = res.status === 403
+        ? 'Bạn không có quyền truy cập chức năng này.'
+        : (err.detail || `HTTP ${res.status}`);
+      const error = new Error(message);
+      error.status = res.status;
+      throw error;
     }
     return await res.json();
   } catch (e) {
     throw e;
   }
+}
+
+function isDevAuthEnabled() {
+  return window.VITE_ENABLE_DEV_AUTH === true || localStorage.getItem('VITE_ENABLE_DEV_AUTH') === 'true';
+}
+
+function roleCode(value = state.currentUserRole) {
+  const raw = String(value || '').trim();
+  const aliases = { admin: 'ADMIN', manager: 'MANAGER', leader: 'LEADER', staff: 'MEMBER', member: 'MEMBER', hr: 'HR', auditor: 'AUDITOR' };
+  return aliases[raw.toLowerCase()] || raw.toUpperCase() || 'MEMBER';
+}
+
+function currentRoleCode() {
+  return roleCode(state.currentUserRole || state.currentUser?.role?.code || state.currentUser?.role_code || state.currentUser?.role);
+}
+
+function isMemberRole() {
+  return currentRoleCode() === 'MEMBER';
+}
+
+function roleAllowsSection(section) {
+  const allowed = ROLE_NAV_POLICY[currentRoleCode()] || ROLE_NAV_POLICY.MEMBER;
+  return allowed.includes(section);
+}
+
+function navLabel(section) {
+  return (ROLE_NAV_LABELS[currentRoleCode()] || {})[section] || TITLES[section] || section;
 }
 
 // ── Toast ──────────────────────────────────────
@@ -67,21 +163,135 @@ function toast(msg, type = 'info') {
 }
 
 // ── User ───────────────────────────────────────
-function setCurrentUserDisplay({ name, role, avatar }) {
+function setCurrentUserDisplay({ name, role, avatar, department }) {
   document.getElementById('userName').textContent = name;
-  document.getElementById('userRole').textContent = role;
+  const roleEl = document.getElementById('userRole');
+  const code = roleCode(role);
+  if (roleEl) {
+    roleEl.textContent = department ? `${roleName(code)} • ${department}` : roleName(code);
+    roleEl.className = `user-role role-pill ${ROLE_COLORS[code] || 'role-member'}`;
+  }
   document.getElementById('userAvatar').textContent = avatar;
+  const dep = document.getElementById('userDepartment');
+  if (dep) dep.textContent = '';
+}
+
+function roleName(code) {
+  return { ADMIN: 'Admin', MANAGER: 'Manager', LEADER: 'Leader', MEMBER: 'Member', HR: 'HR', AUDITOR: 'Auditor' }[roleCode(code)] || code;
+}
+
+async function bootAuth() {
+  if (!state.accessToken && !isDevAuthEnabled()) {
+    showLogin();
+    return;
+  }
+  try {
+    await loadCurrentUser();
+    showApp();
+    applyPermissionNavigation();
+    loadNotificationCount();
+    navigate(requestedSectionFromUrl() || firstAllowedSection() || 'dashboard', { replace: true });
+  } catch (_) {
+    state.accessToken = '';
+    localStorage.removeItem('tw_access_token');
+    showLogin();
+  }
+}
+
+function showLogin() {
+  document.getElementById('loginScreen')?.classList.remove('hidden');
+  document.getElementById('sidebar')?.classList.add('hidden');
+  document.getElementById('mainWrap')?.classList.add('hidden');
+  if (state.loginMessage) {
+    const error = document.getElementById('loginError');
+    if (error) {
+      error.textContent = state.loginMessage;
+      error.classList.remove('hidden');
+    }
+    state.loginMessage = '';
+  }
+}
+
+function showApp() {
+  document.getElementById('loginScreen')?.classList.add('hidden');
+  document.getElementById('sidebar')?.classList.remove('hidden');
+  document.getElementById('mainWrap')?.classList.remove('hidden');
+}
+
+async function login(event) {
+  if (event) event.preventDefault();
+  const error = document.getElementById('loginError');
+  const btn = document.querySelector('.login-submit');
+  const originalText = btn?.textContent || 'Đăng nhập';
+  if (error) error.classList.add('hidden');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Signing in...';
+  }
+  try {
+    const payload = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        usernameOrEmail: document.getElementById('loginEmail').value,
+        password: document.getElementById('loginPassword').value,
+      }),
+    }).then(async res => {
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || 'Dang nhap that bai');
+      }
+      return res.json();
+    });
+    state.accessToken = payload.accessToken;
+    localStorage.setItem('tw_access_token', state.accessToken);
+    await bootAuth();
+  } catch (e) {
+    if (error) {
+      error.textContent = e.message;
+      error.classList.remove('hidden');
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+}
+
+function logout(options = {}) {
+  state.accessToken = '';
+  state.currentUser = null;
+  state.permissions = new Set();
+  state.currentUserRole = null;
+  state.currentSection = 'dashboard';
+  closeNotificationPanel();
+  localStorage.removeItem('tw_access_token');
+  if (options.expired) {
+    state.loginMessage = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+    toast(state.loginMessage, 'error');
+  }
+  if (window.history) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+  showLogin();
 }
 
 async function loadCurrentUser() {
   try {
-    const me = await api('/users/me');
+    const me = await api(state.accessToken ? '/auth/me' : '/users/me');
+    const fullName = me.fullName || me.full_name;
+    const role = me.role?.code || me.role_code || me.role || me.role_detail?.code || 'MEMBER';
+    const department = me.department?.name || me.department_detail?.name || me.department || '';
+    state.currentUserRole = roleCode(role);
     setCurrentUserDisplay({
-      name: me.full_name,
-      role: me.role,
-      avatar: me.full_name.charAt(0).toUpperCase(),
+      name: fullName,
+      role,
+      department,
+      avatar: fullName.charAt(0).toUpperCase(),
     });
-    state.currentUserRole = me.role;
+    state.currentUser = me;
+    state.permissions = new Set(me.permissions || []);
     updateKanbanAssigneeVisibility();
   } catch (_) {
     setCurrentUserDisplay({
@@ -94,13 +304,75 @@ async function loadCurrentUser() {
   }
 }
 
-function changeUserId(val) {
+async function changeUserId(val) {
   state.userId = String(val);
   localStorage.setItem('tw_uid', state.userId);
-  loadCurrentUser();
+  await loadCurrentUser();
+  applyPermissionNavigation();
   loadNotificationCount();
   closeNotificationPanel();
-  refreshCurrent();
+  navigate(requestedSectionFromUrl() || firstAllowedSection() || 'dashboard', { replace: true });
+}
+
+function hasPermission(key) {
+  return state.permissions.has(key);
+}
+
+function hasAnyPermission(keys) {
+  return (keys || []).some(key => state.permissions.has(key));
+}
+
+function canViewModule(module) {
+  return roleAllowsSection(module) && hasAnyPermission(MODULE_VIEW_PERMISSIONS[module] || []);
+}
+
+function canDo(action) {
+  return hasAnyPermission(ACTION_PERMISSIONS[action] || []);
+}
+
+function navAllowed(el) {
+  const section = el.dataset.section;
+  if (section && !roleAllowsSection(section)) return false;
+  if (section && !canViewModule(section)) return false;
+  const one = el.dataset.permission;
+  const any = el.dataset.anyPermission;
+  if (one && !hasPermission(one)) return false;
+  if (any && !hasAnyPermission(any.split(',').map(x => x.trim()))) return false;
+  return true;
+}
+
+function applyPermissionNavigation() {
+  document.querySelectorAll('.nav-item').forEach(el => {
+    const section = el.dataset.section;
+    const label = section ? navLabel(section) : '';
+    const span = el.querySelector('span');
+    if (span && label) span.textContent = label;
+    el.classList.toggle('hidden', !navAllowed(el));
+  });
+  applyPermissionVisibility();
+}
+
+function applyPermissionVisibility(root = document) {
+  root.querySelectorAll('[data-requires-permission]').forEach(el => {
+    el.classList.toggle('hidden', !hasPermission(el.dataset.requiresPermission));
+  });
+  root.querySelectorAll('[data-requires-any-permission]').forEach(el => {
+    const keys = el.dataset.requiresAnyPermission.split(',').map(x => x.trim()).filter(Boolean);
+    el.classList.toggle('hidden', !hasAnyPermission(keys));
+  });
+}
+
+function firstAllowedSection() {
+  const item = Array.from(document.querySelectorAll('.nav-item')).find(navAllowed);
+  return item?.dataset.section;
+}
+
+function requestedSectionFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const querySection = params.get('section');
+  const hashSection = window.location.hash.replace(/^#\/?/, '');
+  const section = (querySection || hashSection || '').trim();
+  return MODULE_VIEW_PERMISSIONS[section] ? section : null;
 }
 
 // ── Navigation ─────────────────────────────────
@@ -116,7 +388,19 @@ const TITLES = {
   admin:     'Quản trị hệ thống',
 };
 
-function navigate(section) {
+function navigate(section, options = {}) {
+  if (!MODULE_VIEW_PERMISSIONS[section]) {
+    section = firstAllowedSection() || 'dashboard';
+  }
+  if (!canViewModule(section)) {
+    showAccessDenied(section, options);
+    return;
+  }
+  const nav = document.querySelector(`.nav-item[data-section="${section}"]`);
+  if (nav && !navAllowed(nav)) {
+    showAccessDenied(section, options);
+    return;
+  }
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.toggle('active', el.dataset.section === section);
   });
@@ -125,11 +409,40 @@ function navigate(section) {
   if (sec) sec.classList.remove('hidden');
 
   state.currentSection = section;
-  document.getElementById('pageTitle').textContent = TITLES[section] || section;
+  document.getElementById('pageTitle').textContent = navLabel(section);
+  syncSectionUrl(section, options);
   loadSection(section);
+  applyPermissionVisibility();
+}
+
+function showAccessDenied(section, options = {}) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(el => el.classList.add('hidden'));
+  const sec = document.getElementById('sec-access-denied');
+  if (sec) sec.classList.remove('hidden');
+  const title = document.getElementById('pageTitle');
+  if (title) title.textContent = 'Access Denied';
+  const requested = document.getElementById('accessDeniedTarget');
+  if (requested) requested.textContent = TITLES[section] || section || '-';
+  state.currentSection = 'access-denied';
+  syncSectionUrl(section || 'access-denied', options);
+}
+
+function backToDashboard() {
+  navigate(firstAllowedSection() || 'dashboard', { replace: true });
+}
+
+function syncSectionUrl(section, options = {}) {
+  if (!window.history || options.skipUrl) return;
+  const targetHash = `#${section}`;
+  if (window.location.hash === targetHash) return;
+  const nextUrl = `${window.location.pathname}${window.location.search}${targetHash}`;
+  if (options.replace) window.history.replaceState(null, '', nextUrl);
+  else window.history.pushState(null, '', nextUrl);
 }
 
 function refreshCurrent() {
+  if (state.currentSection === 'access-denied') return;
   loadSection(state.currentSection);
 }
 
@@ -197,7 +510,7 @@ async function loadNotifications() {
   try {
     const rows = await api('/notifications?limit=20');
     if (!rows.length) {
-      list.innerHTML = '<div class="empty-state compact">No notifications</div>';
+      list.innerHTML = '<div class="empty-state compact">Bạn chưa có thông báo mới.</div>';
       return;
     }
     list.innerHTML = rows.map(notificationItem).join('');
@@ -419,6 +732,10 @@ function initKanbanDragDrop() {
   board.addEventListener('dragstart', (e) => {
     const card = e.target.closest('.task-card[draggable="true"]');
     if (!card) return;
+    if (!canDo('taskUpdate')) {
+      e.preventDefault();
+      return;
+    }
     state.draggingTaskId = Number(card.dataset.taskId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData(
@@ -451,6 +768,7 @@ function initKanbanDragDrop() {
     zone.addEventListener(
       'dragover',
       (e) => {
+        if (!canDo('taskUpdate')) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
@@ -472,6 +790,7 @@ function initKanbanDragDrop() {
     zone.addEventListener(
       'drop',
       async (e) => {
+        if (!canDo('taskUpdate')) return;
         e.preventDefault();
         e.stopPropagation();
         zone.classList.remove('kanban-drop-active');
@@ -605,7 +924,9 @@ function taskCard(t) {
   const daysLeft = Math.ceil((deadline - now) / 86400000);
   const deadlineStr = deadline.toLocaleDateString('vi-VN');
 
-  const nextStatus = t.status === 'todo' ? 'doing' : t.status === 'doing' ? 'done' : null;
+  const nextStatus = canDo('taskUpdate')
+    ? (t.status === 'todo' ? 'doing' : t.status === 'doing' ? 'done' : null)
+    : null;
   const nextLabel  = nextStatus === 'doing'
     ? `${icon('zap', 'text-icon')} Bắt đầu`
     : nextStatus === 'done'
@@ -613,7 +934,7 @@ function taskCard(t) {
       : '';
 
   return `
-    <div class="task-card" draggable="true" data-task-id="${t.id}" data-status="${t.status}" title="Giữ & kéo sang cột khác">
+    <div class="task-card" draggable="${canDo('taskUpdate') ? 'true' : 'false'}" data-task-id="${t.id}" data-status="${t.status}" title="Giữ & kéo sang cột khác">
       <div class="task-card-handle" aria-hidden="true">⋮⋮</div>
       <div class="task-card-title">${escHtml(t.title)}</div>
       <div class="task-card-meta">
@@ -632,6 +953,10 @@ function taskCard(t) {
 }
 
 async function updateTaskStatus(taskId, newStatus, { silent = false } = {}) {
+  if (!canDo('taskUpdate')) {
+    toast('Ban khong co quyen cap nhat task', 'error');
+    return;
+  }
   await api(`/tasks/${taskId}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -953,6 +1278,10 @@ function setupReports() {
 }
 
 function downloadReport(type, fmt) {
+  if (!canDo('reportExport')) {
+    toast('Ban khong co quyen xuat bao cao', 'error');
+    return;
+  }
   let url = '';
   switch (type) {
     case 'kpi':       url = `/reports/kpi.${fmt}?month=${state.month}`; break;
@@ -964,6 +1293,10 @@ function downloadReport(type, fmt) {
 }
 
 function downloadSprintReport(fmt) {
+  if (!canDo('reportExport')) {
+    toast('Ban khong co quyen xuat bao cao', 'error');
+    return;
+  }
   const id = document.getElementById('sprintReportId').value;
   if (!id) { toast('Vui lòng nhập Sprint ID', 'error'); return; }
   triggerDownload(`/reports/sprints/${id}/review.${fmt}`);
@@ -1026,6 +1359,10 @@ function getRagOptions() {
 }
 
 async function generateAiTasksFromText() {
+  if (!canDo('aiGenerate')) {
+    toast('Ban khong co quyen tao AI task', 'error');
+    return;
+  }
   const text = document.getElementById('aiRequirementText').value.trim();
   const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
   const { useRag, ragQuery } = getRagOptions();
@@ -1041,6 +1378,10 @@ async function generateAiTasksFromText() {
 }
 
 async function generateAiTasksFromDocx() {
+  if (!canDo('aiGenerate')) {
+    toast('Ban khong co quyen tao AI task', 'error');
+    return;
+  }
   const file = document.getElementById('aiDocxFile').files[0];
   const maxTasks = Number(document.getElementById('aiMaxTasks').value || 8);
   const { useRag, ragQuery } = getRagOptions();
@@ -1171,6 +1512,8 @@ function renderAiDrafts() {
     el.innerHTML = '<div class="empty-state compact">Chưa có AI draft</div>';
     return;
   }
+  const canReview = canDo('aiReview');
+  const canImport = canDo('aiImport');
   el.innerHTML = `
     <table class="kpi-table ai-drafts-table">
       <thead>
@@ -1187,8 +1530,8 @@ function renderAiDrafts() {
             <td>${d.reviewer_id ? `User ${d.reviewer_id}` : '-'}</td>
             <td>
               <div class="action-row compact-actions">
-                <button class="btn btn-outline btn-sm" onclick="openAiDraftReview(${d.id})">Review</button>
-                ${d.status !== 'imported' ? `<button class="btn btn-primary btn-sm" onclick="importAiDraft(${d.id})">Import</button>` : ''}
+                ${canReview ? `<button class="btn btn-outline btn-sm" onclick="openAiDraftReview(${d.id})">Review</button>` : ''}
+                ${canImport && d.status !== 'imported' ? `<button class="btn btn-primary btn-sm" onclick="importAiDraft(${d.id})">Import</button>` : ''}
               </div>
             </td>
           </tr>
@@ -1226,6 +1569,8 @@ function renderAiDraftReview(draft) {
   const body = document.getElementById('aiDraftReviewBody');
   if (!body) return;
   if (title) title.textContent = `AI Draft #${draft.id}`;
+  const canReview = canDo('aiReview');
+  const canImport = canDo('aiImport');
   body.innerHTML = `
     <div class="task-detail-section">
       <div class="task-detail-status-row">
@@ -1243,8 +1588,8 @@ function renderAiDraftReview(draft) {
       <label class="field-label">Edit reason</label>
       <textarea id="aiEditReason" class="textarea" rows="3">${escHtml(draft.edit_reason || '')}</textarea>
       <div class="action-row">
-        <button class="btn btn-primary" onclick="saveAiDraftReview(${draft.id})">Review</button>
-        ${draft.status !== 'imported' ? `<button class="btn btn-outline" onclick="importAiDraft(${draft.id})">Import</button>` : ''}
+        ${canReview ? `<button class="btn btn-primary" onclick="saveAiDraftReview(${draft.id})">Review</button>` : ''}
+        ${canImport && draft.status !== 'imported' ? `<button class="btn btn-outline" onclick="importAiDraft(${draft.id})">Import</button>` : ''}
         <button class="btn btn-outline" onclick="closeAiDraftReview()">Close</button>
       </div>
     </div>`;
@@ -1287,6 +1632,10 @@ function collectAiReviewItems() {
 }
 
 async function saveAiDraftReview(draftId) {
+  if (!canDo('aiReview')) {
+    toast('Ban khong co quyen review AI draft', 'error');
+    return;
+  }
   const items = collectAiReviewItems();
   if (!items.length || items.some(item => !item.title)) {
     toast('Vui lòng giữ ít nhất một task có tiêu đề', 'error');
@@ -1314,6 +1663,10 @@ async function saveAiDraftReview(draftId) {
 }
 
 async function importAiDraft(draftId) {
+  if (!canDo('aiImport')) {
+    toast('Ban khong co quyen import AI task', 'error');
+    return;
+  }
   const assigneeId = Number(document.getElementById('aiAssigneeSelect').value);
   const projectRaw = document.getElementById('aiProjectSelect').value;
   if (!draftId) {
@@ -1508,6 +1861,10 @@ async function resetKanbanFilters() {
 }
 
 async function createRagDocument() {
+  if (!canDo('ragManage')) {
+    toast('Ban khong co quyen quan ly RAG', 'error');
+    return;
+  }
   const title = document.getElementById('ragTitle').value.trim();
   const source = document.getElementById('ragSource').value.trim();
   const projectId = document.getElementById('ragProjectSelect')?.value;
@@ -1533,6 +1890,10 @@ async function createRagDocument() {
 }
 
 async function deleteRagDocument(id) {
+  if (!canDo('ragManage')) {
+    toast('Ban khong co quyen quan ly RAG', 'error');
+    return;
+  }
   try {
     await api(`/rag/documents/${id}`, { method: 'DELETE' });
     await loadRagDocuments();
@@ -1665,7 +2026,7 @@ function renderOpsAudit(logs) {
   const el = document.getElementById('opsAuditTable');
   if (!el) return;
   if (!logs.length) {
-    el.innerHTML = '<div class="empty-state compact">No audit logs match the current filters.</div>';
+    el.innerHTML = '<div class="empty-state compact">Chưa có audit log phù hợp với bộ lọc.</div>';
     return;
   }
   el.innerHTML = `
@@ -1691,7 +2052,7 @@ function renderOpsQueue(queue, canManage) {
   if (!el) return;
   const items = queue.latest_failed_items || [];
   if (!items.length) {
-    el.innerHTML = '<div class="empty-state compact">No failed queue items.</div>';
+    el.innerHTML = '<div class="empty-state compact">Không có notification queue thất bại.</div>';
     return;
   }
   el.innerHTML = `
@@ -1723,7 +2084,7 @@ function renderOpsOverdue(spike) {
   const projects = spike.top_projects || [];
   const sprints = spike.top_sprints || [];
   if (!projects.length && !sprints.length) {
-    el.innerHTML = '<div class="empty-state compact">No overdue tasks.</div>';
+    el.innerHTML = '<div class="empty-state compact">Không có task quá hạn.</div>';
     return;
   }
   el.innerHTML = `
@@ -1770,7 +2131,61 @@ async function resetOpsFilters() {
 }
 
 async function loadAdmin() {
-  await Promise.all([loadPlanCompletion(), loadAuditLogs(), loadRbacAdmin()]);
+  const jobs = [loadPlanCompletion()];
+  if (hasPermission('USER_VIEW')) jobs.push(loadAdminUsers());
+  if (hasPermission('DEPARTMENT_VIEW')) jobs.push(loadAdminDepartments());
+  if (hasPermission('AUDIT_VIEW')) jobs.push(loadAuditLogs());
+  if (hasPermission('ROLE_VIEW') || hasPermission('roles.view')) jobs.push(loadRbacAdmin());
+  await Promise.all(jobs);
+}
+
+async function loadAdminUsers() {
+  const el = document.getElementById('adminUsersTable');
+  if (!el) return;
+  el.innerHTML = '<div class="skeleton" style="height:100px"></div>';
+  try {
+    const rows = await api('/users');
+    el.innerHTML = `
+      <table class="audit-table">
+        <thead><tr><th>Ten</th><th>Email</th><th>Role</th><th>Department</th><th>Status</th></tr></thead>
+        <tbody>
+          ${rows.map(u => `
+            <tr>
+              <td>${escHtml(u.full_name)}</td>
+              <td>${escHtml(u.email)}</td>
+              <td>${escHtml(u.role_detail?.name || u.role_code || u.role)}</td>
+              <td>${escHtml(u.department_detail?.name || u.department || '-')}</td>
+              <td><span class="tag">${u.is_active ? 'Active' : 'Inactive'}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadAdminDepartments() {
+  const el = document.getElementById('adminDepartmentsTable');
+  if (!el) return;
+  el.innerHTML = '<div class="skeleton" style="height:100px"></div>';
+  try {
+    const rows = await api('/departments');
+    el.innerHTML = `
+      <table class="audit-table">
+        <thead><tr><th>Code</th><th>Name</th><th>Manager</th><th>Members</th></tr></thead>
+        <tbody>
+          ${rows.map(d => `
+            <tr>
+              <td><span class="tag">${escHtml(d.code)}</span></td>
+              <td>${escHtml(d.name)}</td>
+              <td>${escHtml(d.manager_name || '-')}</td>
+              <td>${escHtml(d.member_count ?? 0)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
 }
 
 async function loadRbacAdmin() {
@@ -1830,6 +2245,10 @@ function togglePermissionKey(key, checked) {
 }
 
 async function saveRolePermissions() {
+  if (!canDo('roleManage')) {
+    toast('Ban khong co quyen luu phan quyen', 'error');
+    return;
+  }
   const role = document.getElementById('rbacRoleSelect')?.value;
   if (!role) return;
   try {
@@ -1900,6 +2319,10 @@ async function loadAuditLogs() {
 }
 
 async function runSeed() {
+  if (!canDo('seed')) {
+    toast('Ban khong co quyen khoi tao seed', 'error');
+    return;
+  }
   const btn = document.getElementById('seedBtn');
   const result = document.getElementById('seedResult');
   btn.disabled = true;
@@ -1993,4 +2416,437 @@ function formatPlanKey(key) {
     ci_pipeline:             'CI/CD Pipeline',
   };
   return m[key] || key.replace(/_/g, ' ');
+}
+
+// Role-aware dashboard overrides. Function declarations are intentionally placed
+// after the original MVP dashboard functions so these are the active versions.
+function setDashboardShell() {
+  const sec = document.getElementById('sec-dashboard');
+  if (!sec) return;
+  const role = currentRoleCode();
+  const titles = {
+    MEMBER: { kpi: 'KPI cá nhân', chart: 'Progress cá nhân', overview: 'Task của tôi' },
+    ADMIN: { kpi: 'Global analytics', chart: 'Task toàn hệ thống', overview: 'System health & audit' },
+    AUDITOR: { kpi: 'Báo cáo hệ thống', chart: 'Task toàn hệ thống', overview: 'Audit gần đây' },
+    HR: { kpi: 'KPI nhân sự', chart: 'Tổng quan task', overview: 'Nhân sự & phòng ban' },
+  };
+  const copy = titles[role] || { kpi: 'KPI team', chart: 'Sprint progress', overview: 'Team workload' };
+  sec.innerHTML = `
+    <div class="stat-grid" id="dashStats">
+      <div class="stat-card skeleton"></div>
+      <div class="stat-card skeleton"></div>
+      <div class="stat-card skeleton"></div>
+      <div class="stat-card skeleton"></div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header">
+          <h3>${icon('trophy', 'heading-icon')}${copy.kpi}</h3>
+          <span class="tag" id="kpiMonth">${state.month}</span>
+        </div>
+        <div id="kpiRankTable"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>${icon('bar-chart', 'heading-icon')}${copy.chart}</h3></div>
+        <div class="chart-wrap"><canvas id="taskChart"></canvas></div>
+      </div>
+    </div>
+    <div class="card mt-16">
+      <div class="card-header"><h3>${icon(role === 'MEMBER' ? 'list-checks' : 'folder', 'heading-icon')}${copy.overview}</h3></div>
+      <div id="projectOverview"></div>
+    </div>`;
+}
+
+async function loadDashboard() {
+  setDashboardShell();
+  await Promise.all([loadDashStats(), loadKpiRank(), loadProjectOverview()]);
+}
+
+async function loadDashStats() {
+  const container = document.getElementById('dashStats');
+  container.innerHTML = '';
+  try {
+    const d = await api(`/dashboard/summary?month=${state.month}`);
+    const role = currentRoleCode();
+    let cards;
+    if (role === 'ADMIN') {
+      const metrics = await api('/monitoring/metrics').catch(() => null);
+      cards = [
+        { icon: 'list-checks', label: 'Users', value: metrics?.users ?? '-', change: 'Tài khoản hệ thống' },
+        { icon: 'folder', label: 'Projects', value: metrics?.projects ?? 0, change: 'Danh mục đang theo dõi' },
+        { icon: 'alert-triangle', label: 'Overdue', value: metrics?.overdue_tasks ?? d.overdue_tasks ?? 0, cls: 'down', change: 'Cần xử lý' },
+        { icon: 'activity', label: 'Health', value: (metrics?.failed_notifications ?? 0) > 0 ? 'Warn' : 'OK', cls: (metrics?.failed_notifications ?? 0) > 0 ? 'down' : 'up', change: 'System health' },
+      ];
+    } else if (role === 'MEMBER') {
+      cards = [
+        { icon: 'list-checks', label: 'Task của tôi', value: d.total_tasks ?? 0, change: '' },
+        { icon: 'calendar', label: 'Đang làm', value: d.doing_tasks ?? 0, cls: 'neutral', change: 'Cần cập nhật tiến độ' },
+        { icon: 'alert-triangle', label: 'Deadline gần', value: d.overdue_tasks ?? 0, cls: d.overdue_tasks > 0 ? 'down' : 'up', change: d.overdue_tasks > 0 ? 'Có task quá hạn' : 'Không có quá hạn' },
+        { icon: 'target', label: 'KPI cá nhân', value: (d.avg_kpi_score ?? 0).toFixed(1), cls: kpiCls(d.avg_kpi_score), change: kpiTier(d.avg_kpi_score) },
+      ];
+    } else {
+      cards = [
+        { icon: 'list-checks', label: role === 'AUDITOR' ? 'Total tasks' : 'Team workload', value: d.total_tasks ?? 0, change: '' },
+        { icon: 'check-circle', label: 'Hoàn thành', value: d.done_tasks ?? 0, cls: 'up', change: pct(d.done_tasks, d.total_tasks) },
+        { icon: 'alert-triangle', label: 'Overdue tasks', value: d.overdue_tasks ?? 0, cls: 'down', change: d.overdue_tasks > 0 ? `${d.overdue_tasks} task cần xử lý` : 'Tốt' },
+        { icon: 'target', label: role === 'HR' ? 'KPI nhân sự' : 'KPI team', value: (d.avg_kpi_score ?? 0).toFixed(1), cls: kpiCls(d.avg_kpi_score), change: kpiTier(d.avg_kpi_score) },
+      ];
+    }
+    container.innerHTML = cards.map(c => `
+      <div class="stat-card">
+        <div class="stat-icon">${icon(c.icon, 'stat-svg')}</div>
+        <div class="stat-value">${escHtml(c.value)}</div>
+        <div class="stat-label">${escHtml(c.label)}</div>
+        ${c.change ? `<div class="stat-change ${c.cls || 'neutral'}">${c.change}</div>` : ''}
+      </div>
+    `).join('');
+    renderTaskChart(d.total_tasks ?? 0, d.done_tasks ?? 0, (d.total_tasks ?? 0) - (d.done_tasks ?? 0) - (d.overdue_tasks ?? 0), d.overdue_tasks ?? 0);
+  } catch (e) {
+    container.innerHTML = `<div class="stat-card"><div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>Không tải được dashboard<br><small>${escHtml(e.message)}</small></div></div>`;
+  }
+}
+
+async function loadKpiRank() {
+  const el = document.getElementById('kpiRankTable');
+  const monthEl = document.getElementById('kpiMonth');
+  if (monthEl) monthEl.textContent = state.month;
+  try {
+    const rows = await api(`/kpi/monthly?month=${state.month}`);
+    if (!rows.length) {
+      el.innerHTML = `<div class="empty-state"><div>${icon('bar-chart', 'empty-icon')}</div>Chưa có KPI trong tháng này.</div>`;
+      return;
+    }
+    if (isMemberRole()) {
+      const r = rows[0];
+      el.innerHTML = `
+        <div class="personal-kpi">
+          <div class="personal-kpi-score" style="color:${scoreColor(r.score)}">${(r.score || 0).toFixed(1)}</div>
+          <div><span class="tier ${tierClass(r.score)}">${tierLabel(r.score)}</span></div>
+          <div class="text-sm text-muted">Hoàn thành đúng hạn: ${r.done_on_time ?? 0} • Quá hạn: ${r.overdue_unfinished ?? r.overdue ?? 0}</div>
+        </div>`;
+      return;
+    }
+    el.innerHTML = `
+      <table class="rank-table">
+        <thead><tr><th>#</th><th>Nhân sự</th><th>Điểm KPI</th><th>Xếp loại</th></tr></thead>
+        <tbody>
+          ${rows.slice(0, 8).map((r, i) => `
+            <tr>
+              <td><span class="rank-badge rank-${i < 3 ? i+1 : 'other'}">${i+1}</span></td>
+              <td><strong>${escHtml(r.user_name || `User ${r.user_id}`)}</strong></td>
+              <td><strong style="color:var(--brand)">${(r.score || 0).toFixed(1)}</strong></td>
+              <td><span class="tier ${tierClass(r.score)}">${tierLabel(r.score)}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadProjectOverview() {
+  const el = document.getElementById('projectOverview');
+  try {
+    if (isMemberRole()) {
+      const tasks = await api('/tasks');
+      if (!tasks.length) {
+        el.innerHTML = `<div class="empty-state"><div>${icon('list-checks', 'empty-icon')}</div>Bạn chưa có task nào được giao.</div>`;
+        return;
+      }
+      el.innerHTML = tasks.slice().sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).slice(0, 6).map(t => `
+        <div class="project-row">
+          <div class="project-row-name">${escHtml(t.title)}</div>
+          <span class="badge badge-${escHtml(t.status)}">${statusLabel(t.status)}</span>
+          <span class="text-sm text-muted">${new Date(t.deadline).toLocaleDateString('vi-VN')}</span>
+        </div>`).join('');
+      return;
+    }
+    if (currentRoleCode() === 'AUDITOR') {
+      const logs = await api('/audit/logs?limit=6').catch(() => []);
+      if (!logs.length) {
+        el.innerHTML = `<div class="empty-state"><div>${icon('list-checks', 'empty-icon')}</div>Chưa có nhật ký audit trong khoảng thời gian này.</div>`;
+        return;
+      }
+      el.innerHTML = logs.map(l => `
+        <div class="project-row">
+          <div class="project-row-name">${escHtml(l.action)} <span class="text-sm text-muted">${escHtml(l.entity)}</span></div>
+          <span class="text-sm text-muted">${fmtDateTime(l.created_at)}</span>
+        </div>`).join('');
+      return;
+    }
+    const projects = await api('/projects');
+    if (!projects.length) {
+      el.innerHTML = `<div class="empty-state"><div>${icon('folder', 'empty-icon')}</div>Chưa có dự án nào.</div>`;
+      return;
+    }
+    const rows = await Promise.all(projects.slice(0, 6).map(async p => {
+      try {
+        const progress = await api(`/projects/${p.id}/progress`);
+        return { ...p, progress };
+      } catch {
+        return { ...p, progress: { total_tasks: 0, done_tasks: 0, completion_rate: 0 } };
+      }
+    }));
+    el.innerHTML = rows.map(p => {
+      const done = p.progress?.done_tasks ?? 0;
+      const total = p.progress?.total_tasks ?? 0;
+      const completion = p.progress?.completion_rate ?? 0;
+      const fillCls = completion >= 80 ? 'done' : completion < 30 ? 'warning' : '';
+      return `
+        <div class="project-row">
+          <div class="project-row-name">${escHtml(p.name)}</div>
+          <span class="badge badge-${escHtml(p.status)}">${statusLabel(p.status)}</span>
+          <div class="project-row-bar">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-3);margin-bottom:3px">
+              <span>${done}/${total} tasks</span><span>${completion.toFixed(0)}%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${completion}%"></div></div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderRoleBadge(role) {
+  const code = roleCode(role?.code || role?.slug || role);
+  return `<span class="role-badge ${ROLE_COLORS[code] || 'role-member'}">${roleName(code)}</span>`;
+}
+
+function statusBadge(active) {
+  return `<span class="status-badge ${active ? 'active' : 'inactive'}"><span class="status-dot"></span>${active ? 'Active' : 'Inactive'}</span>`;
+}
+
+function sortRows(rows, sort, dir, getValue) {
+  const direction = dir === 'desc' ? -1 : 1;
+  return rows.slice().sort((a, b) => String(getValue(a, sort) ?? '').localeCompare(String(getValue(b, sort) ?? ''), 'vi') * direction);
+}
+
+function paginateRows(rows, page, pageSize) {
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  return { totalPages, safePage, rows: rows.slice((safePage - 1) * pageSize, safePage * pageSize) };
+}
+
+function pagerHtml(kind, page, totalPages) {
+  return `
+    <div class="table-pager">
+      <button class="btn btn-outline btn-sm" ${page <= 1 ? 'disabled' : ''} onclick="${kind}Page(${page - 1})">Prev</button>
+      <span class="text-sm text-muted">Page ${page}/${totalPages}</span>
+      <button class="btn btn-outline btn-sm" ${page >= totalPages ? 'disabled' : ''} onclick="${kind}Page(${page + 1})">Next</button>
+    </div>`;
+}
+
+async function confirmAction(title, message) {
+  const modal = document.getElementById('confirmModal');
+  if (!modal) return window.confirm(`${title}\n${message}`);
+  return new Promise(resolve => {
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMessage').textContent = message;
+    modal.classList.remove('hidden');
+    window.__confirmResolve = resolve;
+  });
+}
+
+function closeConfirmModal(result) {
+  const modal = document.getElementById('confirmModal');
+  if (modal) modal.classList.add('hidden');
+  if (window.__confirmResolve) window.__confirmResolve(Boolean(result));
+  window.__confirmResolve = null;
+}
+
+async function loadAdminUsers() {
+  const el = document.getElementById('adminUsersTable');
+  if (!el) return;
+  el.innerHTML = '<div class="skeleton" style="height:100px"></div>';
+  try {
+    state.adminUsers.rows = await api('/users');
+    state.adminUsers.page = 1;
+    renderAdminUsers();
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+function adminUserValue(row, sort) {
+  if (sort === 'role') return row.role_detail?.name || row.role_code || row.role;
+  if (sort === 'department') return row.department_detail?.name || row.department || '';
+  if (sort === 'status') return row.is_active ? 'active' : 'inactive';
+  return row.full_name || '';
+}
+
+function renderAdminUsers() {
+  const el = document.getElementById('adminUsersTable');
+  const s = state.adminUsers;
+  const roles = Array.from(new Set(s.rows.map(u => roleCode(u.role_detail?.code || u.role_code || u.role)))).sort();
+  const departments = Array.from(new Set(s.rows.map(u => u.department_detail?.name || u.department || '').filter(Boolean))).sort();
+  const term = s.search.toLowerCase();
+  let rows = s.rows.filter(u => {
+    const haystack = `${u.full_name} ${u.email} ${u.role_code || ''} ${u.department_detail?.name || u.department || ''}`.toLowerCase();
+    if (term && !haystack.includes(term)) return false;
+    if (s.role && roleCode(u.role_detail?.code || u.role_code || u.role) !== s.role) return false;
+    if (s.department && (u.department_detail?.name || u.department || '') !== s.department) return false;
+    if (s.status && String(Boolean(u.is_active)) !== s.status) return false;
+    return true;
+  });
+  rows = sortRows(rows, s.sort, s.dir, adminUserValue);
+  const page = paginateRows(rows, s.page, s.pageSize);
+  s.page = page.safePage;
+  el.innerHTML = `
+    <div class="table-toolbar">
+      <input class="input table-search" type="search" placeholder="Search users" value="${escHtml(s.search)}" oninput="adminUsersFilter('search', this.value)" />
+      <select class="select" onchange="adminUsersFilter('role', this.value)"><option value="">All roles</option>${roles.map(r => `<option value="${r}" ${s.role === r ? 'selected' : ''}>${roleName(r)}</option>`).join('')}</select>
+      <select class="select" onchange="adminUsersFilter('department', this.value)"><option value="">All departments</option>${departments.map(d => `<option value="${escHtml(d)}" ${s.department === d ? 'selected' : ''}>${escHtml(d)}</option>`).join('')}</select>
+      <select class="select" onchange="adminUsersFilter('status', this.value)"><option value="">All status</option><option value="true" ${s.status === 'true' ? 'selected' : ''}>Active</option><option value="false" ${s.status === 'false' ? 'selected' : ''}>Inactive</option></select>
+    </div>
+    ${!rows.length ? '<div class="empty-state compact">Không có user phù hợp với bộ lọc.</div>' : `
+    <div class="responsive-table">
+      <table class="audit-table enterprise-table">
+        <thead><tr>
+          <th onclick="sortAdminUsers('name')">Name</th>
+          <th>Email</th>
+          <th onclick="sortAdminUsers('role')">Role</th>
+          <th onclick="sortAdminUsers('department')">Department</th>
+          <th onclick="sortAdminUsers('status')">Status</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>${page.rows.map(u => `
+          <tr>
+            <td><strong>${escHtml(u.full_name)}</strong></td>
+            <td>${escHtml(u.email)}</td>
+            <td>${renderRoleBadge(u.role_detail || u.role_code || u.role)}</td>
+            <td>${escHtml(u.department_detail?.name || u.department || '-')}</td>
+            <td>${statusBadge(Boolean(u.is_active))}</td>
+            <td>
+              <select class="select action-select" onchange="handleUserAction(${Number(u.id)}, this.value); this.value=''">
+                <option value="">Actions</option>
+                <option value="${u.is_active ? 'deactivate' : 'activate'}">${u.is_active ? 'Deactivate' : 'Activate'}</option>
+                <option value="reset">Reset password</option>
+              </select>
+            </td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    ${pagerHtml('adminUsers', page.safePage, page.totalPages)}`}
+  `;
+}
+
+function adminUsersFilter(key, value) {
+  state.adminUsers[key] = value;
+  state.adminUsers.page = 1;
+  renderAdminUsers();
+}
+
+function sortAdminUsers(sort) {
+  const s = state.adminUsers;
+  s.dir = s.sort === sort && s.dir === 'asc' ? 'desc' : 'asc';
+  s.sort = sort;
+  renderAdminUsers();
+}
+
+function adminUsersPage(page) {
+  state.adminUsers.page = page;
+  renderAdminUsers();
+}
+
+async function handleUserAction(userId, action) {
+  if (!action) return;
+  try {
+    if (action === 'deactivate' || action === 'activate') {
+      const active = action === 'activate';
+      if (!(await confirmAction(active ? 'Activate user' : 'Deactivate user', active ? 'User này sẽ đăng nhập lại được.' : 'User này sẽ không thể đăng nhập cho tới khi được kích hoạt lại.'))) return;
+      await api(`/users/${userId}/active`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: active }) });
+      toast(active ? 'User activated successfully' : 'User deactivated successfully', 'success');
+    }
+    if (action === 'reset') {
+      const password = window.prompt('Nhập mật khẩu mới (tối thiểu 8 ký tự)');
+      if (!password) return;
+      if (!(await confirmAction('Reset password', 'Mật khẩu hiện tại của user sẽ bị thay thế.'))) return;
+      await api(`/users/${userId}/reset-password`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+      toast('Password reset successfully', 'success');
+    }
+    await loadAdminUsers();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function loadAdminDepartments() {
+  const el = document.getElementById('adminDepartmentsTable');
+  if (!el) return;
+  el.innerHTML = '<div class="skeleton" style="height:100px"></div>';
+  try {
+    state.adminDepartments.rows = await api('/departments');
+    state.adminDepartments.page = 1;
+    renderAdminDepartments();
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderAdminDepartments() {
+  const el = document.getElementById('adminDepartmentsTable');
+  const s = state.adminDepartments;
+  const term = s.search.toLowerCase();
+  let rows = s.rows.filter(d => {
+    const haystack = `${d.code} ${d.name} ${d.manager_name || ''}`.toLowerCase();
+    if (term && !haystack.includes(term)) return false;
+    if (s.status && String(Boolean(d.is_active)) !== s.status) return false;
+    return true;
+  });
+  rows = sortRows(rows, s.sort, s.dir, (d, sort) => sort === 'members' ? Number(d.member_count || 0) : d[sort] || '');
+  const page = paginateRows(rows, s.page, s.pageSize);
+  s.page = page.safePage;
+  el.innerHTML = `
+    <div class="table-toolbar">
+      <input class="input table-search" type="search" placeholder="Search departments" value="${escHtml(s.search)}" oninput="adminDepartmentsFilter('search', this.value)" />
+      <select class="select" onchange="adminDepartmentsFilter('status', this.value)"><option value="">All status</option><option value="true" ${s.status === 'true' ? 'selected' : ''}>Active</option><option value="false" ${s.status === 'false' ? 'selected' : ''}>Inactive</option></select>
+    </div>
+    ${!rows.length ? '<div class="empty-state compact">Không có phòng ban phù hợp với bộ lọc.</div>' : `
+    <div class="responsive-table">
+      <table class="audit-table enterprise-table">
+        <thead><tr><th onclick="sortAdminDepartments('code')">Code</th><th onclick="sortAdminDepartments('name')">Name</th><th>Manager</th><th onclick="sortAdminDepartments('members')">Members</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${page.rows.map(d => `
+          <tr>
+            <td><span class="tag">${escHtml(d.code)}</span></td>
+            <td><strong>${escHtml(d.name)}</strong></td>
+            <td>${escHtml(d.manager_name || '-')}</td>
+            <td>${escHtml(d.member_count ?? 0)}</td>
+            <td>${statusBadge(Boolean(d.is_active))}</td>
+            <td><button class="btn btn-outline btn-sm" onclick="deactivateDepartment(${Number(d.id)})" ${!d.is_active ? 'disabled' : ''}>Deactivate</button></td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    ${pagerHtml('adminDepartments', page.safePage, page.totalPages)}`}
+  `;
+}
+
+function adminDepartmentsFilter(key, value) {
+  state.adminDepartments[key] = value;
+  state.adminDepartments.page = 1;
+  renderAdminDepartments();
+}
+
+function sortAdminDepartments(sort) {
+  const s = state.adminDepartments;
+  s.dir = s.sort === sort && s.dir === 'asc' ? 'desc' : 'asc';
+  s.sort = sort;
+  renderAdminDepartments();
+}
+
+function adminDepartmentsPage(page) {
+  state.adminDepartments.page = page;
+  renderAdminDepartments();
+}
+
+async function deactivateDepartment(id) {
+  try {
+    if (!(await confirmAction('Deactivate department', 'Phòng ban sẽ bị chuyển sang trạng thái inactive.'))) return;
+    await api(`/departments/${id}`, { method: 'DELETE' });
+    toast('Department deactivated', 'success');
+    await loadAdminDepartments();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }

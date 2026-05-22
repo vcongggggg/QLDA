@@ -2,7 +2,7 @@ from datetime import timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, require_permission, require_roles
+from app.auth import get_current_user, is_member_role, require_permission, require_roles
 from app.deps import require_project_access
 from app.repository import (
     assign_tasks_to_sprint,
@@ -147,7 +147,7 @@ def sprint_workload_warnings_endpoint(
     if not sprint:
         raise HTTPException(status_code=404, detail="sprint not found")
     require_project_access(current_user, int(sprint["project_id"]))
-    user_id = int(current_user["id"]) if current_user["role"] == "staff" else None
+    user_id = int(current_user["id"]) if is_member_role(current_user) else None
     return list_sprint_workload_warnings(sprint_id, user_id=user_id)
 
 

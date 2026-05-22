@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, is_member_role, require_permission
 from app.kpi import calculate_monthly_kpi
 from app.reporting import (
     build_kpi_csv,
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 def _kpi_rows(month: str, current_user: dict) -> list[dict]:
     tasks = all_tasks_with_users()
-    if current_user["role"] == "staff":
+    if is_member_role(current_user):
         tasks = [t for t in tasks if int(t["assignee_id"]) == int(current_user["id"])]
     report = calculate_monthly_kpi(tasks, month, adjustments=list_kpi_adjustments_by_month(month))
     return sorted(report.values(), key=lambda r: r["score"], reverse=True)

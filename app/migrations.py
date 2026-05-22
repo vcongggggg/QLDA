@@ -246,10 +246,59 @@ def _phase5_rag_schema(conn: Any, table_columns: TableColumns, ensure_column: En
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rag_chunk_embeddings_chunk ON rag_chunk_embeddings(chunk_id)")
 
 
+def _auth_rbac_department_schema(conn: Any, table_columns: TableColumns, ensure_column: EnsureColumn) -> None:
+    ensure_column(conn, "users", "password_hash", "password_hash TEXT")
+    ensure_column(conn, "users", "role_id", "role_id TEXT")
+    ensure_column(conn, "users", "department_id", "department_id INTEGER")
+    ensure_column(conn, "users", "position", "position TEXT")
+    ensure_column(conn, "users", "avatar_url", "avatar_url TEXT")
+    ensure_column(conn, "users", "is_active", "is_active INTEGER NOT NULL DEFAULT 1")
+    ensure_column(conn, "users", "created_at", "created_at TEXT")
+    ensure_column(conn, "users", "updated_at", "updated_at TEXT")
+
+    ensure_column(conn, "roles", "code", "code TEXT")
+    ensure_column(conn, "roles", "is_system_role", "is_system_role INTEGER NOT NULL DEFAULT 1")
+    ensure_column(conn, "permissions", "code", "code TEXT")
+    ensure_column(conn, "permissions", "module", "module TEXT")
+    ensure_column(conn, "departments", "description", "description TEXT")
+    ensure_column(conn, "departments", "manager_user_id", "manager_user_id INTEGER")
+    ensure_column(conn, "departments", "is_active", "is_active INTEGER NOT NULL DEFAULT 1")
+
+    conn.execute("UPDATE roles SET code = COALESCE(code, slug)")
+    conn.execute(
+        """
+        UPDATE roles
+        SET is_system_role = CASE
+            WHEN is_system_role IS NOT NULL THEN is_system_role
+            WHEN is_system THEN 1
+            ELSE 0
+        END
+        """
+    )
+    conn.execute("UPDATE permissions SET code = COALESCE(code, key)")
+    conn.execute("UPDATE permissions SET module = COALESCE(module, category)")
+    conn.execute("UPDATE users SET role_id = COALESCE(role_id, role)")
+    conn.execute(
+        """
+        UPDATE users
+        SET department_id = (
+            SELECT d.id FROM departments d WHERE d.name = users.department OR d.code = users.department LIMIT 1
+        )
+        WHERE department_id IS NULL AND department IS NOT NULL
+        """
+    )
+    conn.execute("UPDATE users SET created_at = COALESCE(created_at, CAST(CURRENT_TIMESTAMP AS TEXT))")
+    conn.execute("UPDATE users SET updated_at = COALESCE(updated_at, created_at, CAST(CURRENT_TIMESTAMP AS TEXT))")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_role_id ON users(role_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_department_id ON users(department_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_departments_active ON departments(is_active)")
+
+
 MIGRATIONS = (
     Migration(1, "legacy_compat_columns", _legacy_compat_columns),
     Migration(2, "operational_indexes", _operational_indexes),
     Migration(3, "normalize_reserved_user_email_domains", _normalize_reserved_user_email_domains),
     Migration(4, "create_ai_task_drafts", _create_ai_task_drafts),
     Migration(5, "phase5_rag_schema", _phase5_rag_schema),
+    Migration(6, "auth_rbac_department_schema", _auth_rbac_department_schema),
 )

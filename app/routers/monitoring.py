@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user, has_permission, require_permission
 from app.repository import (
@@ -59,7 +59,8 @@ def monitoring_ops_endpoint(
     overdue_threshold: int = Query(default=10, ge=0, le=10000),
     current_user: dict = Depends(get_current_user),
 ) -> dict:
-    require_permission(current_user, "monitoring.view")
+    if not (has_permission(current_user, "OPS_VIEW") or has_permission(current_user, "AUDIT_VIEW")):
+        raise HTTPException(status_code=403, detail="forbidden")
     return {
         "can_manage_queue": has_permission(current_user, "teams.manage"),
         "audit_logs": list_audit_logs(
@@ -93,7 +94,7 @@ def audit_logs_endpoint(
     limit: int = Query(default=100, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
 ) -> list[dict]:
-    require_permission(current_user, "monitoring.admin")
+    require_permission(current_user, "AUDIT_VIEW")
     return list_audit_logs(
         limit=limit,
         actor_id=actor_id,

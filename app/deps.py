@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from app.auth import current_role_code
 from app.repository import get_project_by_id, is_project_member
 
 
@@ -9,7 +10,7 @@ def require_project_access(current_user: dict, project_id: int) -> None:
     if not project:
         raise HTTPException(status_code=404, detail="project not found")
 
-    if current_user["role"] in {"admin", "hr"}:
+    if current_role_code(current_user) in {"ADMIN", "HR"}:
         return
 
     if int(project.get("manager_id") or 0) == int(current_user["id"]):

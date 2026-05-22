@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
-from app.auth import get_current_user, require_roles
+from app.auth import current_role_code, get_current_user, is_member_role, require_roles
 from app.kpi import calculate_monthly_kpi, compute_dashboard_metrics
 from app.proactive_worker import process_notification_queue
 from app.repository import (
@@ -44,7 +44,7 @@ def teams_summary_endpoint(
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     tasks_for_metrics = all_tasks_with_users()
-    if current_user["role"] == "staff":
+    if is_member_role(current_user):
         tasks_for_metrics = [
             task for task in tasks_for_metrics
             if int(task["assignee_id"]) == int(current_user["id"])
@@ -62,7 +62,7 @@ def teams_summary_endpoint(
         )[:task_limit]
 
     adjustments = list_kpi_adjustments_by_month(month)
-    if current_user["role"] == "staff":
+    if is_member_role(current_user):
         adjustments = [
             item for item in adjustments
             if int(item["user_id"]) == int(current_user["id"])
@@ -73,10 +73,10 @@ def teams_summary_endpoint(
         key=lambda item: item["score"],
         reverse=True,
     )
-    if current_user["role"] == "staff":
+    if is_member_role(current_user):
         kpi_rows = [row for row in kpi_rows if int(row["user_id"]) == int(current_user["id"])]
 
-    can_manage_queue = current_user["role"] in {"admin", "manager", "hr"}
+    can_manage_queue = current_role_code(current_user) in {"ADMIN", "MANAGER", "HR"}
     return {
         "month": month,
         "dashboard": compute_dashboard_metrics(tasks_for_metrics, monthly_kpi, month),

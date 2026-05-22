@@ -804,26 +804,37 @@ def _seed_rbac_defaults(conn: DatabaseConnection) -> None:
     for role in DEFAULT_ROLES:
         conn.execute(
             """
-            /* no-returning-id */ INSERT INTO roles (slug, name, description, is_system)
-            VALUES (?, ?, ?, ?)
+            /* no-returning-id */ INSERT INTO roles (slug, name, description, is_system, code, is_system_role)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(slug) DO UPDATE SET
                 name = excluded.name,
-                description = excluded.description
+                description = excluded.description,
+                code = excluded.code,
+                is_system_role = excluded.is_system_role
             """,
-            (role["slug"], role["name"], role["description"], True),
+            (role["slug"], role["name"], role["description"], True, role["slug"], 1),
         )
 
     for permission in DEFAULT_PERMISSIONS:
         conn.execute(
             """
-            /* no-returning-id */ INSERT INTO permissions (key, name, description, category)
-            VALUES (?, ?, ?, ?)
+            /* no-returning-id */ INSERT INTO permissions (key, name, description, category, code, module)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(key) DO UPDATE SET
                 name = excluded.name,
                 description = excluded.description,
-                category = excluded.category
+                category = excluded.category,
+                code = excluded.code,
+                module = excluded.module
             """,
-            (permission["key"], permission["name"], permission.get("description"), permission["category"]),
+            (
+                permission["key"],
+                permission["name"],
+                permission.get("description"),
+                permission["category"],
+                permission["key"],
+                permission["category"],
+            ),
         )
 
     for role_slug, permission_keys in DEFAULT_ROLE_PERMISSION_KEYS.items():
@@ -838,6 +849,76 @@ def _seed_rbac_defaults(conn: DatabaseConnection) -> None:
             )
 
 
+def _seed_auth_demo_accounts(conn: DatabaseConnection) -> None:
+    from app.passwords import hash_password
+
+    now = "2026-05-21T00:00:00+00:00"
+    departments = (
+        ("Administration", "ADM"),
+        ("Project Management", "PMO"),
+        ("Engineering", "ENG"),
+        ("Human Resources", "HR"),
+        ("Audit", "AUD"),
+    )
+    for name, code in departments:
+        conn.execute(
+            """
+            /* no-returning-id */ INSERT INTO departments (name, code, description, is_active, created_at)
+            VALUES (?, ?, ?, 1, ?)
+            ON CONFLICT(code) DO UPDATE SET
+                name = excluded.name,
+                is_active = 1
+            """,
+            (name, code, f"Default {name} department", now),
+        )
+
+    dep_ids = {
+        str(row["code"]): int(row["id"])
+        for row in conn.execute("SELECT id, code FROM departments WHERE code IN ('ADM','PMO','ENG','HR','AUD')").fetchall()
+    }
+    accounts = (
+        ("TeamsWork Admin", "admin@teamswork.local", "Admin@123", "ADMIN", dep_ids["ADM"], "System Admin"),
+        ("TeamsWork Manager", "manager@teamswork.local", "Manager@123", "MANAGER", dep_ids["PMO"], "Department Manager"),
+        ("TeamsWork Leader", "leader@teamswork.local", "Leader@123", "LEADER", dep_ids["ENG"], "Team Leader"),
+        ("TeamsWork Member", "member@teamswork.local", "Member@123", "MEMBER", dep_ids["ENG"], "Member"),
+        ("TeamsWork HR", "hr@teamswork.local", "Hr@123", "HR", dep_ids["HR"], "HR Specialist"),
+        ("TeamsWork Auditor", "auditor@teamswork.local", "Auditor@123", "AUDITOR", dep_ids["AUD"], "Auditor"),
+    )
+    for full_name, email, password, role_id, department_id, position in accounts:
+        department_name = conn.execute("SELECT name FROM departments WHERE id = ?", (department_id,)).fetchone()["name"]
+        existing = conn.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email.lower(),)).fetchone()
+        if existing:
+            conn.execute(
+                """
+                UPDATE users
+                SET full_name = ?, role = ?, role_id = ?, department = ?, department_id = ?,
+                    position = ?, is_active = 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (full_name, role_id.lower() if role_id != "MEMBER" else "staff", role_id, department_name, department_id, position, now, existing["id"]),
+            )
+            continue
+        conn.execute(
+            """
+            /* no-returning-id */ INSERT INTO users
+            (full_name, email, aad_object_id, role, department, password_hash, role_id, department_id, position, avatar_url, is_active, created_at, updated_at)
+            VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)
+            """,
+            (
+                full_name,
+                email.lower(),
+                role_id.lower() if role_id != "MEMBER" else "staff",
+                department_name,
+                hash_password(password),
+                role_id,
+                department_id,
+                position,
+                now,
+                now,
+            ),
+        )
+
+
 def init_db() -> None:
     with get_connection() as conn:
         for statement in _schema_statements(conn.dialect):
@@ -845,3 +926,4 @@ def init_db() -> None:
 
         run_schema_migrations(conn, _table_columns, _ensure_column)
         _seed_rbac_defaults(conn)
+        _seed_auth_demo_accounts(conn)

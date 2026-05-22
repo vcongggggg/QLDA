@@ -91,8 +91,8 @@ def calculate_monthly_kpi(tasks: list[dict], month: str, adjustments: list[dict]
     return report
 
 
-def compute_dashboard_metrics(tasks: list[dict], monthly_kpi: dict[int, dict], month: str) -> dict:
-    now = datetime.now(timezone.utc)
+def compute_dashboard_metrics(tasks: list[dict], monthly_kpi: dict[int, dict], month: str, as_of: datetime | None = None) -> dict:
+    now = as_of or datetime.now(timezone.utc)
     total_tasks = len(tasks)
     todo_tasks = sum(1 for t in tasks if t["status"] == "todo")
     doing_tasks = sum(1 for t in tasks if t["status"] == "doing")

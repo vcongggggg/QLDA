@@ -4,10 +4,79 @@ import re
 from typing import Any
 
 from app.database import get_connection
+from app.passwords import hash_password
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+ROLE_ALIASES = {
+    "admin": "ADMIN",
+    "manager": "MANAGER",
+    "staff": "MEMBER",
+    "member": "MEMBER",
+    "hr": "HR",
+    "leader": "LEADER",
+    "auditor": "AUDITOR",
+}
+
+
+def canonical_role_code(role: str | None) -> str:
+    value = str(role or "MEMBER").strip()
+    return ROLE_ALIASES.get(value.lower(), value.upper())
+
+
+def legacy_role_slug(role: str | None) -> str:
+    code = canonical_role_code(role)
+    return {
+        "ADMIN": "admin",
+        "MANAGER": "manager",
+        "MEMBER": "staff",
+        "LEADER": "manager",
+        "HR": "hr",
+        "AUDITOR": "hr",
+    }.get(code, str(role or "staff").lower())
+
+
+def _sanitize_user(row: dict[str, Any]) -> dict[str, Any]:
+    item = dict(row)
+    item.pop("password_hash", None)
+    return item
+
+
+def _role_payload(role_slug: str | None, role_name: str | None = None) -> dict[str, Any]:
+    code = canonical_role_code(role_slug)
+    return {
+        "code": code,
+        "name": role_name or code.title(),
+        "slug": role_slug or code,
+    }
+
+
+def _department_payload(row: dict[str, Any]) -> dict[str, Any] | None:
+    dep_id = row.get("department_id")
+    dep_name = row.get("department_name") or row.get("department")
+    if dep_id is None and not dep_name:
+        return None
+    return {
+        "id": dep_id,
+        "code": row.get("department_code"),
+        "name": dep_name,
+    }
+
+
+def _user_profile_from_row(row: dict[str, Any], *, include_permissions: bool = False) -> dict[str, Any]:
+    item = _sanitize_user(row)
+    role_slug = str(item.get("role_id") or item.get("role") or "")
+    item["role_code"] = canonical_role_code(role_slug)
+    item["role"] = item.get("role") or legacy_role_slug(role_slug)
+    item["role_detail"] = _role_payload(role_slug or item["role"], item.get("role_name"))
+    item["department_detail"] = _department_payload(item)
+    item["is_active"] = bool(item.get("is_active", True))
+    if include_permissions:
+        item["permissions"] = list_permission_keys_for_role(role_slug or item["role"])
+    return item
 
 
 _SECRET_PATTERNS = (
@@ -40,27 +109,95 @@ def create_user(
     role: str,
     department: str | None,
     aad_object_id: str | None = None,
+    password: str | None = None,
+    department_id: int | None = None,
+    position: str | None = None,
+    avatar_url: str | None = None,
+    is_active: bool = True,
 ) -> dict[str, Any]:
+    now = _now_iso()
+    role_id = canonical_role_code(role)
+    stored_role = legacy_role_slug(role)
+    password_hash = hash_password(password) if password else None
     with get_connection() as conn:
+        if department_id is None and department:
+            dep_row = conn.execute(
+                "SELECT id, name FROM departments WHERE name = ? OR code = ? LIMIT 1",
+                (department, department),
+            ).fetchone()
+            if dep_row:
+                department_id = int(dep_row["id"])
+                department = str(dep_row["name"])
         cursor = conn.execute(
-            "INSERT INTO users (full_name, email, aad_object_id, role, department) VALUES (?, ?, ?, ?, ?)",
-            (full_name, email, aad_object_id, role, department),
+            """
+            INSERT INTO users
+            (full_name, email, aad_object_id, role, department, password_hash, role_id, department_id, position, avatar_url, is_active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                full_name,
+                email.lower(),
+                aad_object_id,
+                stored_role,
+                department,
+                password_hash,
+                role_id,
+                department_id,
+                position,
+                avatar_url,
+                bool(is_active),
+                now,
+                now,
+            ),
         )
         user_id = cursor.lastrowid
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        return dict(row)
+    user = get_user_by_id(int(user_id))
+    if not user:
+        raise RuntimeError("created user not found")
+    return user
 
 
 def get_user_by_id(user_id: int) -> dict[str, Any] | None:
     with get_connection() as conn:
-        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-    return dict(row) if row else None
+        row = conn.execute(
+            """
+            SELECT u.*, r.name AS role_name, d.name AS department_name, d.code AS department_code
+            FROM users u
+            LEFT JOIN roles r ON r.slug = COALESCE(u.role_id, u.role)
+            LEFT JOIN departments d ON d.id = u.department_id
+            WHERE u.id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    return _user_profile_from_row(dict(row), include_permissions=True) if row else None
+
+
+def get_user_by_username_or_email(username_or_email: str, *, include_password: bool = False) -> dict[str, Any] | None:
+    value = username_or_email.strip().lower()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT u.*, r.name AS role_name, d.name AS department_name, d.code AS department_code
+            FROM users u
+            LEFT JOIN roles r ON r.slug = COALESCE(u.role_id, u.role)
+            LEFT JOIN departments d ON d.id = u.department_id
+            WHERE LOWER(u.email) = ?
+            LIMIT 1
+            """,
+            (value,),
+        ).fetchone()
+    if not row:
+        return None
+    item = _user_profile_from_row(dict(row), include_permissions=True)
+    if include_password:
+        item["password_hash"] = dict(row).get("password_hash")
+    return item
 
 
 def get_user_by_aad_object_id(aad_object_id: str) -> dict[str, Any] | None:
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM users WHERE aad_object_id = ?", (aad_object_id,)).fetchone()
-    return dict(row) if row else None
+    return _user_profile_from_row(dict(row), include_permissions=True) if row else None
 
 
 def upsert_user_from_aad(aad_object_id: str, display_name: str | None, email: str | None) -> dict[str, Any]:
@@ -85,27 +222,114 @@ def upsert_user_from_aad(aad_object_id: str, display_name: str | None, email: st
         full_name=safe_name,
         email=safe_email,
         aad_object_id=aad_object_id,
-        role="staff",
+        role="MEMBER",
         department="Unassigned",
     )
 
 
 def list_users() -> list[dict[str, Any]]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM users ORDER BY id").fetchall()
-    return [dict(r) for r in rows]
+        rows = conn.execute(
+            """
+            SELECT u.*, r.name AS role_name, d.name AS department_name, d.code AS department_code
+            FROM users u
+            LEFT JOIN roles r ON r.slug = COALESCE(u.role_id, u.role)
+            LEFT JOIN departments d ON d.id = u.department_id
+            ORDER BY u.id
+            """
+        ).fetchall()
+    return [_user_profile_from_row(dict(r), include_permissions=False) for r in rows]
+
+
+def update_user(
+    user_id: int,
+    *,
+    full_name: str | None = None,
+    email: str | None = None,
+    role: str | None = None,
+    department_id: int | None = None,
+    position: str | None = None,
+    avatar_url: str | None = None,
+    is_active: bool | None = None,
+) -> dict[str, Any] | None:
+    existing = get_user_by_id(user_id)
+    if not existing:
+        return None
+    fields: list[str] = []
+    params: list[Any] = []
+    if full_name is not None:
+        fields.append("full_name = ?")
+        params.append(full_name)
+    if email is not None:
+        fields.append("email = ?")
+        params.append(email.lower())
+    if role is not None:
+        fields.extend(["role = ?", "role_id = ?"])
+        params.extend([legacy_role_slug(role), canonical_role_code(role)])
+    if department_id is not None:
+        fields.append("department_id = ?")
+        params.append(department_id)
+        with get_connection() as conn:
+            dep = conn.execute("SELECT name FROM departments WHERE id = ?", (department_id,)).fetchone()
+        fields.append("department = ?")
+        params.append(str(dep["name"]) if dep else None)
+    if position is not None:
+        fields.append("position = ?")
+        params.append(position)
+    if avatar_url is not None:
+        fields.append("avatar_url = ?")
+        params.append(avatar_url)
+    if is_active is not None:
+        fields.append("is_active = ?")
+        params.append(bool(is_active))
+    if not fields:
+        return existing
+    fields.append("updated_at = ?")
+    params.append(_now_iso())
+    params.append(user_id)
+    with get_connection() as conn:
+        conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", tuple(params))
+    return get_user_by_id(user_id)
+
+
+def update_user_active(user_id: int, is_active: bool) -> dict[str, Any] | None:
+    return update_user(user_id, is_active=is_active)
+
+
+def reset_user_password(user_id: int, password: str) -> bool:
+    existing = get_user_by_id(user_id)
+    if not existing:
+        return False
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?",
+            (hash_password(password), _now_iso(), user_id),
+        )
+    return True
 
 
 def list_roles() -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM roles ORDER BY slug").fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for row in rows:
+        item = dict(row)
+        item["code"] = item.get("code") or item.get("slug")
+        item["is_system_role"] = item.get("is_system_role", item.get("is_system", True))
+        out.append(item)
+    return out
 
 
 def list_permissions() -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM permissions ORDER BY category, key").fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for row in rows:
+        item = dict(row)
+        item["code"] = item.get("code") or item.get("key")
+        item["module"] = item.get("module") or item.get("category")
+        out.append(item)
+    return out
 
 
 def role_exists(role_slug: str) -> bool:
@@ -127,42 +351,65 @@ def permission_keys_exist(permission_keys: list[str]) -> bool:
 
 
 def list_permissions_for_role(role_slug: str) -> list[dict[str, Any]]:
+    role_candidates = sorted({role_slug, canonical_role_code(role_slug), legacy_role_slug(role_slug)})
+    placeholders = ",".join(["?"] * len(role_candidates))
     with get_connection() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT p.*
             FROM permissions p
             JOIN role_permissions rp ON rp.permission_key = p.key
-            WHERE rp.role_slug = ?
+            WHERE rp.role_slug IN ({placeholders})
             ORDER BY p.category, p.key
             """,
-            (role_slug,),
+            tuple(role_candidates),
         ).fetchall()
-    return [dict(r) for r in rows]
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        key = str(item["key"])
+        if key in seen:
+            continue
+        seen.add(key)
+        item["code"] = item.get("code") or item.get("key")
+        item["module"] = item.get("module") or item.get("category")
+        out.append(item)
+    return out
+
+
+def list_permission_keys_for_role(role_slug: str) -> list[str]:
+    return [str(item["key"]) for item in list_permissions_for_role(role_slug)]
 
 
 def replace_role_permissions(role_slug: str, permission_keys: list[str]) -> list[dict[str, Any]]:
     unique_keys = sorted(set(permission_keys))
+    role_targets = sorted({role_slug, canonical_role_code(role_slug)})
     with get_connection() as conn:
-        conn.execute("DELETE FROM role_permissions WHERE role_slug = ?", (role_slug,))
-        for permission_key in unique_keys:
-            conn.execute(
-                "/* no-returning-id */ INSERT INTO role_permissions (role_slug, permission_key) VALUES (?, ?)",
-                (role_slug, permission_key),
-            )
+        for target in role_targets:
+            conn.execute("DELETE FROM role_permissions WHERE role_slug = ?", (target,))
+            for permission_key in unique_keys:
+                conn.execute(
+                    "/* no-returning-id */ INSERT INTO role_permissions (role_slug, permission_key) VALUES (?, ?)",
+                    (target, permission_key),
+                )
     return list_permissions_for_role(role_slug)
 
 
 def role_has_permission(role_slug: str, permission_key: str) -> bool:
+    role_candidates = sorted({role_slug, canonical_role_code(role_slug), legacy_role_slug(role_slug)})
+    permission_candidates = sorted({permission_key})
+    placeholders_roles = ",".join(["?"] * len(role_candidates))
+    placeholders_perms = ",".join(["?"] * len(permission_candidates))
     with get_connection() as conn:
         row = conn.execute(
-            """
+            f"""
             SELECT 1
             FROM role_permissions
-            WHERE role_slug = ? AND permission_key = ?
+            WHERE role_slug IN ({placeholders_roles}) AND permission_key IN ({placeholders_perms})
             LIMIT 1
             """,
-            (role_slug, permission_key),
+            tuple(role_candidates + permission_candidates),
         ).fetchone()
     return row is not None
 
@@ -212,6 +459,7 @@ def list_tasks(
     keyword: str | None = None,
     deadline_from: str | None = None,
     deadline_to: str | None = None,
+    as_of: str | None = None,
 ) -> list[dict[str, Any]]:
     query = "SELECT * FROM tasks WHERE 1=1"
     params: list[Any] = []
@@ -229,10 +477,10 @@ def list_tasks(
         params.append(sprint_id)
     if overdue is True:
         query += " AND status != 'done' AND deadline < ?"
-        params.append(_now_iso())
+        params.append(as_of or _now_iso())
     elif overdue is False:
         query += " AND (status = 'done' OR deadline >= ?)"
-        params.append(_now_iso())
+        params.append(as_of or _now_iso())
     if keyword:
         query += " AND (LOWER(title) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ?)"
         term = f"%{keyword.lower()}%"
@@ -899,21 +1147,91 @@ def department_exists(department_id: int) -> bool:
     return row is not None
 
 
-def create_department(name: str, code: str) -> dict[str, Any]:
+def create_department(
+    name: str,
+    code: str,
+    description: str | None = None,
+    manager_user_id: int | None = None,
+) -> dict[str, Any]:
     with get_connection() as conn:
         cursor = conn.execute(
-            "INSERT INTO departments (name, code, created_at) VALUES (?, ?, ?)",
-            (name, code.upper(), _now_iso()),
+            """
+            INSERT INTO departments (name, code, description, manager_user_id, is_active, created_at)
+            VALUES (?, ?, ?, ?, 1, ?)
+            """,
+            (name, code.upper(), description, manager_user_id, _now_iso()),
         )
         dep_id = cursor.lastrowid
         row = conn.execute("SELECT * FROM departments WHERE id = ?", (dep_id,)).fetchone()
     return dict(row)
 
 
-def list_departments() -> list[dict[str, Any]]:
+def list_departments(include_inactive: bool = False) -> list[dict[str, Any]]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM departments ORDER BY id").fetchall()
+        query = """
+            SELECT d.*, u.full_name AS manager_name, COUNT(m.id) AS member_count
+            FROM departments d
+            LEFT JOIN users u ON u.id = d.manager_user_id
+            LEFT JOIN users m ON m.department_id = d.id
+        """
+        params: tuple[Any, ...] = ()
+        if not include_inactive:
+            query += " WHERE d.is_active = 1"
+        query += " GROUP BY d.id, u.full_name ORDER BY d.id"
+        rows = conn.execute(query, params).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_department_by_id(department_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM departments WHERE id = ?", (department_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def update_department(
+    department_id: int,
+    *,
+    name: str | None = None,
+    code: str | None = None,
+    description: str | None = None,
+    manager_user_id: int | None = None,
+    is_active: bool | None = None,
+) -> dict[str, Any] | None:
+    fields: list[str] = []
+    params: list[Any] = []
+    for column, value in (
+        ("name", name),
+        ("code", code.upper() if code else None),
+        ("description", description),
+        ("manager_user_id", manager_user_id),
+        ("is_active", bool(is_active) if is_active is not None else None),
+    ):
+        if value is not None:
+            fields.append(f"{column} = ?")
+            params.append(value)
+    if not fields:
+        return get_department_by_id(department_id)
+    params.append(department_id)
+    with get_connection() as conn:
+        conn.execute(f"UPDATE departments SET {', '.join(fields)} WHERE id = ?", tuple(params))
+        row = conn.execute("SELECT * FROM departments WHERE id = ?", (department_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_department_members(department_id: int) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT u.*, r.name AS role_name, d.name AS department_name, d.code AS department_code
+            FROM users u
+            LEFT JOIN roles r ON r.slug = COALESCE(u.role_id, u.role)
+            LEFT JOIN departments d ON d.id = u.department_id
+            WHERE u.department_id = ?
+            ORDER BY u.full_name
+            """,
+            (department_id,),
+        ).fetchall()
+    return [_user_profile_from_row(dict(r), include_permissions=False) for r in rows]
 
 
 def project_exists(project_id: int) -> bool:

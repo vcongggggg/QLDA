@@ -33,50 +33,66 @@
   <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></symbol>
 </svg>
 
+<section class="login-screen hidden" id="loginScreen">
+  <div class="login-panel">
+    <img class="login-logo" src="assets/sunflower-logo.jpg" alt="TeamsWork logo" />
+    <h1>TeamsWork</h1>
+    <p>Dang nhap de tiep tuc</p>
+    <form id="loginForm" onsubmit="login(event)">
+      <label>Email</label>
+      <input class="input" id="loginEmail" type="text" autocomplete="username" value="admin@teamswork.local" required />
+      <label>Mat khau</label>
+      <input class="input" id="loginPassword" type="password" autocomplete="current-password" value="Admin@123" required />
+      <button class="btn btn-primary login-submit" type="submit">Dang nhap</button>
+      <div class="login-error hidden" id="loginError"></div>
+    </form>
+  </div>
+</section>
+
 <!-- ═══════════════════════════════════════════════════════ SIDEBAR ═════ -->
-<aside class="sidebar" id="sidebar">
+<aside class="sidebar hidden" id="sidebar">
   <div class="sidebar-brand">
     <img class="brand-logo" src="assets/sunflower-logo.jpg" alt="TeamsWork logo" />
     <div class="brand-name">TeamsWork</div>
   </div>
 
   <nav class="sidebar-nav">
-    <a class="nav-item active" data-section="dashboard" onclick="navigate('dashboard')">
+    <a class="nav-item active" data-section="dashboard" data-permission="DASHBOARD_VIEW" onclick="navigate('dashboard')">
       <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       <span>Dashboard</span>
     </a>
-    <a class="nav-item" data-section="kanban" onclick="navigate('kanban')">
+    <a class="nav-item" data-section="kanban" data-permission="KANBAN_VIEW" onclick="navigate('kanban')">
       <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="16" rx="1"/></svg>
       <span>Kanban</span>
     </a>
-    <a class="nav-item" data-section="projects" onclick="navigate('projects')">
+    <a class="nav-item" data-section="projects" data-permission="PROJECT_VIEW" onclick="navigate('projects')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h3l2 2h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
       <span>Dự án</span>
     </a>
-    <a class="nav-item" data-section="kpi" onclick="navigate('kpi')">
+    <a class="nav-item" data-section="kpi" data-any-permission="KPI_VIEW_OWN,KPI_VIEW_TEAM,KPI_VIEW_ALL" onclick="navigate('kpi')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 9-9"/><circle cx="18" cy="7" r="2"/></svg>
       <span>KPI</span>
     </a>
-    <a class="nav-item" data-section="reports" onclick="navigate('reports')">
+    <a class="nav-item" data-section="reports" data-any-permission="REPORT_VIEW_TEAM,REPORT_VIEW_ALL" onclick="navigate('reports')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
       <span>Báo cáo</span>
     </a>
-    <a class="nav-item" data-section="ai" onclick="navigate('ai')">
+    <a class="nav-item" data-section="ai" data-permission="AI_TASK_VIEW" onclick="navigate('ai')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"/></svg>
       <span>AI Tasks</span>
     </a>
-    <a class="nav-item" data-section="teams" onclick="navigate('teams')">
+    <a class="nav-item" data-section="teams" data-permission="TEAM_VIEW" onclick="navigate('teams')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
       <span>Teams</span>
     </a>
-    <a class="nav-item" data-section="ops" onclick="navigate('ops')">
+    <a class="nav-item" data-section="ops" data-any-permission="AUDIT_VIEW,OPS_VIEW" onclick="navigate('ops')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg>
       <span>Audit & Ops</span>
     </a>
 
     <div class="nav-divider"></div>
 
-    <a class="nav-item" data-section="admin" onclick="navigate('admin')">
+    <a class="nav-item" data-section="admin" data-any-permission="USER_VIEW,ROLE_VIEW,DEPARTMENT_VIEW" onclick="navigate('admin')">
       <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span>Quản trị</span>
     </a>
@@ -88,9 +104,11 @@
       <div class="user-info">
         <div class="user-name" id="userName">Người dùng</div>
         <div class="user-role" id="userRole">–</div>
+        <div class="user-role" id="userDepartment"></div>
       </div>
     </div>
-    <div class="user-id-row">
+    <button class="btn btn-outline btn-sm logout-btn" onclick="logout()">Logout</button>
+    <div class="user-id-row hidden" id="devUserSwitcher">
       <label>User ID:</label>
       <input type="number" id="userIdInput" value="1" min="1" onchange="changeUserId(this.value)" />
     </div>
@@ -98,7 +116,7 @@
 </aside>
 
 <!-- ═══════════════════════════════════════════════════════ MAIN ═════════ -->
-<div class="main-wrap">
+<div class="main-wrap hidden" id="mainWrap">
 
   <!-- Top bar -->
   <header class="topbar">
@@ -116,7 +134,7 @@
             <button type="button" class="btn btn-outline btn-sm" onclick="markAllNotificationsRead()">Mark all read</button>
           </div>
           <div id="notificationList" class="notification-list">
-            <div class="empty-state compact">No notifications</div>
+            <div class="empty-state compact">Bạn chưa có thông báo mới.</div>
           </div>
         </div>
       </div>
@@ -159,6 +177,17 @@
     </section>
 
     <!-- ─── KANBAN ─── -->
+    <section id="sec-access-denied" class="section hidden">
+      <div class="card">
+        <div class="empty-state">
+          <div><svg class="empty-icon" aria-hidden="true"><use href="#i-alert-triangle"></use></svg></div>
+          <h3>Access Denied</h3>
+          <p>Bạn không có quyền truy cập chức năng này: <strong id="accessDeniedTarget">-</strong>.</p>
+          <button class="btn btn-primary" type="button" onclick="backToDashboard()">Back to dashboard</button>
+        </div>
+      </div>
+    </section>
+
     <section id="sec-kanban" class="section hidden">
       <div class="toolbar">
         <div class="toolbar-left task-filter-bar">
@@ -265,9 +294,9 @@
             <p>Điểm KPI toàn bộ nhân sự trong tháng đã chọn</p>
           </div>
           <div class="report-actions">
-            <button class="btn btn-outline btn-sm" onclick="downloadReport('kpi','csv')">CSV</button>
-            <button class="btn btn-outline btn-sm" onclick="downloadReport('kpi','xlsx')">Excel</button>
-            <button class="btn btn-primary btn-sm" onclick="downloadReport('kpi','pdf')">PDF</button>
+            <button class="btn btn-outline btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('kpi','csv')">CSV</button>
+            <button class="btn btn-outline btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('kpi','xlsx')">Excel</button>
+            <button class="btn btn-primary btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('kpi','pdf')">PDF</button>
           </div>
         </div>
         <div class="report-card">
@@ -277,8 +306,8 @@
             <p>Portfolio summary tất cả dự án và tiến độ</p>
           </div>
           <div class="report-actions">
-            <button class="btn btn-outline btn-sm" onclick="downloadReport('portfolio','csv')">CSV</button>
-            <button class="btn btn-primary btn-sm" onclick="downloadReport('portfolio','xlsx')">Excel</button>
+            <button class="btn btn-outline btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('portfolio','csv')">CSV</button>
+            <button class="btn btn-primary btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('portfolio','xlsx')">Excel</button>
           </div>
         </div>
         <div class="report-card">
@@ -288,8 +317,8 @@
             <p>Trạng thái tiến độ tất cả dự án đang hoạt động</p>
           </div>
           <div class="report-actions">
-            <button class="btn btn-outline btn-sm" onclick="downloadReport('progress','csv')">CSV</button>
-            <button class="btn btn-primary btn-sm" onclick="downloadReport('progress','xlsx')">Excel</button>
+            <button class="btn btn-outline btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('progress','csv')">CSV</button>
+            <button class="btn btn-primary btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('progress','xlsx')">Excel</button>
           </div>
         </div>
         <div class="report-card">
@@ -301,8 +330,8 @@
           <div class="report-actions">
             <div style="display:flex;gap:6px;align-items:center">
               <input type="number" id="sprintReportId" placeholder="Sprint ID" min="1" class="select" style="width:90px" />
-              <button class="btn btn-outline btn-sm" onclick="downloadSprintReport('csv')">CSV</button>
-              <button class="btn btn-primary btn-sm" onclick="downloadSprintReport('xlsx')">Excel</button>
+              <button class="btn btn-outline btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadSprintReport('csv')">CSV</button>
+              <button class="btn btn-primary btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadSprintReport('xlsx')">Excel</button>
             </div>
           </div>
         </div>
@@ -336,8 +365,8 @@
             </label>
             <input id="aiRagQuery" class="input" type="text" placeholder="Truy vấn RAG tùy chọn; để trống sẽ dùng nội dung requirements" />
             <div class="action-row">
-              <button class="btn btn-primary" onclick="generateAiTasksFromText()">Tạo task từ nội dung</button>
-              <button class="btn btn-outline" onclick="generateAiTasksFromDocx()">Tạo task từ .docx</button>
+              <button class="btn btn-primary" data-requires-any-permission="AI_TASK_GENERATE,ai.preview" onclick="generateAiTasksFromText()">Tạo task từ nội dung</button>
+              <button class="btn btn-outline" data-requires-any-permission="AI_TASK_GENERATE,ai.preview" onclick="generateAiTasksFromDocx()">Tạo task từ .docx</button>
             </div>
             <div id="aiWarnings" class="text-sm text-muted"></div>
           </div>
@@ -358,7 +387,7 @@
               </div>
             </div>
             <p class="text-sm text-muted">Task được import sẽ vào trạng thái <code>todo</code>; deadline tính từ hôm nay theo số ngày AI đề xuất.</p>
-            <button class="btn btn-primary" onclick="importSelectedAiTasks()">Import task đã chọn</button>
+            <button class="btn btn-primary" data-requires-any-permission="AI_TASK_IMPORT,ai.import" onclick="importSelectedAiTasks()">Import task đã chọn</button>
           </div>
         </div>
       </div>
@@ -390,7 +419,7 @@
               <option value="">Chọn dự án</option>
             </select>
             <textarea id="ragContent" class="textarea" rows="7" placeholder="Dán nội dung yêu cầu, biên bản họp, spec, checklist..."></textarea>
-            <button class="btn btn-primary" onclick="createRagDocument()">Thêm vào RAG</button>
+            <button class="btn btn-primary" data-requires-permission="rag.manage" onclick="createRagDocument()">Thêm vào RAG</button>
           </div>
         </div>
         <div class="card">
@@ -507,7 +536,7 @@
         <div class="card">
           <div class="card-header"><h3><svg class="heading-icon" aria-hidden="true"><use href="#i-database"></use></svg>Dữ liệu mẫu</h3></div>
           <p class="text-muted text-sm">Khởi tạo dữ liệu mẫu (users, projects, sprints, tasks) để demo. Chỉ chạy một lần.</p>
-          <button class="btn btn-primary" id="seedBtn" onclick="runSeed()">Khởi tạo dữ liệu mẫu</button>
+          <button class="btn btn-primary" id="seedBtn" data-requires-permission="monitoring.admin" onclick="runSeed()">Khởi tạo dữ liệu mẫu</button>
           <div id="seedResult" style="margin-top:12px"></div>
         </div>
         <div class="card">
@@ -517,14 +546,24 @@
           <div id="planCompletion"></div>
         </div>
       </div>
-      <div class="card mt-16">
+      <div class="card mt-16" data-requires-any-permission="USER_VIEW,DEPARTMENT_VIEW,AUDIT_VIEW">
         <div class="card-header">
           <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-search"></use></svg>Nhật ký hoạt động</h3>
-          <button class="btn btn-outline btn-sm" onclick="loadAuditLogs()"><svg class="btn-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>Tải lại</button>
+          <button class="btn btn-outline btn-sm" data-requires-permission="AUDIT_VIEW" onclick="loadAuditLogs()"><svg class="btn-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>Tải lại</button>
+        </div>
+        <div class="two-col">
+          <div>
+            <h4>Nhan vien</h4>
+            <div id="adminUsersTable"></div>
+          </div>
+          <div>
+            <h4>Phong ban</h4>
+            <div id="adminDepartmentsTable"></div>
+          </div>
         </div>
         <div id="auditTable"></div>
       </div>
-      <div class="card mt-16">
+      <div class="card mt-16" data-requires-any-permission="ROLE_VIEW,roles.view">
         <div class="card-header">
           <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-target"></use></svg>Phân quyền RBAC</h3>
           <button class="btn btn-outline btn-sm" onclick="loadRbacAdmin()"><svg class="btn-icon" aria-hidden="true"><use href="#i-refresh"></use></svg>Tải lại</button>
@@ -534,7 +573,7 @@
             <select id="rbacRoleSelect" class="select" onchange="loadRolePermissions()"></select>
           </div>
           <div class="toolbar-right">
-            <button class="btn btn-primary btn-sm" onclick="saveRolePermissions()">Lưu phân quyền</button>
+            <button class="btn btn-primary btn-sm" data-requires-any-permission="ROLE_MANAGE,roles.manage" onclick="saveRolePermissions()">Lưu phân quyền</button>
           </div>
         </div>
         <div id="rbacPermissionTable"></div>
@@ -574,6 +613,18 @@
 
 <!-- Toast notification -->
 <div id="toast" class="toast hidden"></div>
+
+<!-- Confirm dialog -->
+<div id="confirmModal" class="modal-overlay hidden">
+  <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <h3 id="confirmTitle">Confirm action</h3>
+    <p id="confirmMessage">Are you sure?</p>
+    <div class="confirm-actions">
+      <button class="btn btn-outline" type="button" onclick="closeConfirmModal(false)">Cancel</button>
+      <button class="btn btn-danger" type="button" onclick="closeConfirmModal(true)">Confirm</button>
+    </div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>

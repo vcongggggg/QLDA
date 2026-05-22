@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from jose import jwt
 
-from app.database import init_db
+from app.database import get_connection, init_db
 from app.main import app
 from app.repository import create_user
 from app.settings import settings
@@ -23,6 +23,13 @@ def _bootstrap_users() -> tuple[int, int, int]:
     manager = create_user("Manager Test", f"manager.{ts}@example.com", "manager", "PMO")
     staff = create_user("Staff Test", f"staff.{ts}@example.com", "staff", "Engineering")
     return int(admin["id"]), int(manager["id"]), int(staff["id"])
+
+
+def _seeded_user_id(email: str) -> int:
+    with get_connection() as conn:
+        row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+    assert row is not None
+    return int(row["id"])
 
 
 def test_end_to_end_rbac_kpi_and_reports() -> None:
@@ -48,10 +55,13 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
 
     seed_ok = client.post("/seed/init", headers=_hdr(admin_id))
     assert seed_ok.status_code == 200
+    admin_id = _seeded_user_id("an.nguyen@teamswork.example.com")
+    manager_id = _seeded_user_id("phuc.tran@teamswork.example.com")
+    staff_id = _seeded_user_id("khoa.le@teamswork.example.com")
 
     dep_resp = client.post(
         "/departments",
-        headers=_hdr(manager_id),
+        headers=_hdr(admin_id),
         json={
             "name": f"Integration QA {datetime.now(timezone.utc).strftime('%H%M%S%f')}",
             "code": f"QA{datetime.now(timezone.utc).strftime('%H%M%S')}",
@@ -284,8 +294,6 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
     assert any(int(x["id"]) == notif_id for x in queued_after_first.json())
 
     # Force immediate retry by resetting next_retry_at in DB for this item.
-    from app.database import get_connection
-
     with get_connection() as conn:
         conn.execute("UPDATE notification_queue SET next_retry_at = ? WHERE id = ?", (datetime.now(timezone.utc).isoformat(), notif_id))
 
@@ -355,9 +363,11 @@ def test_users_me_rbac_for_all_roles_and_users_list_unchanged() -> None:
     staff_users_resp = client.get("/users", headers=_hdr(int(staff["id"])))
     assert staff_users_resp.status_code == 403
 
-    for user in (admin, manager, hr):
+    for user in (admin, hr):
         resp = client.get("/users", headers=_hdr(int(user["id"])))
         assert resp.status_code == 200
+    manager_users_resp = client.get("/users", headers=_hdr(int(manager["id"])))
+    assert manager_users_resp.status_code == 403
 
 
 def test_issue_jwt_and_call_authorized_endpoint() -> None:

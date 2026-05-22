@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, require_permission
+from app.auth import get_current_user, is_member_role, require_permission
 from app.repository import (
     create_audit_log,
     create_app_notification,
@@ -25,8 +25,8 @@ router = APIRouter(tags=["tasks"])
 
 
 def _ensure_task_visible(task: dict, current_user: dict) -> None:
-    if current_user["role"] == "staff" and int(task["assignee_id"]) != int(current_user["id"]):
-        raise HTTPException(status_code=403, detail="staff can access only assigned tasks")
+    if is_member_role(current_user) and int(task["assignee_id"]) != int(current_user["id"]):
+        raise HTTPException(status_code=403, detail="member can access only assigned tasks")
 
 
 def _parse_dt(value: str) -> datetime:
@@ -108,9 +108,10 @@ def list_tasks_endpoint(
     keyword: str | None = Query(default=None, max_length=200),
     deadline_from: datetime | None = Query(default=None),
     deadline_to: datetime | None = Query(default=None),
+    as_of: datetime | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ) -> list[dict]:
-    if current_user["role"] == "staff":
+    if is_member_role(current_user):
         assignee_id = current_user["id"]
     if status is not None and status not in {"todo", "doing", "done"}:
         raise HTTPException(status_code=400, detail="status must be one of todo|doing|done")
@@ -132,6 +133,7 @@ def list_tasks_endpoint(
         keyword=cleaned_keyword,
         deadline_from=_normalize_query_datetime(normalized_deadline_from),
         deadline_to=_normalize_query_datetime(normalized_deadline_to),
+        as_of=_normalize_query_datetime(as_of),
     )
 
 
