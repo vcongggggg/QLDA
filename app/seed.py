@@ -23,6 +23,7 @@ DEMO_TABLES = (
     "rag_chunks",
     "rag_documents",
     "kpi_adjustments",
+    "task_ai_details",
     "ai_task_drafts",
     "audit_logs",
     "app_notifications",
@@ -820,6 +821,18 @@ def seed_ai_and_rag(conn: Any, project_ids: dict[str, int], user_ids: dict[str, 
         {"title": "Chuẩn bị checklist sẵn sàng demo", "description": "Tạo task cho diễn tập kịch bản, bằng chứng kiểm thử và bàn giao stakeholder.", "story_points": 3, "difficulty": "medium", "deadline_offset_days": 5, "rationale": "Import từ ghi chú UAT có hỗ trợ RAG", "selected": True},
     ]
     rows = []
+    for item in generated:
+        item.setdefault("type", "dashboard" if "dashboard" in item["title"].lower() else "implementation")
+        item.setdefault("business_goal", f"Demo-ready work package for {item['title']}.")
+        item.setdefault("subtasks", ["Clarify scope", "Implement core workflow", "Prepare review evidence"])
+        item.setdefault("acceptance_criteria", ["Manager can review the outcome", "Selected task can be imported safely"])
+        item.setdefault("data_requirements", ["AI draft JSON", "Project context", "Assigned user"])
+        item.setdefault("ui_components", ["AI draft review drawer", "Task detail drawer"])
+        item.setdefault("test_cases", ["Validate happy path", "Validate empty-state behavior"])
+        item.setdefault("dependencies", ["Manager approval"])
+        item.setdefault("risks", ["Scope may need final review before import"])
+        item.setdefault("demo_value", "Shows AI-generated work packages with reviewable implementation details.")
+        item.setdefault("suggested_role", "Manager")
     for idx, draft in enumerate(drafts):
         rows.append((*draft[:3], json.dumps([generated[idx]], ensure_ascii=True), *draft[3:]))
     conn.executemany(
@@ -947,7 +960,12 @@ def _delete_full_demo_rag(conn: Any, project_ids: list[int] | None = None) -> No
     if project_ids:
         clauses.append(f"project_id IN ({_placeholders(project_ids)})")
         params.extend(project_ids)
-    doc_ids = _select_ids(conn, "rag_documents", " AND ".join(clauses), tuple(params))
+        if _table_exists(conn, "rag_document_permissions"):
+            conn.execute(
+                f"DELETE FROM rag_document_permissions WHERE project_id IN ({_placeholders(project_ids)})",
+                tuple(project_ids),
+            )
+    doc_ids = _select_ids(conn, "rag_documents", " OR ".join(clauses), tuple(params))
     if not doc_ids:
         return
     chunk_ids = _select_ids(conn, "rag_chunks", f"document_id IN ({_placeholders(doc_ids)})", tuple(doc_ids))
@@ -974,6 +992,8 @@ def _delete_full_demo_project_children(conn: Any, project_ids: dict[str, int]) -
             f"DELETE FROM app_notifications WHERE entity_type = 'task' AND entity_id IN ({_placeholders(task_ids)})",
             tuple(task_ids),
         )
+    if task_ids and _table_exists(conn, "task_ai_details"):
+        conn.execute(f"DELETE FROM task_ai_details WHERE task_id IN ({_placeholders(task_ids)})", tuple(task_ids))
     _delete_by_ids(conn, "tasks", task_ids)
     if sprint_ids and _table_exists(conn, "sprint_capacity_plans"):
         conn.execute(f"DELETE FROM sprint_capacity_plans WHERE sprint_id IN ({_placeholders(sprint_ids)})", tuple(sprint_ids))
@@ -990,6 +1010,16 @@ def _delete_full_demo_global_children(conn: Any) -> None:
     if _table_exists(conn, "kpi_adjustments"):
         conn.execute("DELETE FROM kpi_adjustments WHERE reason LIKE ?", (f"%[{DEMO_NAMESPACE}]%",))
     if _table_exists(conn, "ai_task_drafts"):
+        if _table_exists(conn, "task_ai_details"):
+            conn.execute(
+                f"""
+                DELETE FROM task_ai_details
+                WHERE source_ai_draft_id IN (
+                    SELECT id FROM ai_task_drafts WHERE source_name IN ({_placeholders(FULL_DEMO_AI_SOURCE_NAMES)})
+                )
+                """,
+                FULL_DEMO_AI_SOURCE_NAMES,
+            )
         conn.execute(
             f"DELETE FROM ai_task_drafts WHERE source_name IN ({_placeholders(FULL_DEMO_AI_SOURCE_NAMES)})",
             FULL_DEMO_AI_SOURCE_NAMES,
@@ -1248,7 +1278,7 @@ def _seed_full_demo_notifications_comments_audit(conn: Any, user_ids: dict[str, 
                 f"[{DEMO_NAMESPACE}] Task '{task['title']}' needs attention for project progress, sprint review or overdue task handling.",
                 "task",
                 int(task["id"]),
-                1 if idx % 5 == 0 else 0,
+                idx % 5 == 0,
                 _iso_date(f"2026-08-{1 + (idx % 9):02d}", 10),
                 _iso_date(f"2026-08-{1 + (idx % 9):02d}", 11) if idx % 5 == 0 else None,
             )

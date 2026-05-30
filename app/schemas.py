@@ -154,6 +154,25 @@ class TaskCommentOut(BaseModel):
     created_at: datetime
 
 
+class TaskAiDetailOut(BaseModel):
+    id: int
+    task_id: int
+    source_ai_draft_id: int
+    type: str | None = None
+    business_goal: str | None = None
+    subtasks: list[str] = []
+    acceptance_criteria: list[str] = []
+    data_requirements: list[str] = []
+    ui_components: list[str] = []
+    test_cases: list[str] = []
+    dependencies: list[str] = []
+    risks: list[str] = []
+    demo_value: str | None = None
+    suggested_role: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class TaskOut(BaseModel):
     id: int
     title: str
@@ -175,6 +194,7 @@ class TaskDetailOut(TaskOut):
     project_name: str | None = None
     sprint_name: str | None = None
     due_state: str
+    ai_detail: TaskAiDetailOut | None = None
     comments: list[TaskCommentOut]
     activity_logs: list["AuditLogOut"]
 
@@ -565,7 +585,18 @@ class TaskBreakdownRequest(BaseModel):
 
 class TaskBreakdownItem(BaseModel):
     title: str = Field(min_length=2, max_length=200)
+    type: str | None = Field(default=None, max_length=80)
     description: str | None = Field(default=None, max_length=1200)
+    business_goal: str | None = Field(default=None, max_length=1200)
+    subtasks: list[str] = Field(default_factory=list)
+    acceptance_criteria: list[str] = Field(default_factory=list)
+    data_requirements: list[str] = Field(default_factory=list)
+    ui_components: list[str] = Field(default_factory=list)
+    test_cases: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    risks: list[str] = Field(default_factory=list)
+    demo_value: str | None = Field(default=None, max_length=1200)
+    suggested_role: str | None = Field(default=None, max_length=120)
     story_points: int = Field(default=3, ge=1, le=13)
     difficulty: str = Field(default="medium", description="easy|medium|hard")
     deadline_offset_days: int = Field(default=7, ge=1, le=90)

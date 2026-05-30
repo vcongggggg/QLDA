@@ -5,7 +5,7 @@ import pytest
 from docx import Document
 from fastapi.testclient import TestClient
 
-from app.ai_task_breakdown import breakdown_requirements, breakdown_requirements_locally
+from app.ai_task_breakdown import breakdown_requirements, breakdown_requirements_locally, normalize_breakdown_items
 from app.database import init_db
 from app.main import app
 from app.repository import create_user, list_tasks
@@ -46,6 +46,86 @@ def test_local_breakdown_extracts_actionable_tasks() -> None:
     assert all(item.title for item in items)
     assert {item.difficulty for item in items}.issubset({"easy", "medium", "hard"})
     assert all(1 <= item.story_points <= 13 for item in items)
+    assert all(item.business_goal for item in items)
+    assert all(item.acceptance_criteria for item in items)
+    assert all(item.test_cases for item in items)
+
+
+def test_local_breakdown_dashboard_kpi_uses_vietnamese_domain_details() -> None:
+    text = "Tạo dashboard thống kê tiến độ task và KPI cho nhóm 3 người trong sprint hiện tại."
+
+    items = breakdown_requirements_locally(text, max_tasks=3)
+
+    assert len(items) == 1
+    item = items[0]
+    detail_text = " ".join(
+        [
+            item.business_goal,
+            *item.subtasks,
+            *item.acceptance_criteria,
+            *item.data_requirements,
+            *item.ui_components,
+            *item.test_cases,
+            item.demo_value,
+        ]
+    )
+    assert item.type == "dashboard"
+    assert "Tạo dashboard thống kê tiến độ task và KPI cho nhóm 3 người trong sprint hiện tại" in item.business_goal
+    assert "..." not in item.business_goal
+    assert "tổng task" in detail_text
+    assert "task đúng hạn" in detail_text
+    assert "task trễ hạn" in detail_text
+    assert "điểm KPI từng thành viên" in detail_text
+    assert "nhóm 3 người" in detail_text
+    assert not any(english in detail_text for english in ("Clarify", "Confirm scope", "Implement", "Validate the happy path"))
+
+
+def test_ai_preview_table_has_type_and_detail_headers() -> None:
+    script = open("app/static/app.js", encoding="utf-8").read()
+
+    assert "<th>Chọn</th><th>Task</th><th>Loại</th><th>SP</th><th>Deadline</th><th>Chi tiết</th>" in script
+    assert "<th>Chọn</th><th>Task</th><th>Độ khó</th><th>SP</th><th>Deadline</th><th>Lý do</th>" not in script
+
+
+def test_normalize_breakdown_items_preserves_structured_fields() -> None:
+    items = normalize_breakdown_items(
+        [
+            {
+                "title": "Build KPI drilldown",
+                "type": "dashboard",
+                "description": "Show overdue task details from KPI cards.",
+                "business_goal": "Help managers explain KPI score changes.",
+                "subtasks": ["Define drilldown query", "Render task table"],
+                "acceptance_criteria": ["Manager can open overdue task list"],
+                "data_requirements": ["tasks.deadline", "tasks.status"],
+                "ui_components": ["KPI card", "Drawer table"],
+                "test_cases": ["No overdue tasks shows empty state"],
+                "dependencies": ["KPI endpoint"],
+                "risks": ["Large task lists may be slow"],
+                "demo_value": "Shows auditable KPI evidence.",
+                "suggested_role": "Manager",
+                "story_points": 5,
+                "difficulty": "medium",
+                "deadline_offset_days": 7,
+                "rationale": "Important for demo.",
+            }
+        ],
+        max_tasks=3,
+    )
+
+    assert len(items) == 1
+    item = items[0]
+    assert item.type == "dashboard"
+    assert item.business_goal == "Help managers explain KPI score changes."
+    assert item.subtasks == ["Define drilldown query", "Render task table"]
+    assert item.acceptance_criteria == ["Manager can open overdue task list"]
+    assert item.data_requirements == ["tasks.deadline", "tasks.status"]
+    assert item.ui_components == ["KPI card", "Drawer table"]
+    assert item.test_cases == ["No overdue tasks shows empty state"]
+    assert item.dependencies == ["KPI endpoint"]
+    assert item.risks == ["Large task lists may be slow"]
+    assert item.demo_value == "Shows auditable KPI evidence."
+    assert item.suggested_role == "Manager"
 
 
 def test_ai_breakdown_uses_fallback_model_when_primary_fails(monkeypatch) -> None:
@@ -108,6 +188,17 @@ def test_task_breakdown_preview_review_and_import_flow(disable_ai) -> None:
 
     edited_items = payload["items"][:2]
     edited_items[0]["title"] = "Reviewed AI task"
+    edited_items[0]["type"] = "integration"
+    edited_items[0]["business_goal"] = "Manager can approve AI generated work packages."
+    edited_items[0]["subtasks"] = ["Validate draft items", "Import selected tasks"]
+    edited_items[0]["acceptance_criteria"] = ["Selected draft items create Kanban tasks"]
+    edited_items[0]["data_requirements"] = ["ai_task_drafts.generated_tasks"]
+    edited_items[0]["ui_components"] = ["AI draft review drawer"]
+    edited_items[0]["test_cases"] = ["Import skips unselected items"]
+    edited_items[0]["dependencies"] = ["RBAC ai.import permission"]
+    edited_items[0]["risks"] = ["Reviewer may import incomplete scope"]
+    edited_items[0]["demo_value"] = "Shows human approval before task creation."
+    edited_items[0]["suggested_role"] = "Manager"
     review_resp = client.patch(
         f"/ai/task-breakdown/drafts/{payload['ai_draft_id']}/review",
         headers=_hdr(manager_id),
@@ -124,6 +215,7 @@ def test_task_breakdown_preview_review_and_import_flow(disable_ai) -> None:
     assert reviewed["review_note"] == "Manager approved the useful tasks."
     assert reviewed["edit_reason"] == "Trimmed scope and renamed first task."
     assert reviewed["items"][0]["title"] == "Reviewed AI task"
+    assert reviewed["items"][0]["subtasks"] == ["Validate draft items", "Import selected tasks"]
 
     import_resp = client.post(
         "/ai/task-breakdown/import",
@@ -141,6 +233,16 @@ def test_task_breakdown_preview_review_and_import_flow(disable_ai) -> None:
     assert len(imported["tasks"]) == len(edited_items)
     assert all(task["assignee_id"] == staff_id for task in imported["tasks"])
     assert imported["tasks"][0]["title"] == "Reviewed AI task"
+
+    task_detail = client.get(f"/tasks/{imported['tasks'][0]['id']}", headers=_hdr(manager_id))
+    assert task_detail.status_code == 200
+    ai_detail = task_detail.json()["ai_detail"]
+    assert ai_detail["source_ai_draft_id"] == payload["ai_draft_id"]
+    assert ai_detail["type"] == "integration"
+    assert ai_detail["business_goal"] == "Manager can approve AI generated work packages."
+    assert ai_detail["subtasks"] == ["Validate draft items", "Import selected tasks"]
+    assert ai_detail["acceptance_criteria"] == ["Selected draft items create Kanban tasks"]
+    assert ai_detail["test_cases"] == ["Import skips unselected items"]
 
     imported_draft = client.get(
         f"/ai/task-breakdown/drafts/{payload['ai_draft_id']}",

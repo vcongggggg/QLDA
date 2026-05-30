@@ -9,10 +9,10 @@ ROLE_ACCOUNTS = {
 
 
 EXPECTED_ROLE_MODULES = {
-    "ADMIN": ("dashboard", "projects", "kanban", "teams", "kpi", "reports", "ai", "ops", "admin"),
-    "MANAGER": ("dashboard", "projects", "kanban", "teams", "kpi", "reports", "ai"),
-    "LEADER": ("dashboard", "projects", "kanban", "teams", "kpi", "reports", "ai"),
-    "MEMBER": ("dashboard", "kanban", "kpi"),
+    "ADMIN": ("dashboard", "projects", "kanban", "timeline", "teams", "kpi", "reports", "ai", "ops", "admin"),
+    "MANAGER": ("dashboard", "projects", "kanban", "timeline", "teams", "kpi", "reports", "ai"),
+    "LEADER": ("dashboard", "projects", "kanban", "timeline", "teams", "kpi", "reports", "ai"),
+    "MEMBER": ("dashboard", "kanban", "timeline", "kpi"),
     "HR": ("dashboard", "admin", "kpi", "reports", "teams"),
     "AUDITOR": ("dashboard", "reports", "ops"),
 }
@@ -22,6 +22,7 @@ MODULE_PRIMARY_ENDPOINTS = {
     "dashboard": (("GET", "/dashboard/summary?month=2026-08&as_of=2026-08-10T09:00:00%2B00:00"),),
     "projects": (("GET", "/projects"),),
     "kanban": (("GET", "/tasks"),),
+    "timeline": (("GET", "/tasks"),),
     "teams": (("GET", "/integrations/teams/summary?month=2026-08"),),
     "kpi": (("GET", "/kpi/monthly?month=2026-08"),),
     "reports": (("GET", "/reports/kpi.csv?month=2026-08"),),

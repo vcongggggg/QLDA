@@ -248,6 +248,28 @@ _SQLITE_SCHEMA_STATEMENTS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS task_ai_details (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL UNIQUE,
+        source_ai_draft_id INTEGER NOT NULL,
+        type TEXT,
+        business_goal TEXT,
+        subtasks TEXT NOT NULL DEFAULT '[]',
+        acceptance_criteria TEXT NOT NULL DEFAULT '[]',
+        data_requirements TEXT NOT NULL DEFAULT '[]',
+        ui_components TEXT NOT NULL DEFAULT '[]',
+        test_cases TEXT NOT NULL DEFAULT '[]',
+        dependencies TEXT NOT NULL DEFAULT '[]',
+        risks TEXT NOT NULL DEFAULT '[]',
+        demo_value TEXT,
+        suggested_role TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (task_id) REFERENCES tasks(id),
+        FOREIGN KEY (source_ai_draft_id) REFERENCES ai_task_drafts(id)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS kpi_adjustments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
@@ -527,6 +549,26 @@ _POSTGRES_SCHEMA_STATEMENTS = [
         edit_reason TEXT,
         created_by INTEGER NOT NULL REFERENCES users(id),
         created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS task_ai_details (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL UNIQUE REFERENCES tasks(id),
+        source_ai_draft_id INTEGER NOT NULL REFERENCES ai_task_drafts(id),
+        type TEXT,
+        business_goal TEXT,
+        subtasks TEXT NOT NULL DEFAULT '[]',
+        acceptance_criteria TEXT NOT NULL DEFAULT '[]',
+        data_requirements TEXT NOT NULL DEFAULT '[]',
+        ui_components TEXT NOT NULL DEFAULT '[]',
+        test_cases TEXT NOT NULL DEFAULT '[]',
+        dependencies TEXT NOT NULL DEFAULT '[]',
+        risks TEXT NOT NULL DEFAULT '[]',
+        demo_value TEXT,
+        suggested_role TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
     )
     """,
     """

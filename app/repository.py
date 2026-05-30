@@ -21,6 +21,16 @@ ROLE_ALIASES = {
     "auditor": "AUDITOR",
 }
 
+TASK_AI_DETAIL_LIST_FIELDS = (
+    "subtasks",
+    "acceptance_criteria",
+    "data_requirements",
+    "ui_components",
+    "test_cases",
+    "dependencies",
+    "risks",
+)
+
 
 def canonical_role_code(role: str | None) -> str:
     value = str(role or "MEMBER").strip()
@@ -1164,6 +1174,73 @@ def create_department(
         dep_id = cursor.lastrowid
         row = conn.execute("SELECT * FROM departments WHERE id = ?", (dep_id,)).fetchone()
     return dict(row)
+
+
+def _json_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    if isinstance(value, str):
+        try:
+            decoded = json.loads(value or "[]")
+        except json.JSONDecodeError:
+            return [value] if value.strip() else []
+        if isinstance(decoded, list):
+            return [str(item) for item in decoded if str(item).strip()]
+    return []
+
+
+def _encode_ai_detail_lists(item: dict[str, Any]) -> dict[str, str]:
+    return {
+        field: json.dumps(_json_list(item.get(field)), ensure_ascii=True)
+        for field in TASK_AI_DETAIL_LIST_FIELDS
+    }
+
+
+def _decode_task_ai_detail(row: dict[str, Any]) -> dict[str, Any]:
+    item = dict(row)
+    for field in TASK_AI_DETAIL_LIST_FIELDS:
+        item[field] = _json_list(item.get(field))
+    return item
+
+
+def create_task_ai_detail(task_id: int, source_ai_draft_id: int, item: dict[str, Any]) -> dict[str, Any]:
+    now = _now_iso()
+    lists = _encode_ai_detail_lists(item)
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO task_ai_details
+            (task_id, source_ai_draft_id, type, business_goal, subtasks, acceptance_criteria,
+             data_requirements, ui_components, test_cases, dependencies, risks, demo_value,
+             suggested_role, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task_id,
+                source_ai_draft_id,
+                item.get("type"),
+                item.get("business_goal"),
+                lists["subtasks"],
+                lists["acceptance_criteria"],
+                lists["data_requirements"],
+                lists["ui_components"],
+                lists["test_cases"],
+                lists["dependencies"],
+                lists["risks"],
+                item.get("demo_value"),
+                item.get("suggested_role"),
+                now,
+                now,
+            ),
+        )
+        row = conn.execute("SELECT * FROM task_ai_details WHERE id = ?", (cursor.lastrowid,)).fetchone()
+    return _decode_task_ai_detail(dict(row))
+
+
+def get_task_ai_detail(task_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM task_ai_details WHERE task_id = ?", (task_id,)).fetchone()
+    return _decode_task_ai_detail(dict(row)) if row else None
 
 
 def list_departments(include_inactive: bool = False) -> list[dict[str, Any]]:

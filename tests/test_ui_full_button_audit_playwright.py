@@ -405,6 +405,19 @@ def _kanban_actions(page: Page, audit: ButtonAudit, role: str) -> None:
         audit.check(page, role, "kanban", "status-move", lambda: _click_optional(page, ".task-card-actions button"))
 
 
+def _timeline_actions(page: Page, audit: ButtonAudit, role: str) -> None:
+    if "timeline" not in EXPECTED_ROLE_MODULES[role]:
+        return
+    _goto_module(page, "timeline", role)
+    audit.check(page, role, "timeline", "access", lambda: _assert_no_access_denied(page, "timeline"))
+    audit.check(page, role, "timeline", "zoom-week", lambda: page.locator("#timelineZoom").select_option("week") or "week")
+    audit.check(page, role, "timeline", "zoom-month", lambda: page.locator("#timelineZoom").select_option("month") or "month")
+    audit.check(page, role, "timeline", "keyword-filter", lambda: page.locator("#timelineKeywordFilter").fill("dashboard") or "typed")
+    audit.check(page, role, "timeline", "reset-filters", lambda: _click_visible(page, "#sec-timeline button[onclick='resetTimelineFilters()']"))
+    audit.check(page, role, "timeline", "open-task-detail", lambda: _click_optional(page, ".timeline-task-row"))
+    page.evaluate("() => window.closeTaskDetail && window.closeTaskDetail()")
+
+
 def _reports_actions(page: Page, audit: ButtonAudit, role: str) -> None:
     if role not in REPORT_ROLES:
         return
@@ -547,6 +560,7 @@ def test_full_button_audit_across_roles(live_server: str, browser) -> None:
                 _goto_module(page, section, role)
                 audit.check(page, role, section, "open-module", lambda section=section: _assert_no_access_denied(page, section))
             _kanban_actions(page, audit, role)
+            _timeline_actions(page, audit, role)
             _reports_actions(page, audit, role)
             _ai_and_rag_actions(page, audit, role)
             _teams_actions(page, audit, role)

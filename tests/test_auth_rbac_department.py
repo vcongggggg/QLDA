@@ -172,11 +172,11 @@ def test_sidebar_visibility_uses_permissions_from_auth_me() -> None:
     admin = _login("admin@teamswork.local", "Admin@123")
 
     assert "ROLE_NAV_POLICY" in app_js
-    assert "MEMBER:  ['dashboard', 'kanban', 'kpi']" in app_js
+    assert "MEMBER:  ['dashboard', 'kanban', 'timeline', 'kpi']" in app_js
     assert "ROLE_NAV_LABELS" in app_js
     assert "My Tasks" in app_js
     assert "My KPI" in app_js
-    assert {"dashboard", "kanban", "kpi"}.issubset(_visible_sections(member["user"]["permissions"], nav_items))
+    assert {"dashboard", "kanban", "timeline", "kpi"}.issubset(_visible_sections(member["user"]["permissions"], nav_items))
     assert {"admin", "ops"}.isdisjoint(_visible_sections(member["user"]["permissions"], nav_items))
 
     auditor_sections = _visible_sections(auditor["user"]["permissions"], nav_items)
