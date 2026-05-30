@@ -26,16 +26,16 @@ const state = {
 };
 
 const ROLE_NAV_POLICY = {
-  ADMIN:   ['dashboard', 'projects', 'kanban', 'teams', 'kpi', 'reports', 'ai', 'ops', 'admin'],
-  MANAGER: ['dashboard', 'projects', 'kanban', 'teams', 'kpi', 'reports', 'ai'],
-  LEADER:  ['dashboard', 'projects', 'kanban', 'teams', 'kpi', 'reports', 'ai'],
-  MEMBER:  ['dashboard', 'kanban', 'kpi'],
+  ADMIN:   ['dashboard', 'projects', 'kanban', 'timeline', 'teams', 'kpi', 'reports', 'ai', 'ops', 'admin'],
+  MANAGER: ['dashboard', 'projects', 'kanban', 'timeline', 'teams', 'kpi', 'reports', 'ai'],
+  LEADER:  ['dashboard', 'projects', 'kanban', 'timeline', 'teams', 'kpi', 'reports', 'ai'],
+  MEMBER:  ['dashboard', 'kanban', 'timeline', 'kpi'],
   HR:      ['dashboard', 'admin', 'kpi', 'reports', 'teams'],
   AUDITOR: ['dashboard', 'reports', 'ops'],
 };
 
 const ROLE_NAV_LABELS = {
-  MEMBER: { kanban: 'My Tasks', kpi: 'My KPI' },
+  MEMBER: { kanban: 'My Tasks', timeline: 'My Timeline', kpi: 'My KPI' },
   ADMIN: { admin: 'Quản trị' },
 };
 
@@ -51,6 +51,7 @@ const ROLE_COLORS = {
 const MODULE_VIEW_PERMISSIONS = {
   dashboard: ['DASHBOARD_VIEW'],
   kanban: ['KANBAN_VIEW'],
+  timeline: ['KANBAN_VIEW'],
   projects: ['PROJECT_VIEW'],
   kpi: ['KPI_VIEW_OWN', 'KPI_VIEW_TEAM', 'KPI_VIEW_ALL'],
   reports: ['REPORT_VIEW_TEAM', 'REPORT_VIEW_ALL'],
@@ -70,6 +71,26 @@ const ACTION_PERMISSIONS = {
   opsManage: ['OPS_MANAGE', 'monitoring.admin', 'teams.manage'],
   seed: ['monitoring.admin'],
   roleManage: ['ROLE_MANAGE', 'roles.manage'],
+};
+
+const AI_LIST_FIELDS = [
+  'subtasks',
+  'acceptance_criteria',
+  'data_requirements',
+  'ui_components',
+  'test_cases',
+  'dependencies',
+  'risks',
+];
+
+const AI_LIST_LABELS = {
+  subtasks: 'Subtasks',
+  acceptance_criteria: 'Acceptance criteria',
+  data_requirements: 'Data requirements',
+  ui_components: 'UI components',
+  test_cases: 'Test cases',
+  dependencies: 'Dependencies',
+  risks: 'Risks',
 };
 
 function icon(name, className = 'ui-icon') {
@@ -378,6 +399,7 @@ function requestedSectionFromUrl() {
 // ── Navigation ─────────────────────────────────
 const TITLES = {
   dashboard: 'Dashboard',
+  timeline:  'Timeline',
   kanban:    'Kanban – Bảng công việc',
   projects:  'Dự án',
   kpi:       'KPI – Chỉ số hiệu suất',
@@ -450,6 +472,7 @@ function loadSection(section) {
   switch (section) {
     case 'dashboard': loadDashboard(); break;
     case 'kanban':    loadKanban();    break;
+    case 'timeline':  loadTimeline();  break;
     case 'projects':  loadProjects();  break;
     case 'kpi':       loadKPI();       break;
     case 'reports':   setupReports();  break;
@@ -968,6 +991,9 @@ async function updateTaskStatus(taskId, newStatus, { silent = false } = {}) {
   if (state.currentSection === 'kanban') {
     loadKanban();
   }
+  if (state.currentSection === 'timeline') {
+    loadTimeline();
+  }
   loadNotificationCount();
 }
 
@@ -980,6 +1006,306 @@ async function moveTask(taskId, newStatus) {
 }
 
 // ════════════════════════════════ PROJECTS ═════
+
+// Timeline
+const TIMELINE_DAY_MS = 86400000;
+let timelineDebounceTimer = null;
+
+function loadTimelineDebounced() {
+  clearTimeout(timelineDebounceTimer);
+  timelineDebounceTimer = setTimeout(() => loadTimeline(), 250);
+}
+
+async function onTimelineProjectFilterChange() {
+  await loadTimelineSprints();
+  await loadTimeline();
+}
+
+async function loadTimeline() {
+  const body = document.getElementById('timelineBody');
+  const count = document.getElementById('timelineCount');
+  if (!body) return;
+  body.innerHTML = '<div class="skeleton" style="height:180px"></div>';
+  if (count) count.textContent = '';
+
+  try {
+    await loadTimelineFilterOptions();
+    const [tasks, context] = await Promise.all([
+      api(buildTimelineTaskUrl()),
+      loadTimelineContext(),
+    ]);
+    if (count) count.textContent = `${tasks.length} tasks`;
+    renderTimeline(tasks, context);
+  } catch (e) {
+    body.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${escHtml(e.message)}</div>`;
+  }
+}
+
+async function loadTimelineFilterOptions() {
+  updateTimelineAssigneeVisibility();
+  const project = document.getElementById('timelineProjectFilter');
+  if (project && project.options.length === 1) {
+    try {
+      const projects = await api('/projects');
+      projects.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.id;
+        option.textContent = p.name;
+        project.appendChild(option);
+      });
+    } catch (_) {}
+  }
+
+  const assignee = document.getElementById('timelineAssigneeFilter');
+  if (assignee && !assignee.disabled && assignee.options.length === 1) {
+    try {
+      const users = await api('/users');
+      users.forEach(u => {
+        const option = document.createElement('option');
+        option.value = u.id;
+        option.textContent = `${u.full_name} (${u.role})`;
+        assignee.appendChild(option);
+      });
+    } catch (_) {
+      assignee.disabled = true;
+    }
+  }
+
+  await loadTimelineSprints(false);
+}
+
+function updateTimelineAssigneeVisibility() {
+  const assignee = document.getElementById('timelineAssigneeFilter');
+  if (!assignee) return;
+  assignee.style.display = isMemberRole() ? 'none' : '';
+  assignee.disabled = isMemberRole();
+  if (isMemberRole()) assignee.value = '';
+}
+
+async function loadTimelineSprints(resetValue = true) {
+  const project = document.getElementById('timelineProjectFilter');
+  const sprint = document.getElementById('timelineSprintFilter');
+  if (!project || !sprint) return [];
+  const previous = resetValue ? '' : sprint.value;
+  sprint.innerHTML = '<option value="">All sprints</option>';
+  sprint.disabled = true;
+  if (!project.value) return [];
+
+  try {
+    const sprints = await api(`/projects/${project.value}/sprints`);
+    sprints.forEach(item => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = item.name;
+      option.dataset.startDate = item.start_date || '';
+      option.dataset.endDate = item.end_date || '';
+      sprint.appendChild(option);
+    });
+    sprint.disabled = false;
+    if (previous && Array.from(sprint.options).some(option => option.value === previous)) {
+      sprint.value = previous;
+    }
+    return sprints;
+  } catch (_) {
+    return [];
+  }
+}
+
+async function loadTimelineContext() {
+  const context = { projects: new Map(), users: new Map(), sprints: new Map() };
+  const projectSelect = document.getElementById('timelineProjectFilter');
+  const sprintSelect = document.getElementById('timelineSprintFilter');
+  const assigneeSelect = document.getElementById('timelineAssigneeFilter');
+
+  Array.from(projectSelect?.options || []).forEach(option => {
+    if (option.value) context.projects.set(Number(option.value), { id: Number(option.value), name: option.textContent });
+  });
+  Array.from(sprintSelect?.options || []).forEach(option => {
+    if (!option.value) return;
+    context.sprints.set(Number(option.value), {
+      id: Number(option.value),
+      name: option.textContent,
+      start_date: option.dataset.startDate || '',
+      end_date: option.dataset.endDate || '',
+    });
+  });
+  Array.from(assigneeSelect?.options || []).forEach(option => {
+    if (option.value) context.users.set(Number(option.value), option.textContent);
+  });
+
+  return context;
+}
+
+function buildTimelineTaskUrl() {
+  const params = new URLSearchParams();
+  const projectId = document.getElementById('timelineProjectFilter')?.value;
+  const sprintId = document.getElementById('timelineSprintFilter')?.value;
+  const assignee = document.getElementById('timelineAssigneeFilter');
+  const status = document.getElementById('timelineStatusFilter')?.value;
+  const overdue = document.getElementById('timelineOverdueFilter')?.value;
+  const keyword = document.getElementById('timelineKeywordFilter')?.value.trim();
+  const deadlineFrom = document.getElementById('timelineDeadlineFromFilter')?.value;
+  const deadlineTo = document.getElementById('timelineDeadlineToFilter')?.value;
+
+  if (projectId) params.set('project_id', projectId);
+  if (sprintId) params.set('sprint_id', sprintId);
+  if (assignee && !assignee.disabled && assignee.value) params.set('assignee_id', assignee.value);
+  if (status) params.set('status', status);
+  if (overdue) params.set('overdue', overdue);
+  if (keyword) params.set('keyword', keyword);
+  if (deadlineFrom) params.set('deadline_from', new Date(`${deadlineFrom}T00:00:00Z`).toISOString());
+  if (deadlineTo) params.set('deadline_to', new Date(`${deadlineTo}T23:59:59Z`).toISOString());
+
+  const query = params.toString();
+  return query ? `/tasks?${query}` : '/tasks';
+}
+
+function renderTimeline(tasks, context) {
+  const body = document.getElementById('timelineBody');
+  const range = document.getElementById('timelineRange');
+  if (!body) return;
+  if (!tasks.length) {
+    if (range) range.textContent = '-';
+    body.innerHTML = `<div class="empty-state"><div>${icon('calendar', 'empty-icon')}</div>No tasks match the timeline filters.</div>`;
+    return;
+  }
+
+  const rows = tasks.map(task => timelineTaskRow(task, context));
+  const bounds = timelineBounds(rows);
+  const days = timelineDays(bounds.start, bounds.end);
+  if (range) range.textContent = `${formatTimelineDate(bounds.start)} - ${formatTimelineDate(bounds.end)}`;
+  const todayIndex = daysBetween(bounds.start, startOfDay(new Date()));
+
+  body.innerHTML = `
+    <div class="timeline-scroll" style="--timeline-days:${days.length}">
+      <div class="timeline-grid timeline-grid-head">
+        <div class="timeline-left timeline-left-head">Task</div>
+        <div class="timeline-lane timeline-date-head">
+          ${days.map(day => `<div class="timeline-day ${isWeekend(day) ? 'is-weekend' : ''}">${timelineDayLabel(day)}</div>`).join('')}
+        </div>
+      </div>
+      ${timelineGroupedRows(rows, context, bounds, todayIndex)}
+    </div>`;
+}
+
+function timelineTaskRow(task, context) {
+  const sprint = task.sprint_id ? context.sprints.get(Number(task.sprint_id)) : null;
+  const fallbackStart = parseTimelineDate(task.created_at) || parseTimelineDate(task.deadline) || new Date();
+  const start = parseTimelineDate(sprint?.start_date) || fallbackStart;
+  const end = parseTimelineDate(task.deadline) || start;
+  return { task, start: startOfDay(start), end: startOfDay(end) };
+}
+
+function timelineBounds(rows) {
+  const fromFilter = document.getElementById('timelineDeadlineFromFilter')?.value;
+  const toFilter = document.getElementById('timelineDeadlineToFilter')?.value;
+  const zoom = document.getElementById('timelineZoom')?.value || 'month';
+  let start = fromFilter ? parseTimelineDate(`${fromFilter}T00:00:00Z`) : new Date(Math.min(...rows.map(row => row.start.getTime())));
+  let end = toFilter ? parseTimelineDate(`${toFilter}T00:00:00Z`) : new Date(Math.max(...rows.map(row => row.end.getTime())));
+  start = addDays(startOfDay(start), zoom === 'week' ? -2 : -7);
+  end = addDays(startOfDay(end), zoom === 'week' ? 7 : 14);
+  const maxDays = zoom === 'week' ? 28 : 90;
+  if (daysBetween(start, end) > maxDays) end = addDays(start, maxDays);
+  return { start, end };
+}
+
+function timelineDays(start, end) {
+  const count = Math.max(1, daysBetween(start, end) + 1);
+  return Array.from({ length: count }, (_, index) => addDays(start, index));
+}
+
+function timelineGroupedRows(rows, context, bounds, todayIndex) {
+  const groups = new Map();
+  rows.forEach(row => {
+    const projectId = row.task.project_id == null ? 'none' : String(row.task.project_id);
+    const projectName = context.projects.get(Number(row.task.project_id))?.name || 'No project';
+    if (!groups.has(projectId)) groups.set(projectId, { name: projectName, rows: [] });
+    groups.get(projectId).rows.push(row);
+  });
+
+  return Array.from(groups.values()).map(group => `
+    <div class="timeline-group-row">
+      <div class="timeline-left timeline-group-label">${escHtml(group.name)}</div>
+      <div class="timeline-lane timeline-group-line"></div>
+    </div>
+    ${group.rows.map(row => timelineRowHtml(row, context, bounds, todayIndex)).join('')}
+  `).join('');
+}
+
+function timelineRowHtml(row, context, bounds, todayIndex) {
+  const task = row.task;
+  const todayLine = todayIndex >= 0 && todayIndex <= daysBetween(bounds.start, bounds.end)
+    ? `<div class="timeline-today" style="left:calc(${todayIndex} * var(--timeline-day-w) + var(--timeline-day-w) / 2)"></div>`
+    : '';
+  const clampedStart = new Date(Math.max(row.start.getTime(), bounds.start.getTime()));
+  const clampedEnd = new Date(Math.min(row.end.getTime(), bounds.end.getTime()));
+  const startIndex = Math.max(0, daysBetween(bounds.start, clampedStart));
+  const span = Math.max(1, daysBetween(clampedStart, clampedEnd) + 1);
+  const overdue = task.status !== 'done' && parseTimelineDate(task.deadline) < new Date();
+  const assignee = context.users.get(Number(task.assignee_id)) || `User ${task.assignee_id}`;
+  const sprint = context.sprints.get(Number(task.sprint_id));
+  return `
+    <div class="timeline-grid timeline-task-row" role="button" tabindex="0" data-task-id="${Number(task.id)}" onclick="openTaskDetail(${Number(task.id)})" onkeydown="if(event.key==='Enter')openTaskDetail(${Number(task.id)})">
+      <div class="timeline-left timeline-task-label">
+        <strong>${escHtml(task.title)}</strong>
+        <span>${escHtml(assignee)}${sprint ? ` - ${escHtml(sprint.name)}` : ''}</span>
+      </div>
+      <div class="timeline-lane">
+        ${todayLine}
+        <div class="timeline-bar timeline-${escHtml(task.status)} ${overdue ? 'is-overdue' : ''}" style="grid-column:${startIndex + 1} / span ${span}">
+          <span>${statusLabel(task.status)}</span>
+          <small>${Number(task.story_points || 0)} SP</small>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function resetTimelineFilters() {
+  ['timelineProjectFilter', 'timelineAssigneeFilter', 'timelineStatusFilter', 'timelineOverdueFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['timelineKeywordFilter', 'timelineDeadlineFromFilter', 'timelineDeadlineToFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const zoom = document.getElementById('timelineZoom');
+  if (zoom) zoom.value = 'month';
+  await loadTimelineSprints();
+  await loadTimeline();
+}
+
+function parseTimelineDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function startOfDay(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function addDays(date, days) {
+  return new Date(date.getTime() + days * TIMELINE_DAY_MS);
+}
+
+function daysBetween(start, end) {
+  return Math.round((startOfDay(end).getTime() - startOfDay(start).getTime()) / TIMELINE_DAY_MS);
+}
+
+function formatTimelineDate(date) {
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+}
+
+function timelineDayLabel(date) {
+  const zoom = document.getElementById('timelineZoom')?.value || 'month';
+  if (zoom === 'week') return date.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit' });
+  return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+}
+
+function isWeekend(date) {
+  return [0, 6].includes(date.getUTCDay());
+}
 
 async function openTaskDetail(taskId) {
   state.activeTaskId = Number(taskId);
@@ -1029,6 +1355,8 @@ function renderTaskDetail(task) {
       ${taskDetailField('Completed at', fmtDateTime(task.completed_at))}
     </div>
 
+    ${taskAiDetailSection(task.ai_detail)}
+
     <div class="task-detail-section">
       <div class="task-detail-subhead">
         <h3>Comments</h3>
@@ -1060,6 +1388,40 @@ function taskDetailField(label, value) {
     <div class="task-detail-field">
       <span>${escHtml(label)}</span>
       <strong>${escHtml(value ?? '-')}</strong>
+    </div>`;
+}
+
+function taskAiDetailSection(detail) {
+  if (!detail) return '';
+  return `
+    <div class="task-detail-section ai-work-package">
+      <div class="task-detail-subhead">
+        <h3>AI work package</h3>
+        <span class="tag">Draft #${escHtml(detail.source_ai_draft_id)}</span>
+      </div>
+      <div class="task-detail-grid">
+        ${taskDetailField('Type', detail.type || '-')}
+        ${taskDetailField('Suggested role', detail.suggested_role || '-')}
+      </div>
+      ${detail.business_goal ? `<p class="task-detail-description"><strong>Business goal:</strong> ${escHtml(detail.business_goal)}</p>` : ''}
+      ${aiListSection('Subtasks', detail.subtasks)}
+      ${aiListSection('Acceptance criteria', detail.acceptance_criteria)}
+      ${aiListSection('Data requirements', detail.data_requirements)}
+      ${aiListSection('UI components', detail.ui_components)}
+      ${aiListSection('Test cases', detail.test_cases)}
+      ${aiListSection('Dependencies', detail.dependencies)}
+      ${aiListSection('Risks', detail.risks)}
+      ${detail.demo_value ? `<p class="task-detail-description"><strong>Demo value:</strong> ${escHtml(detail.demo_value)}</p>` : ''}
+    </div>`;
+}
+
+function aiListSection(label, items) {
+  const values = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!values.length) return '';
+  return `
+    <div class="ai-detail-list">
+      <strong>${escHtml(label)}</strong>
+      <ul>${values.map(item => `<li>${escHtml(item)}</li>`).join('')}</ul>
     </div>`;
 }
 
@@ -1433,7 +1795,7 @@ function renderAiPreview() {
     <table class="kpi-table ai-task-table">
       <thead>
         <tr>
-          <th>Chọn</th><th>Task</th><th>Độ khó</th><th>SP</th><th>Deadline</th><th>Lý do</th>
+          <th>Chọn</th><th>Task</th><th>Loại</th><th>SP</th><th>Deadline</th><th>Chi tiết</th>
         </tr>
       </thead>
       <tbody>
@@ -1444,10 +1806,10 @@ function renderAiPreview() {
               <strong>${escHtml(item.title)}</strong>
               <div class="text-sm text-muted">${escHtml(item.description || '')}</div>
             </td>
-            <td><span class="badge badge-${item.difficulty}">${diffLabel(item.difficulty)}</span></td>
+            <td><span class="tag">${escHtml(item.type || 'implementation')}</span></td>
             <td>${item.story_points}</td>
             <td>+${item.deadline_offset_days} ngày</td>
-            <td class="text-sm text-muted">${escHtml(item.rationale || '')}</td>
+            <td><button type="button" class="btn btn-outline btn-sm" onclick="openAiItemDetail(${i})">Chi tiết</button></td>
           </tr>
         `).join('')}
       </tbody>
@@ -1458,6 +1820,31 @@ function toggleAiTask(index, checked) {
   if (state.aiItems[index]) {
     state.aiItems[index] = { ...state.aiItems[index], selected: checked };
   }
+}
+
+function openAiItemDetail(index) {
+  const item = state.aiItems[index];
+  const overlay = document.getElementById('aiDraftOverlay');
+  const title = document.getElementById('aiDraftDrawerTitle');
+  const body = document.getElementById('aiDraftReviewBody');
+  if (!item || !overlay || !body) return;
+  overlay.classList.remove('hidden');
+  if (title) title.textContent = item.title || 'AI task detail';
+  body.innerHTML = `
+    <div class="task-detail-section">
+      <div class="task-detail-status-row">
+        <span class="tag">${escHtml(item.type || 'implementation')}</span>
+        <span class="badge badge-${item.difficulty}">${diffLabel(item.difficulty)}</span>
+        <span class="tag">${Number(item.story_points || 3)} SP</span>
+        <span class="tag">+${Number(item.deadline_offset_days || 7)} ngày</span>
+      </div>
+      <p class="task-detail-description">${escHtml(item.description || '')}</p>
+      ${item.rationale ? `<p class="task-detail-description"><strong>Lý do:</strong> ${escHtml(item.rationale)}</p>` : ''}
+    </div>
+    ${taskAiDetailSection({ ...item, source_ai_draft_id: state.activeAiDraftId || '-' })}
+    <div class="action-row">
+      <button class="btn btn-outline" onclick="closeAiDraftReview()">Đóng</button>
+    </div>`;
 }
 
 async function importSelectedAiTasks() {
@@ -1603,14 +1990,22 @@ function aiReviewItemRow(item, i) {
         <span>Import</span>
       </label>
       <input id="aiReviewTitle${i}" class="input" type="text" value="${escHtml(item.title || '')}" />
+      <input id="aiReviewType${i}" class="input" type="text" value="${escHtml(item.type || 'implementation')}" placeholder="Type" />
       <textarea id="aiReviewDesc${i}" class="textarea" rows="2">${escHtml(item.description || '')}</textarea>
+      <textarea id="aiReviewBusinessGoal${i}" class="textarea" rows="2" placeholder="Business goal">${escHtml(item.business_goal || '')}</textarea>
       <div class="inline-fields">
         <select id="aiReviewDifficulty${i}" class="select">
           ${['easy', 'medium', 'hard'].map(d => `<option value="${d}" ${item.difficulty === d ? 'selected' : ''}>${diffLabel(d)}</option>`).join('')}
         </select>
         <input id="aiReviewPoints${i}" class="input" type="number" min="1" max="13" value="${Number(item.story_points || 3)}" />
         <input id="aiReviewOffset${i}" class="input" type="number" min="1" max="90" value="${Number(item.deadline_offset_days || 7)}" />
+        <input id="aiReviewSuggestedRole${i}" class="input" type="text" value="${escHtml(item.suggested_role || '')}" placeholder="Suggested role" />
       </div>
+      ${AI_LIST_FIELDS.map(field => `
+        <label class="field-label">${AI_LIST_LABELS[field]}</label>
+        <textarea id="aiReview${field}${i}" class="textarea" rows="2">${escHtml(listToLines(item[field]))}</textarea>
+      `).join('')}
+      <textarea id="aiReviewDemoValue${i}" class="textarea" rows="2" placeholder="Demo value">${escHtml(item.demo_value || '')}</textarea>
       <input id="aiReviewRationale${i}" class="input" type="text" value="${escHtml(item.rationale || '')}" />
     </div>`;
 }
@@ -1621,7 +2016,15 @@ function collectAiReviewItems() {
     const i = row.dataset.aiReviewIndex;
     return {
       title: document.getElementById(`aiReviewTitle${i}`).value.trim(),
+      type: document.getElementById(`aiReviewType${i}`).value.trim() || 'implementation',
       description: document.getElementById(`aiReviewDesc${i}`).value.trim() || null,
+      business_goal: document.getElementById(`aiReviewBusinessGoal${i}`).value.trim() || null,
+      ...Object.fromEntries(AI_LIST_FIELDS.map(field => [
+        field,
+        linesToList(document.getElementById(`aiReview${field}${i}`).value),
+      ])),
+      demo_value: document.getElementById(`aiReviewDemoValue${i}`).value.trim() || null,
+      suggested_role: document.getElementById(`aiReviewSuggestedRole${i}`).value.trim() || null,
       difficulty: document.getElementById(`aiReviewDifficulty${i}`).value,
       story_points: Number(document.getElementById(`aiReviewPoints${i}`).value || 3),
       deadline_offset_days: Number(document.getElementById(`aiReviewOffset${i}`).value || 7),
@@ -2355,8 +2758,20 @@ async function runSeed() {
 // ════════════════════════════════ HELPERS ══════
 
 function fmtDateTime(value) {
-  if (!value) return '-';
-  return new Date(value).toLocaleString('vi-VN');
+  return safeDate(value);
+}
+
+function safeDate(value, fallback = '-') {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function dueStateLabel(value) {
@@ -2424,6 +2839,17 @@ function formatPlanKey(key) {
     ci_pipeline:             'CI/CD Pipeline',
   };
   return m[key] || key.replace(/_/g, ' ');
+}
+
+function listToLines(value) {
+  return Array.isArray(value) ? value.filter(Boolean).join('\n') : '';
+}
+
+function linesToList(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
 }
 
 // Role-aware dashboard overrides. Function declarations are intentionally placed

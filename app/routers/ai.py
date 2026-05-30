@@ -9,6 +9,7 @@ from app.repository import (
     create_ai_task_draft,
     create_audit_log,
     create_task,
+    create_task_ai_detail,
     get_ai_task_draft,
     list_ai_task_drafts,
     mark_ai_task_draft_imported,
@@ -230,6 +231,11 @@ def import_ai_tasks_endpoint(
             story_points=int(item.get("story_points", 3)),
             difficulty=item["difficulty"],
             deadline_iso=deadline.astimezone(timezone.utc).isoformat(),
+        )
+        create_task_ai_detail(
+            task_id=int(task["id"]),
+            source_ai_draft_id=payload.ai_draft_id,
+            item=item,
         )
         created.append(task)
         create_audit_log(

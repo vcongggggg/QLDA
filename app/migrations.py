@@ -294,6 +294,58 @@ def _auth_rbac_department_schema(conn: Any, table_columns: TableColumns, ensure_
     conn.execute("CREATE INDEX IF NOT EXISTS idx_departments_active ON departments(is_active)")
 
 
+def _task_ai_details_schema(conn: Any, _: TableColumns, __: EnsureColumn) -> None:
+    if conn.dialect == "postgresql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_ai_details (
+                id SERIAL PRIMARY KEY,
+                task_id INTEGER NOT NULL UNIQUE REFERENCES tasks(id),
+                source_ai_draft_id INTEGER NOT NULL REFERENCES ai_task_drafts(id),
+                type TEXT,
+                business_goal TEXT,
+                subtasks TEXT NOT NULL DEFAULT '[]',
+                acceptance_criteria TEXT NOT NULL DEFAULT '[]',
+                data_requirements TEXT NOT NULL DEFAULT '[]',
+                ui_components TEXT NOT NULL DEFAULT '[]',
+                test_cases TEXT NOT NULL DEFAULT '[]',
+                dependencies TEXT NOT NULL DEFAULT '[]',
+                risks TEXT NOT NULL DEFAULT '[]',
+                demo_value TEXT,
+                suggested_role TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+    else:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_ai_details (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL UNIQUE,
+                source_ai_draft_id INTEGER NOT NULL,
+                type TEXT,
+                business_goal TEXT,
+                subtasks TEXT NOT NULL DEFAULT '[]',
+                acceptance_criteria TEXT NOT NULL DEFAULT '[]',
+                data_requirements TEXT NOT NULL DEFAULT '[]',
+                ui_components TEXT NOT NULL DEFAULT '[]',
+                test_cases TEXT NOT NULL DEFAULT '[]',
+                dependencies TEXT NOT NULL DEFAULT '[]',
+                risks TEXT NOT NULL DEFAULT '[]',
+                demo_value TEXT,
+                suggested_role TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (task_id) REFERENCES tasks(id),
+                FOREIGN KEY (source_ai_draft_id) REFERENCES ai_task_drafts(id)
+            )
+            """
+        )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_task_ai_details_draft ON task_ai_details(source_ai_draft_id)")
+
+
 MIGRATIONS = (
     Migration(1, "legacy_compat_columns", _legacy_compat_columns),
     Migration(2, "operational_indexes", _operational_indexes),
@@ -301,4 +353,5 @@ MIGRATIONS = (
     Migration(4, "create_ai_task_drafts", _create_ai_task_drafts),
     Migration(5, "phase5_rag_schema", _phase5_rag_schema),
     Migration(6, "auth_rbac_department_schema", _auth_rbac_department_schema),
+    Migration(7, "task_ai_details_schema", _task_ai_details_schema),
 )

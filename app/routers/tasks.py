@@ -8,6 +8,7 @@ from app.repository import (
     create_app_notification,
     create_task,
     create_task_comment,
+    get_task_ai_detail,
     get_task_by_id,
     get_task_detail_by_id,
     get_user_by_id,
@@ -64,6 +65,7 @@ def _task_detail_payload(task_id: int) -> dict:
     return {
         **task,
         "due_state": _due_state(task),
+        "ai_detail": get_task_ai_detail(task_id),
         "comments": list_task_comments(task_id),
         "activity_logs": list_task_activity_logs(task_id),
     }

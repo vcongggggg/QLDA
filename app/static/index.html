@@ -65,6 +65,10 @@
       <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="13" rx="1"/><rect x="17" y="3" width="5" height="16" rx="1"/></svg>
       <span>Kanban</span>
     </a>
+    <a class="nav-item" data-section="timeline" data-permission="KANBAN_VIEW" onclick="navigate('timeline')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M3 11h18"/><path d="M7 15h4"/><path d="M13 18h4"/></svg>
+      <span>Timeline</span>
+    </a>
     <a class="nav-item" data-section="projects" data-permission="PROJECT_VIEW" onclick="navigate('projects')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h3l2 2h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>
       <span>Dự án</span>
@@ -244,6 +248,56 @@
     </section>
 
     <!-- ─── PROJECTS ─── -->
+    <section id="sec-timeline" class="section hidden">
+      <div class="toolbar">
+        <div class="toolbar-left task-filter-bar">
+          <select id="timelineProjectFilter" class="select" onchange="onTimelineProjectFilterChange()">
+            <option value="">All projects</option>
+          </select>
+          <select id="timelineSprintFilter" class="select" onchange="loadTimeline()" disabled>
+            <option value="">All sprints</option>
+          </select>
+          <select id="timelineAssigneeFilter" class="select" onchange="loadTimeline()">
+            <option value="">All assignees</option>
+          </select>
+          <select id="timelineStatusFilter" class="select" onchange="loadTimeline()">
+            <option value="">All status</option>
+            <option value="todo">Todo</option>
+            <option value="doing">Doing</option>
+            <option value="done">Done</option>
+          </select>
+          <select id="timelineOverdueFilter" class="select" onchange="loadTimeline()">
+            <option value="">Due state</option>
+            <option value="true">Overdue</option>
+            <option value="false">Not overdue</option>
+          </select>
+          <input id="timelineKeywordFilter" class="input task-filter-input" type="search" placeholder="Keyword" oninput="loadTimelineDebounced()">
+          <input id="timelineDeadlineFromFilter" class="input task-filter-date" type="date" onchange="loadTimeline()">
+          <input id="timelineDeadlineToFilter" class="input task-filter-date" type="date" onchange="loadTimeline()">
+          <select id="timelineZoom" class="select" onchange="loadTimeline()">
+            <option value="week">Week</option>
+            <option value="month" selected>Month</option>
+          </select>
+          <button type="button" class="btn btn-outline btn-compact" onclick="resetTimelineFilters()">Reset</button>
+        </div>
+        <div class="toolbar-right">
+          <span id="timelineCount" class="text-sm text-muted"></span>
+        </div>
+      </div>
+      <div class="timeline-shell">
+        <div class="timeline-header">
+          <div>
+            <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-calendar"></use></svg>Timeline</h3>
+            <p class="text-sm text-muted">Read-only task schedule from sprint dates and deadlines.</p>
+          </div>
+          <span id="timelineRange" class="tag">-</span>
+        </div>
+        <div id="timelineBody">
+          <div class="skeleton" style="height:180px"></div>
+        </div>
+      </div>
+    </section>
+
     <section id="sec-projects" class="section hidden">
       <div class="toolbar">
         <div class="toolbar-left">
