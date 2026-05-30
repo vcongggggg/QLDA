@@ -976,3 +976,25 @@ python scripts/smoke_check.py --base-url https://teamswork.example.com --user-id
 - Destructive seed operations are only for local/dev/demo.
 - Never hardcode secrets; use environment variables.
 - Review `git diff` before pushing.
+
+### Role Browser Audit
+
+Install Chromium before running the Playwright role/navigation audit:
+
+```bash
+python -m playwright install chromium
+pytest tests/test_ui_role_navigation_playwright.py
+```
+
+For a headed full-button demo run, slow Playwright down and use the temporary seeded database:
+
+```powershell
+$env:PLAYWRIGHT_HEADED='1'
+$env:PLAYWRIGHT_SLOW_MO_MS='650'
+$env:PLAYWRIGHT_DEMO_STEP_MS='450'
+$env:PLAYWRIGHT_DEMO_NOTE_MS='800'
+$env:PLAYWRIGHT_DEMO_AFTER_ACTION_MS='350'
+.\.venv\Scripts\python.exe -m pytest tests\test_ui_full_button_audit_playwright.py -q
+```
+
+The full-button audit shifts temporary demo task deadlines and KPI adjustments into the current month so the KPI screens have visible demo data without touching the local `teamswork.db`. In headed mode it also shows a small `Running: role / module / action` note; set `PLAYWRIGHT_DEMO_NOTES='0'` to hide it.

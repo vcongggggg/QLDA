@@ -1914,10 +1914,18 @@ async function loadTeams() {
   // Load notification queue stats
   const statsEl = document.getElementById('notifQueueStats');
   try {
-    const all     = await api('/integrations/teams/proactive/queue?status=all&limit=200');
-    const queued  = all.filter(n => n.status === 'queued').length;
-    const sent    = all.filter(n => n.status === 'sent').length;
-    const failed  = all.filter(n => n.status === 'failed').length;
+    let queued = 0;
+    let sent = 0;
+    let failed = 0;
+    const canManageQueue = ['ADMIN', 'MANAGER', 'HR'].includes(currentRoleCode());
+    if (canManageQueue) {
+      const all = await api('/integrations/teams/proactive/queue?status=all&limit=200');
+      queued = all.filter(n => n.status === 'queued').length;
+      sent = all.filter(n => n.status === 'sent').length;
+      failed = all.filter(n => n.status === 'failed').length;
+    } else {
+      await api(`/integrations/teams/summary?month=${state.month}`);
+    }
     statsEl.innerHTML = `
       <div class="notif-stats">
         <div class="notif-stat">
@@ -2551,6 +2559,20 @@ async function loadProjectOverview() {
       const tasks = await api('/tasks');
       if (!tasks.length) {
         el.innerHTML = `<div class="empty-state"><div>${icon('list-checks', 'empty-icon')}</div>Bạn chưa có task nào được giao.</div>`;
+        return;
+      }
+      el.innerHTML = tasks.slice().sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).slice(0, 6).map(t => `
+        <div class="project-row">
+          <div class="project-row-name">${escHtml(t.title)}</div>
+          <span class="badge badge-${escHtml(t.status)}">${statusLabel(t.status)}</span>
+          <span class="text-sm text-muted">${new Date(t.deadline).toLocaleDateString('vi-VN')}</span>
+        </div>`).join('');
+      return;
+    }
+    if (currentRoleCode() === 'LEADER') {
+      const tasks = await api('/tasks');
+      if (!tasks.length) {
+        el.innerHTML = `<div class="empty-state"><div>${icon('list-checks', 'empty-icon')}</div>Chua co task nao trong workload.</div>`;
         return;
       }
       el.innerHTML = tasks.slice().sort((a, b) => new Date(a.deadline) - new Date(b.deadline)).slice(0, 6).map(t => `

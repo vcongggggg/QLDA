@@ -2,7 +2,7 @@ from datetime import timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.auth import get_current_user, require_permission, require_roles
+from app.auth import current_role_code, get_current_user, require_permission, require_roles
 from app.deps import require_project_access
 from app.repository import (
     add_project_member,
@@ -140,9 +140,9 @@ def list_projects_endpoint(
     department_id: int | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ) -> list[dict]:
-    require_roles(current_user, {"admin", "manager", "hr", "staff"})
+    require_roles(current_user, {"admin", "manager", "leader", "hr", "staff"})
     rows = list_projects(status=status, department_id=department_id)
-    if current_user["role"] in {"admin", "hr"}:
+    if current_role_code(current_user) in {"ADMIN", "MANAGER", "HR"}:
         return rows
     filtered: list[dict] = []
     for item in rows:
@@ -175,21 +175,21 @@ def add_project_member_endpoint(
 
 @router.get("/projects/{project_id}/members", response_model=list[ProjectMemberOut])
 def list_project_members_endpoint(project_id: int, current_user: dict = Depends(get_current_user)) -> list[dict]:
-    require_roles(current_user, {"admin", "manager", "hr", "staff"})
+    require_roles(current_user, {"admin", "manager", "leader", "hr", "staff"})
     require_project_access(current_user, project_id)
     return list_project_members(project_id)
 
 
 @router.get("/projects/{project_id}/progress", response_model=ProjectProgressOut)
 def project_progress_endpoint(project_id: int, current_user: dict = Depends(get_current_user)) -> dict:
-    require_roles(current_user, {"admin", "manager", "hr", "staff"})
+    require_roles(current_user, {"admin", "manager", "leader", "hr", "staff"})
     require_project_access(current_user, project_id)
     return project_progress(project_id)
 
 
 @router.get("/projects/{project_id}/velocity", response_model=list[SprintVelocityOut])
 def project_velocity_endpoint(project_id: int, current_user: dict = Depends(get_current_user)) -> list[dict]:
-    require_roles(current_user, {"admin", "manager", "hr", "staff"})
+    require_roles(current_user, {"admin", "manager", "leader", "hr", "staff"})
     require_project_access(current_user, project_id)
     return sprint_velocity_history(project_id)
 
@@ -233,7 +233,7 @@ def list_project_risks_endpoint(
     status: str | None = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ) -> list[dict]:
-    require_roles(current_user, {"admin", "manager", "hr", "staff"})
+    require_roles(current_user, {"admin", "manager", "leader", "hr", "staff"})
     require_project_access(current_user, project_id)
     return list_project_risks(project_id, status=status)
 
@@ -274,7 +274,7 @@ def list_weekly_status_endpoint(
     limit: int = Query(default=20, ge=1, le=100),
     current_user: dict = Depends(get_current_user),
 ) -> list[dict]:
-    require_roles(current_user, {"admin", "manager", "hr", "staff"})
+    require_roles(current_user, {"admin", "manager", "leader", "hr", "staff"})
     require_project_access(current_user, project_id)
     return list_weekly_status_updates(project_id, limit=limit)
 
