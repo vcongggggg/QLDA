@@ -172,6 +172,24 @@ def test_staff_task_filters_remain_scoped_to_own_assignments() -> None:
     assert data["other_assignee_id"] not in ids
 
 
+def test_project_backlog_lists_only_unsprinted_tasks_and_preserves_staff_scope() -> None:
+    data = _seed_filter_tasks()
+
+    manager_resp = client.get(f"/projects/{data['project_id']}/backlog", headers=_hdr(data["manager_id"]))
+    manager_ids = _ids(manager_resp)
+    assert data["late_id"] in manager_ids
+    assert data["done_late_id"] in manager_ids
+    assert data["other_assignee_id"] in manager_ids
+    assert data["todo_id"] not in manager_ids
+    assert data["other_project_task_id"] not in manager_ids
+
+    staff_resp = client.get(f"/projects/{data['project_id']}/backlog", headers=_hdr(data["staff_id"]))
+    staff_ids = _ids(staff_resp)
+    assert data["late_id"] in staff_ids
+    assert data["done_late_id"] in staff_ids
+    assert data["other_assignee_id"] not in staff_ids
+
+
 def test_get_tasks_rejects_invalid_filters() -> None:
     data = _seed_filter_tasks()
 

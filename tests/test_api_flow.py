@@ -116,11 +116,19 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
             "project_id": project_id,
             "story_points": 5,
             "difficulty": "medium",
+            "priority": "high",
+            "labels": ["phase-2"],
+            "checklist": ["Confirm metadata"],
+            "subtasks": ["Create API test"],
+            "dependencies": ["Project member exists"],
+            "attachment_metadata": [{"name": "release-roadmap", "url": "docs/USER_STORY_RELEASE_ROADMAP.md"}],
             "deadline": deadline,
         },
     )
     assert task_resp.status_code == 200
     task_id = task_resp.json()["id"]
+    assert task_resp.json()["priority"] == "high"
+    assert task_resp.json()["labels"] == ["phase-2"]
 
     # Staff can only update own task
     update_ok = client.patch(f"/tasks/{task_id}/status", headers=_hdr(staff_id), json={"status": "doing"})
@@ -168,11 +176,77 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
     )
     assert sprint_status_resp.status_code == 200
 
+    sprint_2_resp = client.post(
+        f"/projects/{project_id}/sprints",
+        headers=_hdr(manager_id),
+        json={
+            "name": "Sprint 2",
+            "goal": "Carry unfinished work",
+            "start_date": (datetime.now(timezone.utc) + timedelta(days=15)).isoformat(),
+            "end_date": (datetime.now(timezone.utc) + timedelta(days=28)).isoformat(),
+        },
+    )
+    assert sprint_2_resp.status_code == 200
+    sprint_2_id = sprint_2_resp.json()["id"]
+
+    backlog_task_resp = client.post(
+        "/tasks",
+        headers=_hdr(manager_id),
+        json={
+            "title": "Backlog grooming item",
+            "description": "Move from backlog into sprint",
+            "assignee_id": staff_id,
+            "project_id": project_id,
+            "story_points": 2,
+            "difficulty": "easy",
+            "deadline": (datetime.now(timezone.utc) + timedelta(days=8)).isoformat(),
+        },
+    )
+    assert backlog_task_resp.status_code == 200
+    backlog_task_id = backlog_task_resp.json()["id"]
+    backlog_resp = client.get(f"/projects/{project_id}/backlog", headers=_hdr(manager_id))
+    assert backlog_resp.status_code == 200
+    assert any(item["id"] == backlog_task_id for item in backlog_resp.json())
+    move_resp = client.post(
+        f"/projects/{project_id}/backlog/move-to-sprint",
+        headers=_hdr(manager_id),
+        json={"task_ids": [backlog_task_id], "sprint_id": sprint_2_id},
+    )
+    assert move_resp.status_code == 200
+    assert move_resp.json()["updated"] == 1
+
+    carry_task_resp = client.post(
+        "/tasks",
+        headers=_hdr(manager_id),
+        json={
+            "title": "Carry open sprint item",
+            "description": "Unfinished work should move",
+            "assignee_id": staff_id,
+            "project_id": project_id,
+            "sprint_id": sprint_id,
+            "story_points": 3,
+            "difficulty": "medium",
+            "deadline": (datetime.now(timezone.utc) + timedelta(days=9)).isoformat(),
+        },
+    )
+    assert carry_task_resp.status_code == 200
+    carry_task_id = carry_task_resp.json()["id"]
+    carry_resp = client.post(
+        f"/sprints/{sprint_id}/carryover",
+        headers=_hdr(manager_id),
+        json={"target_sprint_id": sprint_2_id},
+    )
+    assert carry_resp.status_code == 200
+    assert carry_resp.json()["updated"] >= 1
+    carry_detail = client.get(f"/tasks/{carry_task_id}", headers=_hdr(manager_id))
+    assert carry_detail.status_code == 200
+    assert carry_detail.json()["sprint_id"] == sprint_2_id
+
     progress_resp = client.get(f"/projects/{project_id}/progress", headers=_hdr(manager_id))
     assert progress_resp.status_code == 200
     progress_payload = progress_resp.json()
     assert progress_payload["project_id"] == project_id
-    assert progress_payload["completion_rate"] == 100.0
+    assert 0 < progress_payload["completion_rate"] < 100.0
     assert "progress_percent" not in progress_payload
 
     burndown_resp = client.get(f"/sprints/{sprint_id}/burndown", headers=_hdr(manager_id))

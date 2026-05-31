@@ -1,0 +1,7 @@
+interface:
+  display_name: "TeamsWork Development"
+  short_description: "Project-specific build, test, security, and UI workflow"
+  default_prompt: "Use $teamswork-development to implement this TeamsWork change while preserving product rules, tests, security, and UI design."
+
+policy:
+  allow_implicit_invocation: true

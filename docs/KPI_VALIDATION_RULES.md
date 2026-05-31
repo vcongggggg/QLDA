@@ -23,6 +23,8 @@ Với mỗi task thuộc tháng KPI:
 
 Điểm cuối được làm tròn 2 chữ số thập phân.
 
+Phase 3 Slice 1 note: these defaults are represented in code as `DEFAULT_KPI_POLICY` in `app/kpi.py`. This is a compatibility policy, not admin-editable configuration.
+
 ## 3. Difficulty Multiplier
 
 Multiplier hiện tại:
@@ -93,6 +95,24 @@ Quy tắc:
 - `reason` phải đủ rõ để review.
 - Tạo adjustment phải ghi audit log.
 - Adjustment không được dùng để âm thầm thay đổi công thức KPI.
+
+Phase 3 update: manager-created adjustments start as `pending` and do not affect score until HR/admin approval. HR/admin-created adjustments are auto-approved and still require reason/audit evidence. Approved adjustments are materialized into `kpi_transactions`; pending or rejected adjustments are excluded from KPI score.
+
+## 7.1 KPI Transaction Ledger
+
+KPI monthly API/report paths rebuild active ledger rows for the requested month before aggregating score.
+
+- Task events use a unique event key per task/month/outcome and remain idempotent across rebuilds.
+- Reopened, deleted, or changed task outcomes reverse stale ledger rows instead of deleting evidence.
+- KPI report rows aggregate only active ledger rows.
+
+## 7.2 KPI Targets
+
+KPI targets store user/month `target_score` and are compared with ledger score.
+
+- `progress_percent = score / target_score * 100`.
+- `gap = max(target_score - score, 0)`.
+- KPI target warnings are notifications and must deduplicate within the daily run window.
 
 ## 8. Test Case Bắt Buộc
 

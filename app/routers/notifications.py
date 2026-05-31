@@ -3,15 +3,19 @@ from datetime import datetime, time, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user, require_roles
+from app.kpi import policy_from_row
 from app.repository import (
     count_unread_app_notifications,
     create_app_notification,
     create_audit_log,
     list_app_notifications,
     list_tasks,
+    get_kpi_policy,
+    list_kpi_target_progress,
     mark_all_app_notifications_read,
     mark_app_notification_read,
     notification_exists_for_event,
+    rebuild_kpi_transactions,
 )
 from app.schemas import AppNotificationOut, MarkAllReadOut, TaskReminderRunOut, UnreadNotificationCountOut
 
@@ -114,5 +118,48 @@ def run_task_reminders_endpoint(current_user: dict = Depends(get_current_user)) 
         "task_reminders",
         None,
         f"due_soon={result['due_soon_created']} overdue={result['overdue_created']} skipped={result['skipped_duplicates']}",
+    )
+    return result
+
+
+@router.post("/notifications/kpi-target-warnings/run")
+def run_kpi_target_warnings_endpoint(
+    month: str = Query(description="YYYY-MM"),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    require_roles(current_user, {"admin", "manager", "hr", "ADMIN", "MANAGER", "HR"})
+    rebuild_kpi_transactions(month, policy_from_row(get_kpi_policy()))
+    now = datetime.now(timezone.utc)
+    window_start, window_end = _today_window(now)
+    result = {"created": 0, "skipped_duplicates": 0}
+    for row in list_kpi_target_progress(month):
+        if float(row["gap"]) <= 0:
+            continue
+        exists = notification_exists_for_event(
+            user_id=int(row["user_id"]),
+            notification_type="kpi_target_warning",
+            entity_type="kpi_target",
+            entity_id=int(row["user_id"]),
+            window_start_iso=window_start,
+            window_end_iso=window_end,
+        )
+        if exists:
+            result["skipped_duplicates"] += 1
+            continue
+        create_app_notification(
+            user_id=int(row["user_id"]),
+            notification_type="kpi_target_warning",
+            title="KPI target warning",
+            message=f"KPI {month} is {row['gap']} point(s) below target",
+            entity_type="kpi_target",
+            entity_id=int(row["user_id"]),
+        )
+        result["created"] += 1
+    create_audit_log(
+        current_user["id"],
+        "run",
+        "kpi_target_warnings",
+        None,
+        f"month={month} created={result['created']} skipped={result['skipped_duplicates']}",
     )
     return result

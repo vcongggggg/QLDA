@@ -218,12 +218,27 @@
           <input id="kanbanKeywordFilter" class="input task-filter-input" type="search" placeholder="Keyword" oninput="loadKanbanDebounced()">
           <input id="kanbanDeadlineFromFilter" class="input task-filter-date" type="date" onchange="loadKanban()">
           <input id="kanbanDeadlineToFilter" class="input task-filter-date" type="date" onchange="loadKanban()">
+          <select id="kanbanSavedFilterSelect" class="select" onchange="applyKanbanSavedFilter()">
+            <option value="">Saved filters</option>
+          </select>
+          <label class="check-inline"><input id="kanbanDefaultFilterCheck" type="checkbox"> Default</label>
+          <button type="button" class="btn btn-outline btn-compact" onclick="saveCurrentKanbanFilter()">Save</button>
+          <button type="button" class="btn btn-outline btn-compact" onclick="deleteCurrentKanbanFilter()">Delete</button>
           <button type="button" class="btn btn-outline btn-compact" onclick="resetKanbanFilters()">Reset</button>
         </div>
         <div class="toolbar-right">
+          <div class="segmented-control" role="group" aria-label="Kanban view">
+            <button id="kanbanBoardViewBtn" type="button" class="btn btn-outline btn-compact active" aria-pressed="true" onclick="setKanbanView('board')">Board</button>
+            <button id="kanbanListViewBtn" type="button" class="btn btn-outline btn-compact" aria-pressed="false" onclick="setKanbanView('list')">List</button>
+          </div>
           <span id="kanbanCount" class="text-sm text-muted"></span>
+          <button type="button" class="btn btn-outline btn-compact" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="exportKanbanTasks('csv')">CSV</button>
+          <button type="button" class="btn btn-outline btn-compact" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="exportKanbanTasks('xlsx')">XLSX</button>
+          <input id="taskImportFile" class="input" type="file" accept=".csv,.xlsx" data-requires-any-permission="KANBAN_MANAGE_TEAM,KANBAN_MANAGE_ALL,tasks.create">
+          <button type="button" class="btn btn-primary btn-compact" data-requires-any-permission="KANBAN_MANAGE_TEAM,KANBAN_MANAGE_ALL,tasks.create" onclick="importKanbanTasks()">Import</button>
         </div>
       </div>
+      <div id="kanbanSummaryPanel" class="kanban-summary-grid" aria-live="polite"></div>
       <div id="workloadWarningsPanel" class="workload-panel hidden"></div>
       <div class="kanban-board" id="kanban-board">
         <div class="kanban-col">
@@ -245,6 +260,7 @@
           <div class="kanban-cards" id="col-done"></div>
         </div>
       </div>
+      <div id="kanban-list" class="kanban-list-wrap hidden"></div>
     </section>
 
     <!-- ─── PROJECTS ─── -->
@@ -388,6 +404,105 @@
               <button class="btn btn-primary btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadSprintReport('xlsx')">Excel</button>
             </div>
           </div>
+        </div>
+        <div class="report-card">
+          <div class="report-icon prog-icon"><svg class="report-svg" aria-hidden="true"><use href="#i-activity"></use></svg></div>
+          <div class="report-info">
+            <h4>Analytics package</h4>
+            <p>Productivity, workload, velocity, project effort and dependency map</p>
+          </div>
+          <div class="report-actions">
+            <button class="btn btn-outline btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('analytics','json')">JSON</button>
+            <button class="btn btn-outline btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('analytics','csv')">CSV</button>
+            <button class="btn btn-primary btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('analytics','xlsx')">Excel</button>
+          </div>
+        </div>
+      </div>
+      <div
+        class="analytics-grid mt-16"
+        id="reportAnalyticsPanel"
+        data-requires-any-permission="REPORT_VIEW_TEAM,REPORT_VIEW_ALL,REPORT_EXPORT,reports.export"
+        aria-live="polite"
+      >
+        <div class="analytics-card">
+          <div class="card-header">
+            <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-activity"></use></svg>Analytics summary</h3>
+            <button class="btn btn-outline btn-sm" type="button" onclick="loadReportAnalytics()">Refresh</button>
+          </div>
+          <div class="analytics-stats" id="analyticsStats">
+            <div class="empty-state compact">Loading analytics...</div>
+          </div>
+        </div>
+        <div class="analytics-card">
+          <div class="card-header">
+            <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-list-checks"></use></svg>Workload</h3>
+          </div>
+          <div class="chart-wrap-wide"><canvas id="analyticsWorkloadChart"></canvas></div>
+          <div id="analyticsWorkloadTable"></div>
+        </div>
+        <div class="analytics-card">
+          <div class="card-header">
+            <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-bar-chart"></use></svg>Task status</h3>
+          </div>
+          <div class="chart-wrap-wide"><canvas id="analyticsStatusChart"></canvas></div>
+        </div>
+        <div class="analytics-card">
+          <div class="card-header">
+            <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-trending-up"></use></svg>Velocity</h3>
+          </div>
+          <div class="chart-wrap-wide"><canvas id="analyticsVelocityChart"></canvas></div>
+        </div>
+        <div class="analytics-card">
+          <div class="card-header">
+            <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-folder"></use></svg>Project effort</h3>
+          </div>
+          <div class="chart-wrap-wide"><canvas id="analyticsProjectEffortChart"></canvas></div>
+        </div>
+        <div class="analytics-card">
+          <div class="card-header">
+            <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-link"></use></svg>Dependency map</h3>
+          </div>
+          <div id="analyticsDependencySummary"></div>
+        </div>
+      </div>
+      <div
+        class="card mt-16"
+        id="scheduledReportsPanel"
+        data-requires-any-permission="REPORT_VIEW_TEAM,REPORT_VIEW_ALL,REPORT_EXPORT,reports.export"
+        aria-live="polite"
+      >
+        <div class="card-header">
+          <h3><svg class="heading-icon" aria-hidden="true"><use href="#i-calendar"></use></svg>Scheduled reports</h3>
+          <div class="report-actions">
+            <button class="btn btn-outline btn-sm" type="button" onclick="runDueReportSchedules()">Run due</button>
+            <button class="btn btn-outline btn-sm" type="button" onclick="loadReportSchedules()">Refresh</button>
+          </div>
+        </div>
+        <div class="schedule-form">
+          <input id="scheduleName" class="input" type="text" placeholder="Schedule name" />
+          <select id="scheduleReportType" class="select">
+            <option value="kpi">KPI</option>
+            <option value="analytics">Analytics</option>
+            <option value="portfolio">Portfolio</option>
+            <option value="progress">Progress</option>
+          </select>
+          <select id="scheduleFormat" class="select">
+            <option value="csv">CSV</option>
+            <option value="xlsx">Excel</option>
+            <option value="pdf">PDF</option>
+            <option value="json">JSON</option>
+          </select>
+          <select id="scheduleFrequency" class="select">
+            <option value="weekly">Weekly</option>
+            <option value="daily">Daily</option>
+            <option value="monthly">Monthly</option>
+          </select>
+          <input id="scheduleRecipients" class="input" type="text" placeholder="email@example.com" />
+          <input id="scheduleNextRun" class="input" type="datetime-local" />
+          <button class="btn btn-primary btn-sm" type="button" onclick="createReportSchedule()">Create</button>
+        </div>
+        <div id="scheduledReportsList">
+          <div class="empty-state compact">Loading schedules...</div>
         </div>
       </div>
     </section>
@@ -680,6 +795,18 @@
   </div>
 </div>
 
+<script src="js/core-shell.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/kanban.js"></script>
+<script src="js/timeline.js"></script>
+<script src="js/task-detail.js"></script>
+<script src="js/projects-kpi-reports-ai.js"></script>
+<script src="js/ai-drafts.js"></script>
+<script src="js/rag-teams.js"></script>
+<script src="js/ops.js"></script>
+<script src="js/admin-core.js"></script>
+<script src="js/utils-dashboard.js"></script>
+<script src="js/admin-tables.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.database import init_db
 from app.main import app
-from app.repository import create_app_notification, create_task, create_user, list_app_notifications
+from app.repository import create_app_notification, create_task, create_user, list_app_notifications, list_notifications, queue_notification
 
 client = TestClient(app)
 
@@ -174,3 +174,42 @@ def test_staff_cannot_run_reminder_scan_but_manager_can() -> None:
 
     manager_resp = client.post("/notifications/task-reminders/run", headers=_hdr(int(manager["id"])))
     assert manager_resp.status_code == 200
+
+
+def test_teams_queue_deduplicates_payload_dedup_key_and_preserves_target_shape() -> None:
+    _manager, staff, _other = _bootstrap()
+    payload = {
+        "type": "message",
+        "text": "Dedup me",
+        "dedup_key": "phase4-dedup-key",
+        "target": {"type": "channel", "team_id": "team-a", "channel_id": "channel-a"},
+    }
+    first = queue_notification(int(staff["id"]), "teams", payload)
+    second = queue_notification(int(staff["id"]), "teams", dict(payload))
+
+    assert second["id"] == first["id"]
+    rows = [row for row in list_notifications(status="all", limit=20) if row["payload"].get("dedup_key") == "phase4-dedup-key"]
+    assert len(rows) == 1
+    assert rows[0]["payload"]["target"]["type"] == "channel"
+
+
+def test_teams_queue_endpoint_accepts_target_and_dedup_but_staff_cannot_manage_it() -> None:
+    manager, staff, _other = _bootstrap()
+    staff_resp = client.post(
+        "/integrations/teams/proactive/queue?message=Nope&target_type=channel&dedup_key=staff-denied",
+        headers=_hdr(int(staff["id"])),
+    )
+    assert staff_resp.status_code == 403
+
+    first = client.post(
+        "/integrations/teams/proactive/queue?message=Channel%20notice&target_type=channel&team_id=team-a&channel_id=channel-a&dedup_key=endpoint-dedup",
+        headers=_hdr(int(manager["id"])),
+    )
+    second = client.post(
+        "/integrations/teams/proactive/queue?message=Channel%20notice&target_type=channel&team_id=team-a&channel_id=channel-a&dedup_key=endpoint-dedup",
+        headers=_hdr(int(manager["id"])),
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+    assert first.json()["payload"]["target"]["channel_id"] == "channel-a"

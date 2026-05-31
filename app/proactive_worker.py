@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.repository import list_processable_notifications, list_teams_conversation_refs, mark_notification_result
 from app.settings import settings
-from app.teams_bot import build_text_card, send_card_to_teams_webhook, send_text_to_teams_conversation
+from app.teams_bot import build_text_card, send_card_to_teams_webhook, send_text_to_graph_channel, send_text_to_teams_conversation
 
 
 def process_notification_queue(limit: int = 1000) -> dict:
@@ -16,13 +16,22 @@ def process_notification_queue(limit: int = 1000) -> dict:
         processed += 1
         payload = item.get("payload") or {}
         text = payload.get("text", "TeamsWork notification")
+        target = payload.get("target") or {}
         result = {"sent": False, "reason": "not attempted"}
 
         conversation_refs: list[dict] = []
         if item.get("user_id") is not None:
             conversation_refs = list_teams_conversation_refs(user_id=int(item["user_id"]), limit=1)
 
-        if settings.teams_proactive_mode == "bot" and conversation_refs:
+        if target.get("type") in {"channel", "project_channel"} or settings.teams_proactive_mode == "graph":
+            result = send_text_to_graph_channel(
+                text,
+                team_id=target.get("team_id"),
+                channel_id=target.get("channel_id"),
+            )
+            if not result.get("sent") and conversation_refs:
+                result = send_text_to_teams_conversation(conversation_refs[0], text)
+        elif settings.teams_proactive_mode == "bot" and conversation_refs:
             result = send_text_to_teams_conversation(conversation_refs[0], text)
         elif conversation_refs:
             # Prefer direct conversation when available, even in mixed mode.

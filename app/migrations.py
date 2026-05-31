@@ -346,6 +346,433 @@ def _task_ai_details_schema(conn: Any, _: TableColumns, __: EnsureColumn) -> Non
     conn.execute("CREATE INDEX IF NOT EXISTS idx_task_ai_details_draft ON task_ai_details(source_ai_draft_id)")
 
 
+def _auth_login_attempts_schema(conn: Any, _: TableColumns, __: EnsureColumn) -> None:
+    if conn.dialect == "postgresql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_login_attempts (
+                id SERIAL PRIMARY KEY,
+                email TEXT NOT NULL,
+                ip_hash TEXT NOT NULL,
+                outcome TEXT NOT NULL CHECK(outcome IN ('success','failure','blocked')),
+                reason_code TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+    else:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_login_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                ip_hash TEXT NOT NULL,
+                outcome TEXT NOT NULL CHECK(outcome IN ('success','failure','blocked')),
+                reason_code TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_login_attempts_email_created ON auth_login_attempts(email, created_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_login_attempts_ip_created ON auth_login_attempts(ip_hash, created_at)")
+
+
+def _phase2_task_metadata_schema(conn: Any, table_columns: TableColumns, ensure_column: EnsureColumn) -> None:
+    ensure_column(conn, "tasks", "priority", "priority TEXT NOT NULL DEFAULT 'medium'")
+    ensure_column(conn, "tasks", "labels", "labels TEXT NOT NULL DEFAULT '[]'")
+    ensure_column(conn, "tasks", "checklist", "checklist TEXT NOT NULL DEFAULT '[]'")
+    ensure_column(conn, "tasks", "subtasks", "subtasks TEXT NOT NULL DEFAULT '[]'")
+    ensure_column(conn, "tasks", "dependencies", "dependencies TEXT NOT NULL DEFAULT '[]'")
+    ensure_column(conn, "tasks", "attachment_metadata", "attachment_metadata TEXT NOT NULL DEFAULT '[]'")
+
+    conn.execute("UPDATE tasks SET priority = COALESCE(priority, 'medium')")
+    for column in ("labels", "checklist", "subtasks", "dependencies", "attachment_metadata"):
+        conn.execute(f"UPDATE tasks SET {column} = COALESCE({column}, '[]')")
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_project_sprint ON tasks(project_id, sprint_id)")
+
+
+def _phase2_remaining_schema(conn: Any, table_columns: TableColumns, ensure_column: EnsureColumn) -> None:
+    ensure_column(conn, "tasks", "backlog_rank", "backlog_rank INTEGER")
+    ensure_column(conn, "tasks", "readiness_status", "readiness_status TEXT")
+    ensure_column(conn, "tasks", "acceptance_notes", "acceptance_notes TEXT")
+    ensure_column(conn, "tasks", "milestone_id", "milestone_id INTEGER")
+
+    if conn.dialect == "postgresql":
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS kanban_saved_filters (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                name TEXT NOT NULL,
+                filters TEXT NOT NULL,
+                is_default BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS kanban_wip_policies (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER REFERENCES projects(id),
+                sprint_id INTEGER REFERENCES sprints(id),
+                todo_limit INTEGER,
+                doing_limit INTEGER,
+                done_limit INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_templates (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                project_id INTEGER REFERENCES projects(id),
+                story_points INTEGER NOT NULL,
+                difficulty TEXT NOT NULL,
+                priority TEXT NOT NULL,
+                labels TEXT NOT NULL DEFAULT '[]',
+                checklist TEXT NOT NULL DEFAULT '[]',
+                subtasks TEXT NOT NULL DEFAULT '[]',
+                created_by INTEGER NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS recurring_task_rules (
+                id SERIAL PRIMARY KEY,
+                template_id INTEGER NOT NULL REFERENCES task_templates(id),
+                assignee_id INTEGER NOT NULL REFERENCES users(id),
+                project_id INTEGER REFERENCES projects(id),
+                sprint_id INTEGER REFERENCES sprints(id),
+                frequency TEXT NOT NULL CHECK(frequency IN ('weekly','monthly')),
+                next_run_at TEXT NOT NULL,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_by INTEGER NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_milestones (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                name TEXT NOT NULL,
+                description TEXT,
+                due_date TEXT,
+                status TEXT NOT NULL DEFAULT 'planned',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_dependencies (
+                task_id INTEGER NOT NULL REFERENCES tasks(id),
+                dependency_task_id INTEGER NOT NULL REFERENCES tasks(id),
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (task_id, dependency_task_id)
+            )
+            """
+        )
+    else:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS kanban_saved_filters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                filters TEXT NOT NULL,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS kanban_wip_policies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER,
+                sprint_id INTEGER,
+                todo_limit INTEGER,
+                doing_limit INTEGER,
+                done_limit INTEGER,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                FOREIGN KEY (sprint_id) REFERENCES sprints(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                project_id INTEGER,
+                story_points INTEGER NOT NULL,
+                difficulty TEXT NOT NULL,
+                priority TEXT NOT NULL,
+                labels TEXT NOT NULL DEFAULT '[]',
+                checklist TEXT NOT NULL DEFAULT '[]',
+                subtasks TEXT NOT NULL DEFAULT '[]',
+                created_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS recurring_task_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                template_id INTEGER NOT NULL,
+                assignee_id INTEGER NOT NULL,
+                project_id INTEGER,
+                sprint_id INTEGER,
+                frequency TEXT NOT NULL CHECK(frequency IN ('weekly','monthly')),
+                next_run_at TEXT NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (template_id) REFERENCES task_templates(id),
+                FOREIGN KEY (assignee_id) REFERENCES users(id),
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                FOREIGN KEY (sprint_id) REFERENCES sprints(id),
+                FOREIGN KEY (created_by) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_milestones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                due_date TEXT,
+                status TEXT NOT NULL DEFAULT 'planned',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_dependencies (
+                task_id INTEGER NOT NULL,
+                dependency_task_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (task_id, dependency_task_id),
+                FOREIGN KEY (task_id) REFERENCES tasks(id),
+                FOREIGN KEY (dependency_task_id) REFERENCES tasks(id)
+            )
+            """
+        )
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kanban_saved_filters_user ON kanban_saved_filters(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kanban_wip_project_sprint ON kanban_wip_policies(project_id, sprint_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_task_templates_project ON task_templates(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_recurring_task_rules_next ON recurring_task_rules(active, next_run_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_milestones_project ON project_milestones(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_task_dependencies_dependency ON task_dependencies(dependency_task_id)")
+
+
+def _phase3_kpi_schema(conn: Any, table_columns: TableColumns, ensure_column: EnsureColumn) -> None:
+    ensure_column(conn, "kpi_adjustments", "status", "status TEXT NOT NULL DEFAULT 'approved'")
+    ensure_column(conn, "kpi_adjustments", "reviewer_id", "reviewer_id INTEGER")
+    ensure_column(conn, "kpi_adjustments", "reviewed_at", "reviewed_at TEXT")
+    ensure_column(conn, "kpi_adjustments", "review_reason", "review_reason TEXT")
+
+    id_type = "SERIAL PRIMARY KEY" if conn.dialect == "postgresql" else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    real_type = "DOUBLE PRECISION" if conn.dialect == "postgresql" else "REAL"
+    user_ref = " REFERENCES users(id)" if conn.dialect == "postgresql" else ""
+    dept_ref = " REFERENCES departments(id)" if conn.dialect == "postgresql" else ""
+
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS kpi_policies (
+            id {id_type},
+            difficulty_multiplier TEXT NOT NULL,
+            on_time_points {real_type} NOT NULL,
+            late_points {real_type} NOT NULL,
+            overdue_unfinished_points {real_type} NOT NULL,
+            fallback_difficulty TEXT NOT NULL DEFAULT 'easy',
+            change_reason TEXT,
+            updated_by INTEGER{user_ref},
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS kpi_transactions (
+            id {id_type},
+            event_key TEXT NOT NULL UNIQUE,
+            source_type TEXT NOT NULL,
+            source_id INTEGER,
+            user_id INTEGER NOT NULL{user_ref},
+            month TEXT NOT NULL,
+            points {real_type} NOT NULL,
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TEXT NOT NULL,
+            reversed_at TEXT
+        )
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS kpi_targets (
+            id {id_type},
+            user_id INTEGER NOT NULL{user_ref},
+            month TEXT NOT NULL,
+            target_score {real_type} NOT NULL,
+            department_id INTEGER{dept_ref},
+            team TEXT,
+            created_by INTEGER NOT NULL{user_ref},
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(user_id, month)
+        )
+        """
+    )
+
+    if conn.dialect == "sqlite":
+        row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'app_notifications'").fetchone()
+        sql = str(row["sql"] if row else "")
+        if "kpi_target_warning" not in sql:
+            conn.execute("ALTER TABLE app_notifications RENAME TO app_notifications_old")
+            conn.execute(
+                """
+                CREATE TABLE app_notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    type TEXT NOT NULL CHECK(type IN ('task_due_soon','task_overdue','task_comment','task_status_changed','kpi_target_warning')),
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id INTEGER NOT NULL,
+                    is_read INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    read_at TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO app_notifications
+                (id, user_id, type, title, message, entity_type, entity_id, is_read, created_at, read_at)
+                SELECT id, user_id, type, title, message, entity_type, entity_id, is_read, created_at, read_at
+                FROM app_notifications_old
+                """
+            )
+            conn.execute("DROP TABLE app_notifications_old")
+
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kpi_transactions_month_user_status ON kpi_transactions(month, user_id, status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_kpi_targets_month_user ON kpi_targets(month, user_id)")
+
+
+def _phase5_scheduled_reports_schema(conn: Any, _: TableColumns, __: EnsureColumn) -> None:
+    id_type = "SERIAL PRIMARY KEY" if conn.dialect == "postgresql" else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    bool_type = "BOOLEAN" if conn.dialect == "postgresql" else "INTEGER"
+    user_ref = " REFERENCES users(id)" if conn.dialect == "postgresql" else ""
+    schedule_ref = " REFERENCES scheduled_reports(id)" if conn.dialect == "postgresql" else ""
+
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS scheduled_reports (
+            id {id_type},
+            name TEXT NOT NULL,
+            report_type TEXT NOT NULL,
+            format TEXT NOT NULL,
+            frequency TEXT NOT NULL,
+            recipients TEXT NOT NULL,
+            active {bool_type} NOT NULL DEFAULT TRUE,
+            next_run_at TEXT NOT NULL,
+            last_run_at TEXT,
+            created_by INTEGER NOT NULL{user_ref},
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS scheduled_report_deliveries (
+            id {id_type},
+            schedule_id INTEGER NOT NULL{schedule_ref},
+            status TEXT NOT NULL,
+            delivery_channel TEXT NOT NULL,
+            message TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_reports_active_next ON scheduled_reports(active, next_run_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_report_deliveries_schedule ON scheduled_report_deliveries(schedule_id, created_at)")
+
+
+def _phase6_admin_compliance_maintenance_schema(conn: Any, _: TableColumns, __: EnsureColumn) -> None:
+    id_type = "SERIAL PRIMARY KEY" if conn.dialect == "postgresql" else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    user_ref = " REFERENCES users(id)" if conn.dialect == "postgresql" else ""
+
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS compliance_requests (
+            id {id_type},
+            subject_user_id INTEGER NOT NULL{user_ref},
+            request_type TEXT NOT NULL CHECK(request_type IN ('export','delete')),
+            status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','in_review','approved','rejected','fulfilled')),
+            reason TEXT NOT NULL,
+            resolution_note TEXT,
+            created_by INTEGER NOT NULL{user_ref},
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS maintenance_windows (
+            id {id_type},
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            starts_at TEXT NOT NULL,
+            ends_at TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'scheduled' CHECK(status IN ('scheduled','active','completed','cancelled')),
+            created_by INTEGER NOT NULL{user_ref},
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_compliance_requests_status_type ON compliance_requests(status, request_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_compliance_requests_subject ON compliance_requests(subject_user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_maintenance_windows_status_start ON maintenance_windows(status, starts_at)")
+
+
 MIGRATIONS = (
     Migration(1, "legacy_compat_columns", _legacy_compat_columns),
     Migration(2, "operational_indexes", _operational_indexes),
@@ -354,4 +781,10 @@ MIGRATIONS = (
     Migration(5, "phase5_rag_schema", _phase5_rag_schema),
     Migration(6, "auth_rbac_department_schema", _auth_rbac_department_schema),
     Migration(7, "task_ai_details_schema", _task_ai_details_schema),
+    Migration(8, "auth_login_attempts_schema", _auth_login_attempts_schema),
+    Migration(9, "phase2_task_metadata_schema", _phase2_task_metadata_schema),
+    Migration(10, "phase2_remaining_schema", _phase2_remaining_schema),
+    Migration(11, "phase3_kpi_schema", _phase3_kpi_schema),
+    Migration(12, "phase5_scheduled_reports_schema", _phase5_scheduled_reports_schema),
+    Migration(13, "phase6_admin_compliance_maintenance_schema", _phase6_admin_compliance_maintenance_schema),
 )

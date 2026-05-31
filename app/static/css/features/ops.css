@@ -1,0 +1,177 @@
+font-weight: 700;
+  padding: 10px 12px;
+}
+.ops-alert.hidden { display: none; }
+.ops-stat-card.success .stat-icon { color: var(--success); }
+.ops-stat-card.warning .stat-icon { color: var(--warning); }
+.ops-stat-card.danger .stat-icon { color: var(--danger); }
+.ops-table-stack {
+  display: grid;
+  gap: 14px;
+}
+.ops-queue-table td:nth-child(4) {
+  max-width: 280px;
+  overflow-wrap: anywhere;
+}
+
+/* ── Helpers ── */
+.text-sm   { font-size: 12.5px; }
+.text-muted { color: var(--text-3); }
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-3);
+  font-size: 13px;
+}
+.empty-state div:first-child { font-size: 32px; margin-bottom: 8px; }
+
+/* ── Skeleton ── */
+.skeleton {
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: var(--radius-sm);
+  min-height: 90px;
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #1E293B;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  z-index: 9999;
+  box-shadow: var(--shadow-md);
+  max-width: 320px;
+  transition: opacity .3s, transform .3s;
+}
+.toast.hidden { opacity: 0; transform: translateY(10px); pointer-events: none; }
+.toast.success { border-left: 4px solid var(--success); }
+.toast.error   { border-left: 4px solid var(--danger); }
+
+/* Task detail drawer */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: rgba(15, 23, 42, .42);
+  display: flex;
+  justify-content: flex-end;
+}
+.drawer-overlay.hidden { display: none; }
+.task-detail-drawer {
+  width: min(560px, 100vw);
+  height: 100vh;
+  background: var(--card-bg);
+  box-shadow: -8px 0 24px rgba(15, 23, 42, .18);
+  display: flex;
+  flex-direction: column;
+}
+.task-detail-header {
+  min-height: 64px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.drawer-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text-2);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.drawer-close:hover {
+  background: var(--brand-light);
+  color: var(--brand);
+}
+.task-detail-body {
+  padding: 18px;
+  overflow-y: auto;
+}
+.task-detail-section {
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.task-detail-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+.task-detail-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.task-detail-title {
+  margin-top: 4px;
+  font-size: 20px;
+  line-height: 1.25;
+  color: var(--text);
+}
+.task-detail-description {
+  margin-top: 8px;
+  color: var(--text-2);
+  white-space: pre-wrap;
+}
+.task-detail-status-row,
+.task-detail-subhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.task-detail-status-row { margin-top: 12px; }
+.task-detail-subhead {
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.task-detail-subhead h3 { font-size: 14px; }
+.task-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.task-detail-field {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  background: #F8FAFC;
+}
+.task-detail-field span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.task-detail-field strong {
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+.due-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;

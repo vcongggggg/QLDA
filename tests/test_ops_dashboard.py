@@ -16,6 +16,7 @@ from app.repository import (
     queue_notification,
     replace_role_permissions,
 )
+from app.settings import settings
 
 
 client = TestClient(app)
@@ -253,6 +254,64 @@ def test_latest_failed_items_do_not_expose_direct_db_secrets() -> None:
     assert resp.status_code == 200
     assert "secret-webhook" not in resp.text
     assert "Traceback" not in resp.text
+
+
+def test_release_gate_is_privileged_and_summarizes_ops_readiness() -> None:
+    admin, _manager, hr, staff = _bootstrap()
+    create_audit_log(int(admin["id"]), "release_gate_probe", "system", None, "release gate evidence")
+    queue_notification(int(staff["id"]), "teams", {"type": "message", "text": "queued"}, max_attempts=2)
+    failed = _make_failed_notification(int(staff["id"]))
+
+    for user in (admin, hr):
+        resp = client.get("/monitoring/release-gate", headers=_hdr(int(user["id"])))
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload["status"] in {"ok", "warn"}
+        assert payload["health"]["status"] == "ok"
+        assert payload["readiness"]["status"] == "ready"
+        assert payload["metrics"]["queued_notifications"] >= 1
+        assert payload["notification_queue"]["queued_count"] >= 1
+        assert payload["notification_queue"]["failed_count"] >= 1
+        assert any(int(item["id"]) == int(failed["id"]) for item in payload["notification_queue"]["latest_failed_items"])
+        assert payload["audit"]["available"] is True
+        assert {check["key"] for check in payload["checks"]} >= {
+            "health",
+            "readiness",
+            "metrics",
+            "notification_queue",
+            "audit_logs",
+            "production_auth",
+        }
+
+    blocked = client.get("/monitoring/release-gate", headers=_hdr(int(staff["id"])))
+    assert blocked.status_code == 403
+
+
+def test_release_gate_redacts_queue_errors_and_reports_auth_safety(monkeypatch) -> None:
+    _admin, _manager, hr, staff = _bootstrap()
+    _make_failed_notification(int(staff["id"]))
+    monkeypatch.setattr(settings, "app_env", "production", raising=False)
+    monkeypatch.setattr(settings, "auth_jwt_secret", "dev-secret-change-me", raising=False)
+    monkeypatch.setattr(settings, "auth_disable_jwt_validation", True, raising=False)
+    monkeypatch.setattr(settings, "auth_allow_header_fallback", True, raising=False)
+
+    resp = client.get("/monitoring/release-gate", headers=_hdr(int(hr["id"])))
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["status"] == "fail"
+    assert payload["production_auth"]["status"] == "fail"
+    assert "production" in payload["production_auth"]["summary"].lower()
+    text = resp.text.lower()
+    forbidden_fragments = [
+        "secret-webhook",
+        "bearer should-not-leak",
+        "client_secret",
+        "super-secret",
+        "traceback",
+        "webhook_url",
+    ]
+    assert all(fragment not in text for fragment in forbidden_fragments)
 
 
 def test_static_ui_exposes_audit_ops_section() -> None:

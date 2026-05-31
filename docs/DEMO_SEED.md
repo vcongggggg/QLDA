@@ -24,6 +24,16 @@ python scripts/seed_full_demo.py --reset-demo
 
 `--reset-demo` is guarded and should only be used in local/dev/demo/test. `--force` overrides the guard and must not be used against production data unless that reset has been explicitly approved.
 
+Run final demo smoke and evidence capture after starting the local app:
+
+```bash
+uvicorn app.main:app --reload
+python scripts/smoke_check.py --base-url http://127.0.0.1:8000 --user-id 1 --expect-production-auth
+python scripts/capture_demo_evidence.py --base-url http://127.0.0.1:8000
+```
+
+Evidence artifacts are written under `.tmp/demo-evidence/<timestamp>/` and should remain runtime artifacts unless explicitly requested for handoff.
+
 ## Demo Accounts
 
 The auth demo accounts are local/demo credentials, not production secrets:

@@ -1,0 +1,152 @@
+/* ══════════════════════════════════════════════
+   TeamsWork UI – Design System
+   ══════════════════════════════════════════════ */
+
+:root {
+  --brand:        #2563EB;
+  --brand-dark:   #1D4ED8;
+  --brand-light:  #EFF6FF;
+  --success:      #059669;
+  --success-bg:   #D1FAE5;
+  --warning:      #D97706;
+  --warning-bg:   #FEF3C7;
+  --danger:       #DC2626;
+  --danger-bg:    #FEE2E2;
+  --info:         #0891B2;
+  --info-bg:      #E0F2FE;
+
+  --sidebar-w:    220px;
+  --topbar-h:     56px;
+  --sidebar-bg:   #1E293B;
+  --sidebar-text: #94A3B8;
+  --sidebar-act:  #FFFFFF;
+
+  --bg:           #F1F5F9;
+  --card-bg:      #FFFFFF;
+  --border:       #E2E8F0;
+  --border-dark:  #CBD5E1;
+
+  --text:         #0F172A;
+  --text-2:       #475569;
+  --text-3:       #94A3B8;
+
+  --radius:       12px;
+  --radius-sm:    8px;
+  --shadow:       0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:    0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+
+  --font:         'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.ui-icon,
+.btn-icon,
+.heading-icon,
+.text-icon,
+.stat-svg,
+.report-svg,
+.empty-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.ui-icon { width: 18px; height: 18px; }
+.btn-icon { width: 15px; height: 15px; }
+.heading-icon { width: 16px; height: 16px; }
+.text-icon { width: 14px; height: 14px; vertical-align: -2px; }
+.stat-svg { width: 24px; height: 24px; }
+.report-svg { width: 24px; height: 24px; }
+.empty-icon { width: 32px; height: 32px; }
+
+html, body {
+  height: 100%;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  background: #f8fafc;
+  padding: 24px;
+}
+
+.login-panel {
+  width: min(380px, 100%);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 28px;
+}
+
+.login-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  margin-bottom: 12px;
+}
+
+.login-panel h1 {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.login-panel p {
+  color: var(--text-2);
+  margin-bottom: 18px;
+}
+
+.login-panel label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 12px 0 6px;
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.login-error {
+  margin-top: 12px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.logout-btn {
+  width: 100%;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-dark); border-radius: 3px; }
+
+/* ════════════════════════════════ LAYOUT ═══════ */

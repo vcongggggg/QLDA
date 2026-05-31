@@ -38,6 +38,64 @@ def build_deadline_card(task: dict) -> dict:
     }
 
 
+def build_task_action_card(task: dict) -> dict:
+    return {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+            {"type": "TextBlock", "size": "Large", "weight": "Bolder", "text": "TeamsWork - Task Action"},
+            {"type": "TextBlock", "text": f"Task #{task.get('id')}: {task.get('title', 'N/A')}", "wrap": True},
+            {"type": "TextBlock", "text": f"Status: {task.get('status', 'unknown')}"},
+            {"type": "TextBlock", "text": f"Deadline: {task.get('deadline') or 'N/A'}", "wrap": True},
+        ],
+        "actions": [
+            {
+                "type": "Action.Submit",
+                "title": "Start",
+                "data": {"action": "task_status", "task_id": task.get("id"), "status": "doing"},
+            },
+            {
+                "type": "Action.Submit",
+                "title": "Done",
+                "data": {"action": "task_status", "task_id": task.get("id"), "status": "done"},
+            },
+            {
+                "type": "Action.OpenUrl",
+                "title": "Open TeamsWork",
+                "url": f"{settings.app_base_url}/teams/tab",
+            },
+        ],
+    }
+
+
+def build_kpi_summary_card(month: str, rows: list[dict]) -> dict:
+    top_rows = rows[:5]
+    facts = [
+        {"title": str(row.get("user_name", f"User {row.get('user_id')}")), "value": str(row.get("score", 0))}
+        for row in top_rows
+    ]
+    return {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+            {"type": "TextBlock", "size": "Large", "weight": "Bolder", "text": f"TeamsWork - KPI {month}"},
+            {"type": "FactSet", "facts": facts or [{"title": "Status", "value": "No KPI data"}]},
+        ],
+        "actions": [
+            {
+                "type": "Action.Submit",
+                "title": "Acknowledge",
+                "data": {"action": "acknowledge", "kind": "kpi_summary", "month": month},
+            },
+            {
+                "type": "Action.OpenUrl",
+                "title": "Open TeamsWork",
+                "url": f"{settings.app_base_url}/teams/tab",
+            },
+        ],
+    }
+
+
 def build_text_card(title: str, message: str) -> dict:
     return {
         "type": "AdaptiveCard",
@@ -153,4 +211,55 @@ def send_text_to_teams_conversation(conversation_ref: dict, text: str) -> dict:
         "sent": resp.status_code in (200, 201, 202),
         "status_code": resp.status_code,
         "response_text": resp.text,
+    }
+
+
+def _get_graph_access_token() -> dict:
+    if settings.teams_proactive_mode != "graph":
+        return {"ok": False, "reason": "graph mode is not enabled"}
+    if not settings.teams_client_id or not settings.teams_client_secret or not settings.teams_tenant_id:
+        return {"ok": False, "reason": "missing graph credentials"}
+
+    token_url = f"https://login.microsoftonline.com/{settings.teams_tenant_id}/oauth2/v2.0/token"
+    data = {
+        "client_id": settings.teams_client_id,
+        "client_secret": settings.teams_client_secret,
+        "grant_type": "client_credentials",
+        "scope": "https://graph.microsoft.com/.default",
+    }
+    try:
+        resp = httpx.post(token_url, data=data, timeout=10.0)
+    except Exception:
+        return {"ok": False, "reason": "graph token request failed"}
+    if resp.status_code != 200:
+        return {"ok": False, "reason": f"graph token request failed: {resp.status_code}"}
+    token = resp.json().get("access_token")
+    if not token:
+        return {"ok": False, "reason": "missing graph access token"}
+    return {"ok": True, "token": token}
+
+
+def send_text_to_graph_channel(text: str, team_id: str | None = None, channel_id: str | None = None) -> dict:
+    target_team_id = team_id or getattr(settings, "teams_graph_team_id", "")
+    target_channel_id = channel_id or getattr(settings, "teams_graph_channel_id", "") or settings.teams_channel_id
+    if settings.teams_proactive_mode != "graph":
+        return {"sent": False, "reason": "graph mode is not enabled"}
+    if not target_team_id or not target_channel_id:
+        return {"sent": False, "reason": "missing graph channel target"}
+
+    token_result = _get_graph_access_token()
+    if not token_result.get("ok"):
+        return {"sent": False, "reason": token_result.get("reason", "graph token error")}
+
+    url = f"https://graph.microsoft.com/v1.0/teams/{target_team_id}/channels/{target_channel_id}/messages"
+    headers = {"Authorization": f"Bearer {token_result['token']}", "Content-Type": "application/json"}
+    payload = {"body": {"contentType": "text", "content": text}}
+    try:
+        resp = httpx.post(url, json=payload, headers=headers, timeout=10.0)
+    except Exception:
+        return {"sent": False, "reason": "graph post failed"}
+    return {
+        "sent": resp.status_code in (200, 201, 202),
+        "status_code": resp.status_code,
+        "reason": None if resp.status_code in (200, 201, 202) else f"graph post failed: {resp.status_code}",
     }

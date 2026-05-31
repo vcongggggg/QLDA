@@ -1,15 +1,12 @@
 # TeamsWork / QLDA
 
-[![Ngôn ngữ: Tiếng Việt](https://img.shields.io/badge/Ngon_ngu-Tieng_Viet-2B579A?style=for-the-badge)](#tiếng-việt)
-[![Language: English](https://img.shields.io/badge/Language-English-555555?style=for-the-badge)](#english)
-
-**TeamsWork** là nền tảng quản lý dự án, công việc, KPI, báo cáo, Microsoft Teams và AI task breakdown cho vận hành nội bộ.
+![Ngôn ngữ: Tiếng Việt](https://img.shields.io/badge/Ngon_ngu-Tieng_Viet-2B579A?style=for-the-badge)![Language: English](https://img.shields.io/badge/Language-English-555555?style=for-the-badge)**TeamsWork** là nền tảng quản lý dự án, công việc, KPI, báo cáo, Microsoft Teams và AI task breakdown cho vận hành nội bộ.
 
 ---
 
 ## Tiếng Việt
 
-> Chọn nhanh ngôn ngữ: [Tiếng Việt](#tiếng-việt) | [English](#english)
+> Chọn nhanh ngôn ngữ: [Tiếng Việt](#ti%E1%BA%BFng-vi%E1%BB%87t) | [English](#english)
 
 ### Tổng Quan
 
@@ -313,6 +310,16 @@ python scripts/seed_full_demo.py --rag-only
 python scripts/seed_full_demo.py --reset-demo
 ```
 
+Final demo evidence capture:
+
+```bash
+uvicorn app.main:app --reload
+python scripts/smoke_check.py --base-url http://127.0.0.1:8000 --user-id 1 --expect-production-auth
+python scripts/capture_demo_evidence.py --base-url http://127.0.0.1:8000
+```
+
+Artifacts are written to `.tmp/demo-evidence/<timestamp>/`.
+
 Xem thêm:
 
 - `docs/DEMO_SEED.md`
@@ -369,6 +376,7 @@ Teams integration đã có scaffold:
 - AAD sync: `POST /integrations/teams/aad/sync`
 - Reminder runner: `POST /integrations/teams/reminders/run`
 - Bot callback: `POST /integrations/teams/bot/messages`
+- Adaptive Card action callback: `POST /integrations/teams/card/actions`
 - Proactive queue: `POST /integrations/teams/proactive/queue`
 - Teams tab summary: `GET /integrations/teams/summary?month=YYYY-MM`
 - Queue processor: `POST /integrations/teams/proactive/process`
@@ -381,6 +389,14 @@ python scripts/package_teams_app.py
 ```
 
 Checklist publish nằm ở `teams-app/PUBLISH_CHECKLIST.md`.
+
+Phase 4 Teams release behavior:
+
+- Bot commands are local-testable: `/help`, `/task-list`, `/team-kpi`, `/my-deadlines`, `/top-kpi`, `/search`, `/new-task`, `/assign`, `/status`, `/report`.
+- Data-changing bot commands and Adaptive Card actions require a mapped Teams `aadObjectId` and existing TeamsWork RBAC permissions.
+- Proactive queue payloads support `dedup_key` and `target` metadata for user, webhook, channel, and project-channel routing.
+- Microsoft Graph channel posting is disabled by default. It only runs when `TEAMS_PROACTIVE_MODE=graph` and `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_TENANT_ID`, `TEAMS_GRAPH_TEAM_ID`, and `TEAMS_GRAPH_CHANNEL_ID` are configured.
+- Tests mock Graph calls; local demo and default config do not send real Teams messages.
 
 ### Audit & Ops Dashboard
 
@@ -494,7 +510,7 @@ python scripts/smoke_check.py --base-url https://teamswork.example.com --user-id
 
 ## English
 
-> Quick language switch: [Tiếng Việt](#tiếng-việt) | [English](#english)
+> Quick language switch: [Tiếng Việt](#ti%E1%BA%BFng-vi%E1%BB%87t) | [English](#english)
 
 ### Overview
 
@@ -800,6 +816,16 @@ python scripts/seed_full_demo.py --rag-only
 python scripts/seed_full_demo.py --reset-demo
 ```
 
+Final demo evidence capture:
+
+```bash
+uvicorn app.main:app --reload
+python scripts/smoke_check.py --base-url http://127.0.0.1:8000 --user-id 1 --expect-production-auth
+python scripts/capture_demo_evidence.py --base-url http://127.0.0.1:8000
+```
+
+Artifacts are written to `.tmp/demo-evidence/<timestamp>/`.
+
 See also:
 
 - `docs/DEMO_SEED.md`
@@ -856,6 +882,7 @@ Teams integration scaffold:
 - AAD sync: `POST /integrations/teams/aad/sync`
 - Reminder runner: `POST /integrations/teams/reminders/run`
 - Bot callback: `POST /integrations/teams/bot/messages`
+- Adaptive Card action callback: `POST /integrations/teams/card/actions`
 - Proactive queue: `POST /integrations/teams/proactive/queue`
 - Teams tab summary: `GET /integrations/teams/summary?month=YYYY-MM`
 - Queue processor: `POST /integrations/teams/proactive/process`
@@ -868,6 +895,14 @@ python scripts/package_teams_app.py
 ```
 
 Publishing checklist: `teams-app/PUBLISH_CHECKLIST.md`.
+
+Phase 4 Teams release behavior:
+
+- Bot commands are local-testable: `/help`, `/task-list`, `/team-kpi`, `/my-deadlines`, `/top-kpi`, `/search`, `/new-task`, `/assign`, `/status`, `/report`.
+- Data-changing bot commands and Adaptive Card actions require a mapped Teams `aadObjectId` and existing TeamsWork RBAC permissions.
+- Proactive queue payloads support `dedup_key` and `target` metadata for user, webhook, channel, and project-channel routing.
+- Microsoft Graph channel posting is disabled by default. It only runs when `TEAMS_PROACTIVE_MODE=graph` and `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_TENANT_ID`, `TEAMS_GRAPH_TEAM_ID`, and `TEAMS_GRAPH_CHANNEL_ID` are configured.
+- Tests mock Graph calls; local demo and default config do not send real Teams messages.
 
 ### Audit & Ops Dashboard
 
@@ -928,6 +963,22 @@ Run API, AI, and RBAC/RAG flows:
 ```bash
 pytest tests/test_api_flow.py tests/test_ai_task_breakdown.py tests/test_rbac_rag.py
 ```
+
+Final demo evidence docs and scripts:
+
+- `docs/FINAL_DEMO_SCRIPT.md`
+- `docs/TRACEABILITY_MATRIX.md`
+- `docs/TEST_EVIDENCE.md`
+- `docs/FINAL_DEMO_SLIDES.md`
+- `scripts/capture_demo_evidence.py`
+
+Final demo evidence docs and scripts:
+
+- `docs/FINAL_DEMO_SCRIPT.md`
+- `docs/TRACEABILITY_MATRIX.md`
+- `docs/TEST_EVIDENCE.md`
+- `docs/FINAL_DEMO_SLIDES.md`
+- `scripts/capture_demo_evidence.py`
 
 Default quality gate:
 

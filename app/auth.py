@@ -17,6 +17,23 @@ def _parse_bearer_token(authorization: str | None) -> str | None:
     return parts[1]
 
 
+def email_domain_allowed(email: str | None) -> bool:
+    allowed_domains = tuple(getattr(settings, "auth_allowed_email_domains", ()) or ())
+    if not allowed_domains:
+        return True
+    value = str(email or "").strip().lower()
+    if "@" not in value:
+        return False
+    domain = value.rsplit("@", 1)[1]
+    normalized_allowed = {str(item).strip().lower().lstrip("@") for item in allowed_domains if str(item).strip()}
+    return domain in normalized_allowed
+
+
+def require_email_domain_allowed(email: str | None) -> None:
+    if not email_domain_allowed(email):
+        raise HTTPException(status_code=403, detail="email domain is not allowed")
+
+
 def _get_user_from_jwt(token: str) -> dict:
     try:
         payload = jwt.decode(token, settings.auth_jwt_secret, algorithms=[settings.auth_jwt_algorithm])
@@ -49,11 +66,13 @@ def create_access_token(user: dict, expires_minutes: int = 480) -> str:
 
 
 def authenticate_user(username_or_email: str, password: str) -> dict:
+    require_email_domain_allowed(username_or_email)
     user = get_user_by_username_or_email(username_or_email, include_password=True)
     if not user or not verify_password(password, user.get("password_hash")):
-        raise HTTPException(status_code=401, detail="invalid username/email or password")
+        raise HTTPException(status_code=401, detail="invalid credentials")
     if not user.get("is_active", True):
         raise HTTPException(status_code=403, detail="user is inactive")
+    require_email_domain_allowed(user.get("email"))
     user.pop("password_hash", None)
     return user
 

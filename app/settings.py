@@ -33,6 +33,20 @@ def parse_bool(value: Any, default: bool = False) -> bool:
     return default
 
 
+def parse_csv(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, (tuple, list, set)):
+        raw_items = value
+    else:
+        raw_items = str(value).split(",")
+    return tuple(
+        item.strip().lower().lstrip("@")
+        for item in raw_items
+        if str(item).strip()
+    )
+
+
 class Settings:
     def __init__(self, **overrides: Any) -> None:
         self.app_env = str(overrides.get("app_env", os.getenv("APP_ENV", "development"))).lower()
@@ -55,6 +69,28 @@ class Settings:
             ),
             default=True,
         )
+        self.auth_allowed_email_domains = parse_csv(
+            overrides.get("auth_allowed_email_domains", os.getenv("AUTH_ALLOWED_EMAIL_DOMAINS"))
+        )
+        self.auth_failed_login_limit = int(
+            overrides.get("auth_failed_login_limit", os.getenv("AUTH_FAILED_LOGIN_LIMIT", "5"))
+        )
+        self.auth_failed_login_window_minutes = int(
+            overrides.get(
+                "auth_failed_login_window_minutes",
+                os.getenv("AUTH_FAILED_LOGIN_WINDOW_MINUTES", "30"),
+            )
+        )
+        self.auth_failed_login_block_minutes = int(
+            overrides.get(
+                "auth_failed_login_block_minutes",
+                os.getenv("AUTH_FAILED_LOGIN_BLOCK_MINUTES", "30"),
+            )
+        )
+        self.security_hsts_enabled = parse_bool(
+            overrides.get("security_hsts_enabled", os.getenv("SECURITY_HSTS_ENABLED")),
+            default=False,
+        )
 
         self.teams_client_id = overrides.get("teams_client_id", os.getenv("TEAMS_CLIENT_ID", ""))
         self.teams_tenant_id = overrides.get("teams_tenant_id", os.getenv("TEAMS_TENANT_ID", "common"))
@@ -75,6 +111,8 @@ class Settings:
         self.teams_proactive_mode = overrides.get("teams_proactive_mode", os.getenv("TEAMS_PROACTIVE_MODE", "webhook"))
         self.teams_bot_app_id = overrides.get("teams_bot_app_id", os.getenv("TEAMS_BOT_APP_ID", ""))
         self.teams_bot_app_secret = overrides.get("teams_bot_app_secret", os.getenv("TEAMS_BOT_APP_SECRET", ""))
+        self.teams_graph_team_id = overrides.get("teams_graph_team_id", os.getenv("TEAMS_GRAPH_TEAM_ID", ""))
+        self.teams_graph_channel_id = overrides.get("teams_graph_channel_id", os.getenv("TEAMS_GRAPH_CHANNEL_ID", ""))
 
         self.ai_provider = overrides.get("ai_provider", os.getenv("AI_PROVIDER", "openai_compatible"))
         self.ai_api_key = overrides.get("ai_api_key", os.getenv("AI_API_KEY", "ollama"))
