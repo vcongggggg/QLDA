@@ -72,6 +72,8 @@ def create_user(
     position: str | None = None,
     avatar_url: str | None = None,
     is_active: bool = True,
+    onboarding_status: str = "active",
+    onboarding_note: str | None = None,
 ) -> dict[str, Any]:
     now = _now_iso()
     role_id = canonical_role_code(role)
@@ -89,8 +91,8 @@ def create_user(
         cursor = conn.execute(
             """
             INSERT INTO users
-            (full_name, email, aad_object_id, role, department, password_hash, role_id, department_id, position, avatar_url, is_active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (full_name, email, aad_object_id, role, department, password_hash, role_id, department_id, position, avatar_url, is_active, created_at, updated_at, onboarding_status, onboarding_note, activated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 full_name,
@@ -106,6 +108,9 @@ def create_user(
                 bool(is_active),
                 now,
                 now,
+                onboarding_status,
+                onboarding_note,
+                now if onboarding_status == "active" else None,
             ),
         )
         user_id = cursor.lastrowid
@@ -166,13 +171,19 @@ def upsert_user_from_aad(aad_object_id: str, display_name: str | None, email: st
                 """
                 UPDATE users
                 SET full_name = COALESCE(?, full_name),
-                    email = COALESCE(?, email)
+                    email = COALESCE(?, email),
+                    onboarding_status = CASE WHEN onboarding_status IN ('invited','pending') THEN 'active' ELSE onboarding_status END,
+                    activated_at = COALESCE(activated_at, ?),
+                    last_login_at = ?,
+                    updated_at = ?
                 WHERE id = ?
                 """,
-                (display_name, email, existing["id"]),
+                (display_name, email, _now_iso(), _now_iso(), _now_iso(), existing["id"]),
             )
-            row = conn.execute("SELECT * FROM users WHERE id = ?", (existing["id"],)).fetchone()
-        return dict(row)
+        updated = get_user_by_id(int(existing["id"]))
+        if not updated:
+            raise RuntimeError("updated aad user not found")
+        return updated
 
     safe_email = email or f"{aad_object_id}@aad.example.com"
     safe_name = display_name or "Teams User"
@@ -182,6 +193,7 @@ def upsert_user_from_aad(aad_object_id: str, display_name: str | None, email: st
         aad_object_id=aad_object_id,
         role="MEMBER",
         department="Unassigned",
+        onboarding_status="active",
     )
 
 
@@ -252,6 +264,126 @@ def update_user(
 
 def update_user_active(user_id: int, is_active: bool) -> dict[str, Any] | None:
     return update_user(user_id, is_active=is_active)
+
+
+def update_user_last_login(user_id: int) -> dict[str, Any] | None:
+    now = _now_iso()
+    with get_connection() as conn:
+        existing = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not existing:
+            return None
+        conn.execute(
+            """
+            UPDATE users
+            SET last_login_at = ?,
+                onboarding_status = CASE WHEN onboarding_status IN ('invited','pending') THEN 'active' ELSE onboarding_status END,
+                activated_at = COALESCE(activated_at, ?),
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (now, now, now, user_id),
+        )
+    return get_user_by_id(user_id)
+
+
+def invite_user(user_id: int) -> dict[str, Any] | None:
+    now = _now_iso()
+    with get_connection() as conn:
+        existing = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not existing:
+            return None
+        conn.execute(
+            """
+            UPDATE users
+            SET onboarding_status = 'invited',
+                invited_at = COALESCE(invited_at, ?),
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (now, now, user_id),
+        )
+    return get_user_by_id(user_id)
+
+
+def update_user_onboarding(
+    user_id: int,
+    onboarding_status: str,
+    onboarding_note: str | None = None,
+) -> dict[str, Any] | None:
+    now = _now_iso()
+    with get_connection() as conn:
+        existing = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not existing:
+            return None
+        conn.execute(
+            """
+            UPDATE users
+            SET onboarding_status = ?,
+                onboarding_note = ?,
+                invited_at = CASE WHEN ? = 'invited' THEN COALESCE(invited_at, ?) ELSE invited_at END,
+                activated_at = CASE WHEN ? = 'active' THEN COALESCE(activated_at, ?) ELSE activated_at END,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (onboarding_status, onboarding_note, onboarding_status, now, onboarding_status, now, now, user_id),
+        )
+    return get_user_by_id(user_id)
+
+
+def get_user_notification_preferences(user_id: int) -> dict[str, Any]:
+    now = _now_iso()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM user_notification_preferences WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            conn.execute(
+                """
+                INSERT INTO user_notification_preferences
+                (user_id, app_enabled, email_enabled, teams_enabled, digest_enabled, quiet_hours_start, quiet_hours_end, updated_at)
+                VALUES (?, TRUE, FALSE, TRUE, FALSE, NULL, NULL, ?)
+                """,
+                (user_id, now),
+            )
+            row = conn.execute(
+                "SELECT * FROM user_notification_preferences WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+    return dict(row)
+
+
+def update_user_notification_preferences(
+    user_id: int,
+    **updates: Any,
+) -> dict[str, Any]:
+    current = get_user_notification_preferences(user_id)
+    allowed = {
+        "app_enabled",
+        "email_enabled",
+        "teams_enabled",
+        "digest_enabled",
+        "quiet_hours_start",
+        "quiet_hours_end",
+    }
+    fields: list[str] = []
+    params: list[Any] = []
+    for key, value in updates.items():
+        if key not in allowed or value is None:
+            continue
+        fields.append(f"{key} = ?")
+        params.append(bool(value) if key.endswith("_enabled") else value)
+    if not fields:
+        return current
+    fields.append("updated_at = ?")
+    params.append(_now_iso())
+    params.append(user_id)
+    with get_connection() as conn:
+        conn.execute(
+            f"UPDATE user_notification_preferences SET {', '.join(fields)} WHERE user_id = ?",
+            tuple(params),
+        )
+    return get_user_notification_preferences(user_id)
 
 
 def reset_user_password(user_id: int, password: str) -> bool:

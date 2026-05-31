@@ -63,8 +63,11 @@ const MODULE_VIEW_PERMISSIONS = {
 };
 
 const ACTION_PERMISSIONS = {
+  taskCreate: ['KANBAN_MANAGE_TEAM', 'KANBAN_MANAGE_ALL', 'tasks.create'],
   taskUpdate: ['KANBAN_UPDATE_OWN_TASK', 'KANBAN_MANAGE_TEAM', 'KANBAN_MANAGE_ALL', 'tasks.update_own', 'tasks.update_any'],
   taskDeadlineExtend: ['KANBAN_MANAGE_TEAM', 'KANBAN_MANAGE_ALL', 'tasks.update_any'],
+  projectCreate: ['PROJECT_CREATE', 'projects.manage'],
+  sprintManage: ['PROJECT_UPDATE', 'projects.manage', 'sprints.manage'],
   reportExport: ['REPORT_EXPORT', 'reports.export'],
   aiGenerate: ['AI_TASK_GENERATE', 'ai.preview'],
   aiReview: ['AI_TASK_REVIEW', 'ai.import'],

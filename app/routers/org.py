@@ -114,18 +114,22 @@ def department_members_endpoint(department_id: int, current_user: dict = Depends
 @router.post("/projects", response_model=ProjectOut)
 def create_project_endpoint(payload: ProjectCreate, current_user: dict = Depends(get_current_user)) -> dict:
     require_roles(current_user, {"admin", "manager"})
+    require_permission(current_user, "projects.manage")
     if payload.department_id is not None and not department_exists(payload.department_id):
         raise HTTPException(status_code=404, detail="department not found")
     if payload.manager_id is not None and not user_exists(payload.manager_id):
         raise HTTPException(status_code=404, detail="manager not found")
     if payload.status not in {"active", "on_hold", "done", "archived"}:
         raise HTTPException(status_code=400, detail="invalid project status")
+    manager_id = payload.manager_id
+    if manager_id is None and current_role_code(current_user) == "MANAGER":
+        manager_id = int(current_user["id"])
 
     project = create_project(
         name=payload.name,
         description=payload.description,
         department_id=payload.department_id,
-        manager_id=payload.manager_id,
+        manager_id=manager_id,
         start_date=payload.start_date.astimezone(timezone.utc).isoformat() if payload.start_date else None,
         end_date=payload.end_date.astimezone(timezone.utc).isoformat() if payload.end_date else None,
         status=payload.status,
@@ -161,8 +165,10 @@ def add_project_member_endpoint(
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     require_roles(current_user, {"admin", "manager"})
+    require_permission(current_user, "projects.manage")
     if not project_exists(project_id):
         raise HTTPException(status_code=404, detail="project not found")
+    require_project_access(current_user, project_id)
     if not user_exists(payload.user_id):
         raise HTTPException(status_code=404, detail="user not found")
     try:

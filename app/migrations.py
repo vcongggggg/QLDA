@@ -773,6 +773,42 @@ def _phase6_admin_compliance_maintenance_schema(conn: Any, _: TableColumns, __: 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_maintenance_windows_status_start ON maintenance_windows(status, starts_at)")
 
 
+def _phase1_onboarding_notification_preferences_schema(
+    conn: Any,
+    table_columns: TableColumns,
+    ensure_column: EnsureColumn,
+) -> None:
+    ensure_column(conn, "users", "onboarding_status", "onboarding_status TEXT NOT NULL DEFAULT 'active'")
+    ensure_column(conn, "users", "onboarding_note", "onboarding_note TEXT")
+    ensure_column(conn, "users", "invited_at", "invited_at TEXT")
+    ensure_column(conn, "users", "activated_at", "activated_at TEXT")
+    ensure_column(conn, "users", "last_login_at", "last_login_at TEXT")
+
+    conn.execute("UPDATE users SET onboarding_status = COALESCE(onboarding_status, 'active')")
+
+    id_type = "SERIAL PRIMARY KEY" if conn.dialect == "postgresql" else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    bool_type = "BOOLEAN" if conn.dialect == "postgresql" else "INTEGER"
+    user_ref = " REFERENCES users(id)" if conn.dialect == "postgresql" else ""
+
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS user_notification_preferences (
+            id {id_type},
+            user_id INTEGER NOT NULL{user_ref},
+            app_enabled {bool_type} NOT NULL DEFAULT TRUE,
+            email_enabled {bool_type} NOT NULL DEFAULT FALSE,
+            teams_enabled {bool_type} NOT NULL DEFAULT TRUE,
+            digest_enabled {bool_type} NOT NULL DEFAULT FALSE,
+            quiet_hours_start TEXT,
+            quiet_hours_end TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE(user_id)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_notification_preferences_user ON user_notification_preferences(user_id)")
+
+
 MIGRATIONS = (
     Migration(1, "legacy_compat_columns", _legacy_compat_columns),
     Migration(2, "operational_indexes", _operational_indexes),
@@ -787,4 +823,5 @@ MIGRATIONS = (
     Migration(11, "phase3_kpi_schema", _phase3_kpi_schema),
     Migration(12, "phase5_scheduled_reports_schema", _phase5_scheduled_reports_schema),
     Migration(13, "phase6_admin_compliance_maintenance_schema", _phase6_admin_compliance_maintenance_schema),
+    Migration(14, "phase1_onboarding_notification_preferences_schema", _phase1_onboarding_notification_preferences_schema),
 )

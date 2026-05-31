@@ -5,13 +5,26 @@ from app.repository import (
     create_audit_log,
     create_user,
     department_exists,
+    get_user_notification_preferences,
+    invite_user,
     list_roles,
     list_users,
     reset_user_password,
     update_user,
     update_user_active,
+    update_user_notification_preferences,
+    update_user_onboarding,
 )
-from app.schemas import PasswordReset, UserCreate, UserOut, UserUpdate
+from app.schemas import (
+    PasswordReset,
+    UserCreate,
+    UserNotificationPreferencesOut,
+    UserNotificationPreferencesUpdate,
+    UserOnboardingUpdate,
+    UserOut,
+    UserProfileUpdate,
+    UserUpdate,
+)
 
 router = APIRouter(tags=["users"])
 
@@ -34,6 +47,8 @@ def create_user_endpoint(payload: UserCreate, current_user: dict = Depends(get_c
             department_id=payload.department_id,
             position=payload.position,
             avatar_url=payload.avatar_url,
+            onboarding_status=payload.onboarding_status,
+            onboarding_note=payload.onboarding_note,
         )
         create_audit_log(current_user["id"], "create", "user", user["id"], f"create user {user['email']}")
         return user
@@ -44,6 +59,47 @@ def create_user_endpoint(payload: UserCreate, current_user: dict = Depends(get_c
 @router.get("/users/me", response_model=UserOut)
 def get_current_user_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
+
+
+@router.patch("/users/me", response_model=UserOut)
+def update_current_user_endpoint(
+    payload: UserProfileUpdate,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    updated = update_user(
+        int(current_user["id"]),
+        full_name=payload.full_name,
+        position=payload.position,
+        avatar_url=payload.avatar_url,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="user not found")
+    create_audit_log(current_user["id"], "update_profile", "user", int(current_user["id"]), "update own profile")
+    return updated
+
+
+@router.get("/users/me/notification-settings", response_model=UserNotificationPreferencesOut)
+def get_current_user_notification_settings_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    return get_user_notification_preferences(int(current_user["id"]))
+
+
+@router.patch("/users/me/notification-settings", response_model=UserNotificationPreferencesOut)
+def update_current_user_notification_settings_endpoint(
+    payload: UserNotificationPreferencesUpdate,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    updated = update_user_notification_preferences(
+        int(current_user["id"]),
+        **payload.model_dump(exclude_unset=True),
+    )
+    create_audit_log(
+        current_user["id"],
+        "update_notification_settings",
+        "user_notification_preferences",
+        int(current_user["id"]),
+        "update own notification settings",
+    )
+    return updated
 
 
 @router.get("/users", response_model=list[UserOut])
@@ -82,6 +138,36 @@ def set_user_active_endpoint(user_id: int, payload: UserUpdate, current_user: di
     if not updated:
         raise HTTPException(status_code=404, detail="user not found")
     create_audit_log(current_user["id"], "update_active", "user", user_id, f"is_active={payload.is_active}")
+    return updated
+
+
+@router.post("/users/{user_id}/invite", response_model=UserOut)
+def invite_user_endpoint(user_id: int, current_user: dict = Depends(get_current_user)) -> dict:
+    require_permission(current_user, "USER_UPDATE")
+    updated = invite_user(user_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="user not found")
+    create_audit_log(current_user["id"], "invite", "user", user_id, "invite user")
+    return updated
+
+
+@router.patch("/users/{user_id}/onboarding", response_model=UserOut)
+def update_user_onboarding_endpoint(
+    user_id: int,
+    payload: UserOnboardingUpdate,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    require_permission(current_user, "USER_UPDATE")
+    updated = update_user_onboarding(user_id, payload.onboarding_status, payload.onboarding_note)
+    if not updated:
+        raise HTTPException(status_code=404, detail="user not found")
+    create_audit_log(
+        current_user["id"],
+        "update_onboarding",
+        "user",
+        user_id,
+        f"onboarding_status={payload.onboarding_status}",
+    )
     return updated
 
 

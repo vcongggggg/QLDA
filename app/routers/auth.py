@@ -4,9 +4,15 @@ from hashlib import sha256
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from jose import jwt
 
-from app.auth import authenticate_user, create_access_token, get_current_user, require_roles
-from app.repository import get_user_by_id, recent_failed_login_attempt_summary, record_auth_login_attempt
-from app.schemas import AuthUserOut, LoginRequest, LoginResponse
+from app.auth import authenticate_user, create_access_token, get_current_user, require_permission, require_roles
+from app.repository import (
+    create_audit_log,
+    get_user_by_id,
+    recent_failed_login_attempt_summary,
+    record_auth_login_attempt,
+    update_user_last_login,
+)
+from app.schemas import AuthSecurityStatusOut, AuthUserOut, LoginRequest, LoginResponse
 from app.settings import settings
 
 router = APIRouter(tags=["auth"])
@@ -72,6 +78,7 @@ def login(payload: LoginRequest, request: Request) -> dict:
         raise
 
     record_auth_login_attempt(email, ip_hash, "success", "authenticated")
+    update_user_last_login(int(user["id"]))
     return {
         "accessToken": create_access_token(user),
         "tokenType": "Bearer",
@@ -87,6 +94,52 @@ def auth_me(current_user: dict = Depends(get_current_user)) -> dict:
 @router.post("/auth/logout")
 def logout(_: dict = Depends(get_current_user)) -> dict:
     return {"ok": True}
+
+
+def _auth_security_status_payload() -> dict:
+    findings: list[str] = []
+    status = "ok"
+    try:
+        settings.validate_production_safety()
+    except ValueError as exc:
+        findings.append(str(exc))
+        status = "fail" if settings.app_env == "production" else "warn"
+
+    if settings.app_env != "production":
+        findings.append("APP_ENV is not production; production auth safety is reported as readiness evidence only.")
+        if status == "ok":
+            status = "warn"
+    if not settings.auth_allowed_email_domains:
+        findings.append("AUTH_ALLOWED_EMAIL_DOMAINS is not configured.")
+        if settings.app_env == "production":
+            status = "fail"
+        elif status == "ok":
+            status = "warn"
+    if settings.teams_disable_jwt_validation:
+        findings.append("Teams JWT validation is disabled; only safe for local/dev simulation.")
+        if settings.app_env == "production":
+            status = "fail"
+        elif status == "ok":
+            status = "warn"
+
+    return {
+        "app_env": settings.app_env,
+        "status": status,
+        "jwt_validation_required": not settings.auth_disable_jwt_validation,
+        "header_fallback_enabled": bool(settings.auth_allow_header_fallback),
+        "email_domain_allowlist_configured": bool(settings.auth_allowed_email_domains),
+        "teams_aad_validation_required": not settings.teams_disable_jwt_validation,
+        "teams_real_graph_enabled": bool(settings.teams_real_graph_enabled),
+        "findings": findings,
+    }
+
+
+@router.get("/auth/security/status", response_model=AuthSecurityStatusOut)
+def auth_security_status(current_user: dict = Depends(get_current_user)) -> dict:
+    require_permission(current_user, "OPS_VIEW")
+    payload = _auth_security_status_payload()
+    create_audit_log(current_user["id"], "view", "auth_security_status", None, f"status={payload['status']}")
+    return payload
 
 
 @router.post("/auth/token")

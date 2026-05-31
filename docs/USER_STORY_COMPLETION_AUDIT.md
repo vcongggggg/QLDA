@@ -11,10 +11,10 @@ Strict rule used: only `Done` is counted as completed. `Partial` stories are sti
 | Metric | Count |
 | --- | ---: |
 | Total user stories in backlog | 513 |
-| Completed (`Done`) | 206 |
+| Completed (`Done`) | 255 |
 | Partially implemented (`Partial`) | 4 |
-| Not started | 303 |
-| **Unfinished (`Partial` + `Not started`)** | **307** |
+| Not started | 254 |
+| **Unfinished (`Partial` + `Not started`)** | **258** |
 
 ## Production Release Scope
 
@@ -22,7 +22,7 @@ Roadmap scope for production release is `Must Have` + `Should Have` only. `Could
 
 | Scope | Total | Done | Partial | Not started | Remaining |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Must Have + Should Have | 374 | 202 | 0 | 172 | 172 |
+| Must Have + Should Have | 374 | 251 | 0 | 123 | 123 |
 | Could Have + Won't Have | 139 | 4 | 4 | 131 | 135 |
 
 ## Traceability Rules
@@ -77,6 +77,46 @@ The codebase has been split toward a feature-sliced modular monolith while prese
 | US022 | Done | Migration 8 creates `auth_login_attempts`; `app/routers/auth.py` blocks repeated failures by email/IP hash. | `tests/test_auth_security_hardening.py` |
 | US049 | Done | Failed, blocked, and successful login attempts are recorded without passwords, bearer tokens, raw provider errors, or raw IP addresses. | `tests/test_auth_security_hardening.py` |
 
+## Phase 1B Evidence
+
+This slice completes directly testable RBAC custom role management, role-permission matrix export, and safe self-profile update. It does not claim production Azure AD tenant validation, external SSO rollout, or unrelated onboarding/notification settings stories.
+
+| Story ID | Phase 1B status | Implementation evidence | Test evidence |
+| --- | --- | --- | --- |
+| US006 | Done | `POST /rbac/roles`, `PATCH /rbac/roles/{role_slug}`, and `GET /rbac/roles/{role_slug}/permissions` support custom role setup and permission assignment behind `roles.manage`. | `tests/test_auth_rbac_department.py`; `pytest tests/test_auth_rbac_department.py tests/test_auth_security_hardening.py tests/test_role_module_rbac_matrix.py -q` |
+| US007 | Done | RBAC matrix endpoint `GET /rbac/matrix` exposes role-to-permission coverage for review and admin verification. | `tests/test_auth_rbac_department.py`; focused Phase 1 suite |
+| US008 | Done | Staff/member users are blocked from role mutation while admin users can create/update custom roles; audit logs record role changes. | `tests/test_auth_rbac_department.py`; focused Phase 1 suite |
+| US024 | Done | Custom role creation stores non-system roles and assigns validated permission keys without accepting unknown permissions. | `app/repositories/rbac.py`; `tests/test_auth_rbac_department.py` |
+| US027 | Done | RBAC matrix export is available as `GET /rbac/matrix.csv` and `GET /rbac/matrix.xlsx` with `roles.view` permission checks. | `app/routers/rbac.py`; `app/reporting.py`; `tests/test_auth_rbac_department.py` |
+| US042 | Done | Role permission review/export includes all roles and permissions, including custom roles, for release audit evidence. | `tests/test_auth_rbac_department.py`; focused Phase 1 suite |
+| US013 | Done | `PATCH /users/me` lets an authenticated user update safe profile fields only (`full_name`, `position`, `avatar_url`) while ignoring role/active escalation attempts and writing audit evidence. | `tests/test_auth_rbac_department.py`; focused Phase 1 suite |
+
+## Phase 1C Evidence
+
+This slice completes local-testable production auth/SSO/security readiness. It does not claim real Azure AD tenant rollout or live Microsoft Graph production acceptance.
+
+| Story ID | Phase 1C status | Implementation evidence | Test evidence |
+| --- | --- | --- | --- |
+| US003 | Done | `GET /auth/security/status` exposes privileged auth readiness evidence for JWT validation, header fallback, domain allowlist, and Teams/AAD validation without returning secrets. | `tests/test_auth_security_hardening.py`; focused Phase 1 suite |
+| US025 | Done | Password login records safe success/failure/block audit rows and updates `last_login_at`; response payloads do not expose password hashes or raw credentials. | `app/routers/auth.py`; `tests/test_auth_security_hardening.py` |
+| US038 | Done | Teams/AAD sync remains domain-allowlist guarded and maps AAD identity into TeamsWork users with safe audit evidence while real tenant validation stays configuration-gated. | `tests/test_auth_security_hardening.py`; `tests/test_teams_mvp.py` |
+| US031 | Done | Invalid bearer tokens do not fall back to `X-User-Id` when JWT validation is required, preserving production auth priority. | `tests/test_auth_security_hardening.py` |
+| US032 | Done | Production auth readiness fails unsafe settings such as disabled JWT validation, enabled header fallback, weak default secret, or missing domain allowlist. | `tests/test_auth_security_hardening.py`; `app/settings.py` |
+| US020 | Done | Privileged auth status checks and onboarding/security changes write safe audit log evidence without tokens, passwords, raw IP addresses, or provider error payloads. | `tests/test_auth_security_hardening.py`; `tests/test_auth_rbac_department.py` |
+| US021 | Done | Security status is permission-gated with `OPS_VIEW`; staff/member users are blocked from inspecting production auth readiness. | `tests/test_auth_security_hardening.py` |
+
+## Phase 1D Evidence
+
+This slice completes local onboarding lifecycle and self-service notification settings for release scope. It does not send real external invitation emails.
+
+| Story ID | Phase 1D status | Implementation evidence | Test evidence |
+| --- | --- | --- | --- |
+| US015 | Done | User creation accepts onboarding status/note and persists onboarding fields through migration 14. | `app/routers/users.py`; `app/repositories/users.py`; `tests/test_auth_rbac_department.py` |
+| US016 | Done | Admin/HR users can invite users through `POST /users/{user_id}/invite`, setting `invited_at` and audit evidence. | `tests/test_auth_rbac_department.py` |
+| US034 | Done | Admin/HR users can update onboarding status through `PATCH /users/{user_id}/onboarding`; staff/member users are denied. | `tests/test_auth_rbac_department.py` |
+| US036 | Done | Users can read/update only their own notification settings through `/users/me/notification-settings`; unknown options and invalid quiet hours are rejected. | `tests/test_auth_rbac_department.py` |
+| US043 | Done | Successful login or AAD sync activates invited/pending users by recording `activated_at`/`last_login_at` without changing role or active-state permissions. | `app/repositories/users.py`; `tests/test_auth_security_hardening.py` |
+
 ## Phase 2 Slice 1 Evidence
 
 This slice adds backend/API coverage for task metadata, bulk task operations, backlog movement, and sprint carryover. It does not complete the full Phase 2 UI, import/export, WIP-limit, custom-column, attachment-upload, or deadline-extension scope.
@@ -120,6 +160,27 @@ These slices add the remaining Phase 2 production capabilities in small vertical
 | US308 | Partial | Project milestone list/create/update endpoints and task milestone assignment are available with project access checks. Gap: milestone UI/timeline and complete project planning workflow remain pending. | `tests/test_backlog_milestones_dependencies.py` |
 | US341 | Partial | Task dependency endpoint validates same-project task-id dependencies and blocks circular dependencies. Gap: visual dependency map, cross-view UI, and full planning workflow remain pending. | `tests/test_backlog_milestones_dependencies.py` |
 
+## Phase 2 Slice 7 Evidence
+
+This slice completes the requested core task/project workflow stories with API behavior, static UI surfaces, RBAC/project-scope checks, audit/activity evidence, focused pytest coverage, and Playwright role-navigation verification. It does not claim unrelated later Phase 2 stories such as custom Kanban columns or full dependency visualization.
+
+| Story ID | Phase 2 slice status | Implementation evidence | Test evidence |
+| --- | --- | --- | --- |
+| US053 | Done | Manual task creation is available through `POST /tasks` and the Kanban task-create drawer; `taskCreate` client permission now maps to `tasks.create`/Kanban manage permissions. | `tests/test_api_flow.py`; `pytest tests/test_phase2_project_workflow.py tests/test_task_filters.py tests/test_task_detail.py tests/test_task_deadline_extension.py tests/test_task_bulk_backlog.py tests/test_api_flow.py -q`; `pytest tests/test_ui_role_navigation_playwright.py -q` |
+| US091 | Done | Task creation persists title, description, assignee, project/sprint, priority, difficulty, story points, checklist, deadline, audit log, and Kanban refresh evidence. | `tests/test_api_flow.py`; focused Phase 2 suite |
+| US073 | Done | Task detail drawer/API exposes assignee/project/sprint names, due state, comments, activity logs, AI detail, labels, subtasks, checklist, attachments, duplicate action, and deadline-extension controls where permitted. | `tests/test_task_detail.py`; `tests/test_task_deadline_extension.py`; Playwright role navigation |
+| US110 | Done | Task detail access preserves staff/member self-scope and manager/admin visibility while blocking unassigned staff comments/detail reads. | `tests/test_task_detail.py`; focused Phase 2 suite |
+| US080 | Done | Task search/filter supports project, sprint, assignee, status, overdue, keyword, deadline range, and UI Kanban/timeline filter state. | `tests/test_task_filters.py`; Playwright role navigation |
+| US098 | Done | Staff task search remains scoped to own assignments even when another assignee is requested. | `tests/test_task_filters.py` |
+| US113 | Done | Invalid task filters are rejected with safe 400 responses and empty states render in Kanban/list views. | `tests/test_task_filters.py`; static UI in `app/static/js/kanban.js` |
+| US094 | Done | Manager/admin deadline extension requires a later deadline and non-empty reason, writes task activity evidence, notifies the assignee, and is exposed in task detail UI only for permitted roles. | `tests/test_task_deadline_extension.py`; `app/static/js/task-detail.js` |
+| US297 | Done | Project creation is available through `POST /projects` and the Projects drawer; manager-created projects default ownership to the creator when no manager is supplied. | `tests/test_phase2_project_workflow.py`; `app/static/js/projects-kpi-reports-ai.js` |
+| US298 | Done | Project creation validates status/department/manager references, requires `projects.manage`, writes project audit evidence, and refreshes the project UI. | `tests/test_phase2_project_workflow.py`; focused Phase 2 suite |
+| US333 | Done | Project detail UI exposes progress, members, sprints, and backlog evidence; project/sprint/member mutations preserve project-scope checks. | `tests/test_phase2_project_workflow.py`; Playwright role navigation |
+| US337 | Done | Outside managers cannot mutate another manager's project membership or sprint plan; admin/owner manager workflows remain allowed. | `tests/test_phase2_project_workflow.py` |
+| US305 | Done | Project backlog lists unsprinted project tasks with staff self-scope preserved and task detail links available from project detail UI. | `tests/test_task_filters.py`; `tests/test_phase2_project_workflow.py` |
+| US306 | Done | Backlog move-to-sprint validates same-project sprint/task membership, moves backlog tasks, writes audit evidence, and is exposed from project detail UI. | `tests/test_task_bulk_backlog.py`; `tests/test_phase2_project_workflow.py`; `tests/test_api_flow.py` |
+
 ## Phase 3 Slice 1 Evidence
 
 This slice makes the existing KPI defaults explicit in code as a source-compatible policy. It does not add admin-editable KPI configuration, approval workflow, KPI targets, transaction ledger, or new KPI UI.
@@ -146,6 +207,22 @@ This slice adds the Phase 3 backend/API foundation for persisted KPI policy, tra
 | US148 | Partial | KPI report exports include target score, progress percent, and gap fields while preserving export RBAC/content behavior. Gap: advanced report views/charts and scheduled delivery remain pending. | `tests/test_kpi_phase3.py`; `tests/test_api_flow.py` |
 | US135 | Partial | KPI history endpoint returns up to 6-12 months of ledger-backed user KPI rows. Gap: history UI and drilldown acceptance remain pending. | `tests/test_kpi_phase3.py` |
 | US149 | Partial | Team summary and department breakdown endpoints expose aggregate KPI/target status for reporting. Gap: advanced report UI/chart coverage remains pending. | `tests/test_kpi_phase3.py` |
+| US121 | Done | KPI config read/update workflow is permissioned, requires `change_reason`, writes audit evidence, and preserves the default formula values under explicit tests. | `app/routers/kpi.py`; `app/repositories/kpi.py`; `tests/test_kpi.py`; `tests/test_kpi_phase3.py` |
+| US122 | Done | KPI policy update validation requires complete difficulty multiplier keys and valid fallback difficulty, with staff/member mutation denied. | `tests/test_kpi_phase3.py`; focused Phase 3 suite |
+| US140 | Done | `/kpi/monthly` returns ledger-backed monthly KPI rows with member self-scope and target progress fields where targets exist. | `tests/test_kpi_phase3.py`; `tests/test_api_flow.py` |
+| US142 | Done | KPI target create/list/progress workflow supports user-month targets and computes score, target, progress percent, and gap. | `tests/test_kpi_phase3.py` |
+| US144 | Done | KPI target update preserves existing values for omitted fields and recalculates target progress without changing score formula defaults. | `app/repositories/kpi.py`; `tests/test_kpi_phase3.py` |
+| US145 | Done | KPI target import accepts CSV/XLSX rows, validates user/month/target fields, upserts targets, and records audit evidence. | `app/routers/kpi.py`; `tests/test_kpi_phase3.py` |
+| US151 | Done | KPI target warning runner rebuilds ledger state and creates user notifications for target gaps. | `app/routers/notifications.py`; `tests/test_kpi_phase3.py` |
+| US152 | Done | KPI warning notifications deduplicate within the daily run window. | `app/repositories/notifications.py`; `tests/test_kpi_phase3.py` |
+| US153 | Done | KPI warning generation is role-gated, audited, and local-only without requiring external Teams/Graph delivery. | `app/routers/notifications.py`; `tests/test_kpi_phase3.py` |
+| US157 | Done | KPI history, team summary, and department breakdown endpoints expose release-testable KPI view workflows. | `app/routers/kpi.py`; `tests/test_kpi_phase3.py` |
+| US159 | Done | KPI transaction rebuild is idempotent and stores active/reversed events for task outcomes. | `app/repositories/kpi.py`; `tests/test_kpi_phase3.py` |
+| US165 | Done | Manual KPI adjustments require stored reason/audit evidence, manager-created adjustments remain pending, and HR/admin approval is required before score impact. | `tests/test_kpi_phase3.py` |
+| US166 | Done | Staff/member KPI and report access stays scoped/permissioned while privileged users can inspect team KPI exports. | `app/routers/kpi.py`; `tests/test_kpi_phase3.py`; `tests/test_api_flow.py` |
+| US171 | Done | Persisted KPI policy retrieval/update uses the same tested policy model and keeps `DEFAULT_KPI_POLICY` compatibility intact. | `app/kpi.py`; `app/routers/kpi.py`; `tests/test_kpi.py`; `tests/test_kpi_phase3.py` |
+| US174 | Done | KPI aggregation uses active ledger transactions for task and approved adjustment events rather than untracked score mutation. | `app/kpi.py`; `app/repositories/kpi.py`; `tests/test_kpi_phase3.py` |
+| US177 | Done | Changed task outcomes reverse stale KPI ledger rows and preserve transaction evidence for rollback-safe recalculation. | `tests/test_kpi_phase3.py` |
 
 ## Phase 4 Slice 1 Evidence
 
@@ -337,7 +414,7 @@ This section records the implementation pass that completes the remaining Must/S
 | --- | ---: | ---: | ---: | ---: | ---: |
 | E1: Auth & User Mgmt | 19 | 1 | 29 | 30 | 49 |
 | E2: Task Management | 34 | 0 | 33 | 33 | 67 |
-| E3: KPI Management | 28 | 2 | 32 | 34 | 62 |
+| E3: KPI Management | 44 | 2 | 32 | 18 | 46 |
 | E4: Bot & Notifications | 18 | 0 | 41 | 41 | 59 |
 | E5: Reporting & Analytics | 16 | 0 | 40 | 40 | 56 |
 | E6: Project Management | 26 | 1 | 32 | 33 | 59 |
@@ -350,8 +427,8 @@ This section records the implementation pass that completes the remaining Must/S
 
 | MoSCoW | Done | Partial | Not started | Unfinished | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Must Have | 138 | 0 | 79 | 79 | 217 |
-| Should Have | 56 | 0 | 101 | 101 | 157 |
+| Must Have | 143 | 0 | 74 | 74 | 217 |
+| Should Have | 67 | 0 | 90 | 90 | 157 |
 | Could Have | 3 | 4 | 89 | 93 | 96 |
 | Won't Have | 1 | 0 | 42 | 42 | 43 |
 
@@ -377,11 +454,11 @@ This section records the implementation pass that completes the remaining Must/S
 | E2: Task Management | Tìm kiếm & Lọc | 2 | 0 | 3 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E2: Task Management | Tạo Task | 2 | 0 | 9 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E3: KPI Management | Báo cáo KPI | 6 | 2 | 0 | Backlog partial remains outside release scope or requires explicit future promotion |
-| E3: KPI Management | Cấu hình KPI | 4 | 0 | 9 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E3: KPI Management | Mục tiêu KPI | 2 | 0 | 6 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E3: KPI Management | Thông báo KPI | 1 | 0 | 5 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E3: KPI Management | Tính điểm KPI | 8 | 0 | 6 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E3: KPI Management | Xem KPI | 7 | 0 | 6 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
+| E3: KPI Management | Cấu hình KPI | 7 | 0 | 6 | Phase 3 requested Should/Must KPI config stories are complete; lower-priority backlog remains outside this pass |
+| E3: KPI Management | Mục tiêu KPI | 5 | 0 | 3 | Phase 3 requested KPI target stories are complete; lower-priority backlog remains outside this pass |
+| E3: KPI Management | Thông báo KPI | 4 | 0 | 2 | Phase 3 requested KPI notification stories are complete; lower-priority backlog remains outside this pass |
+| E3: KPI Management | Tính điểm KPI | 12 | 0 | 2 | Phase 3 requested KPI scoring stories are complete; lower-priority backlog remains outside this pass |
+| E3: KPI Management | Xem KPI | 10 | 0 | 3 | Phase 3 requested KPI viewing stories are complete; lower-priority backlog remains outside this pass |
 | E4: Bot & Notifications | Adaptive Cards | 5 | 0 | 14 | Teams-ready simulation stories are complete; real Teams tenant/Graph rendering remains disabled by default |
 | E4: Bot & Notifications | Bot Commands | 7 | 0 | 20 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E4: Bot & Notifications | Channel Notifications | 6 | 0 | 7 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
@@ -435,7 +512,7 @@ This section records the implementation pass that completes the remaining Must/S
 
 - E1: Auth & User Mgmt: US001, US002, US004, US005, US049, US009, US010, US023, US028, US033, US048, US011, US026, US035, US047, US017, US044, US019, US022
 - E2: Task Management: US050, US051, US058, US059, US060, US061, US062, US063, US064, US066, US096, US099, US101, US102, US115, US116, US068, US069, US070, US072, US074, US103, US075, US076, US077, US078, US081, US082, US083, US084, US086, US087, US089, US090
-- E3: KPI Management: US117, US118, US119, US120, US125, US126, US127, US128, US129, US130, US131, US132, US134, US135, US136, US137, US138, US139, US170, US141, US143, US146, US147, US148, US149, US168, US173, US150
+- E3: KPI Management: US117, US118, US119, US120, US121, US122, US125, US126, US127, US128, US129, US130, US131, US132, US134, US135, US136, US137, US138, US139, US140, US141, US142, US143, US144, US145, US146, US147, US148, US149, US150, US151, US152, US153, US157, US159, US165, US166, US168, US170, US171, US173, US174, US177
 - E4: Bot & Notifications: US179, US180, US181, US182, US183, US186, US212, US189, US191, US192, US193, US196, US197, US198, US206, US209, US221, US237
 - E5: Reporting & Analytics: US238, US239, US240, US242, US268, US285, US248, US249, US251, US252, US255, US256, US259, US284, US260, US261
 - E6: Project Management: US294, US295, US296, US326, US299, US300, US301, US302, US321, US338, US343, US304, US307, US308, US311, US312, US313, US314, US315, US327, US316, US317, US318, US334, US340, US341
@@ -477,11 +554,11 @@ This section records the implementation pass that completes the remaining Must/S
 - E2: Task Management / Tìm kiếm & Lọc: US080, US098, US113
 - E2: Task Management / Tạo Task: US052, US053, US054, US055, US056, US057, US091, US095, US109
 - E3: KPI Management / Báo cáo KPI: US160, US163
-- E3: KPI Management / Cấu hình KPI: US121, US122, US123, US124, US154, US155, US164, US171, US176
-- E3: KPI Management / Mục tiêu KPI: US142, US144, US145, US158, US167, US178
-- E3: KPI Management / Thông báo KPI: US151, US152, US153, US162, US172
-- E3: KPI Management / Tính điểm KPI: US133, US159, US165, US169, US174, US177
-- E3: KPI Management / Xem KPI: US140, US156, US157, US161, US166, US175
+- E3: KPI Management / Cấu hình KPI: US123, US124, US154, US155, US164, US176
+- E3: KPI Management / Mục tiêu KPI: US158, US167, US178
+- E3: KPI Management / Thông báo KPI: US162, US172
+- E3: KPI Management / Tính điểm KPI: US133, US169
+- E3: KPI Management / Xem KPI: US156, US161, US175
 - E4: Bot & Notifications / Adaptive Cards: US190, US194, US195, US204, US207, US210, US213, US216, US219, US223, US226, US228, US230, US235
 - E4: Bot & Notifications / Bot Commands: US184, US185, US187, US188, US201, US202, US203, US205, US208, US211, US215, US218, US220, US222, US225, US227, US229, US232, US233, US236
 - E4: Bot & Notifications / Channel Notifications: US199, US200, US214, US217, US224, US231, US234
@@ -533,62 +610,62 @@ This section records the implementation pass that completes the remaining Must/S
 | --- | --- | --- | --- | --- | --- |
 | US001 | E1: Auth & User Mgmt | SSO Login | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US002 | E1: Auth & User Mgmt | SSO Login | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US003 | E1: Auth & User Mgmt | SSO Login | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US003 | E1: Auth & User Mgmt | SSO Login | Must Have | Done | `GET /auth/security/status` provides privileged local-testable SSO/auth readiness evidence without exposing secrets; covered by `tests/test_auth_security_hardening.py`. |
 | US004 | E1: Auth & User Mgmt | SSO Login | Must Have | Done | `AUTH_ALLOWED_EMAIL_DOMAINS` is enforced for password login and Teams/AAD sync; covered by `tests/test_auth_security_hardening.py`. |
 | US005 | E1: Auth & User Mgmt | SSO Login | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US025 | E1: Auth & User Mgmt | SSO Login | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US038 | E1: Auth & User Mgmt | SSO Login | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US025 | E1: Auth & User Mgmt | SSO Login | Must Have | Done | Password login records safe audit evidence and `last_login_at` without exposing password hashes or raw credentials; covered by `tests/test_auth_security_hardening.py`. |
+| US038 | E1: Auth & User Mgmt | SSO Login | Must Have | Done | Teams/AAD sync is domain-allowlist guarded and configuration-gated for real tenant validation; covered by `tests/test_auth_security_hardening.py`. |
 | US045 | E1: Auth & User Mgmt | SSO Login | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US049 | E1: Auth & User Mgmt | SSO Login | Must Have | Done | Failed, blocked, and successful login attempts are recorded without passwords/tokens/raw IPs; covered by `tests/test_auth_security_hardening.py`. |
-| US006 | E1: Auth & User Mgmt | Phân quyền | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US007 | E1: Auth & User Mgmt | Phân quyền | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US008 | E1: Auth & User Mgmt | Phân quyền | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US006 | E1: Auth & User Mgmt | Phân quyền | Must Have | Done | Custom roles can be created and assigned validated permissions via `POST /rbac/roles` and `PATCH /rbac/roles/{role_slug}`; covered by `tests/test_auth_rbac_department.py`. |
+| US007 | E1: Auth & User Mgmt | Phân quyền | Must Have | Done | `GET /rbac/matrix` exposes the role-permission matrix for admin review; covered by `tests/test_auth_rbac_department.py`. |
+| US008 | E1: Auth & User Mgmt | Phân quyền | Must Have | Done | RBAC mutation is restricted to `roles.manage`, staff/member access is rejected, and role updates are audit logged; covered by `tests/test_auth_rbac_department.py`. |
 | US009 | E1: Auth & User Mgmt | Phân quyền | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US010 | E1: Auth & User Mgmt | Phân quyền | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US023 | E1: Auth & User Mgmt | Phân quyền | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
-| US024 | E1: Auth & User Mgmt | Phân quyền | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US027 | E1: Auth & User Mgmt | Phân quyền | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US024 | E1: Auth & User Mgmt | Phân quyền | Must Have | Done | Non-system custom role records are persisted with validated permission keys and returned through existing role APIs; covered by `tests/test_auth_rbac_department.py`. |
+| US027 | E1: Auth & User Mgmt | Phân quyền | Should Have | Done | Role-permission matrix export is available as CSV/XLSX with `roles.view` checks; covered by `tests/test_auth_rbac_department.py`. |
 | US028 | E1: Auth & User Mgmt | Phân quyền | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US033 | E1: Auth & User Mgmt | Phân quyền | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US039 | E1: Auth & User Mgmt | Phân quyền | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US042 | E1: Auth & User Mgmt | Phân quyền | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US042 | E1: Auth & User Mgmt | Phân quyền | Should Have | Done | RBAC review/export includes custom roles and all permission keys for release audit evidence; covered by `tests/test_auth_rbac_department.py`. |
 | US048 | E1: Auth & User Mgmt | Phân quyền | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US011 | E1: Auth & User Mgmt | Profile | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US012 | E1: Auth & User Mgmt | Profile | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US013 | E1: Auth & User Mgmt | Profile | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US013 | E1: Auth & User Mgmt | Profile | Should Have | Done | `PATCH /users/me` lets users update safe profile fields only and records profile audit evidence; covered by `tests/test_auth_rbac_department.py`. |
 | US014 | E1: Auth & User Mgmt | Profile | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US026 | E1: Auth & User Mgmt | Profile | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US035 | E1: Auth & User Mgmt | Profile | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US041 | E1: Auth & User Mgmt | Profile | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US047 | E1: Auth & User Mgmt | Profile | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US015 | E1: Auth & User Mgmt | Onboarding | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US016 | E1: Auth & User Mgmt | Onboarding | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US034 | E1: Auth & User Mgmt | Onboarding | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US043 | E1: Auth & User Mgmt | Onboarding | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US015 | E1: Auth & User Mgmt | Onboarding | Should Have | Done | User onboarding status/note fields are persisted on user creation through migration 14; covered by `tests/test_auth_rbac_department.py`. |
+| US016 | E1: Auth & User Mgmt | Onboarding | Should Have | Done | Admin/HR users can invite users through `POST /users/{user_id}/invite`; covered by `tests/test_auth_rbac_department.py`. |
+| US034 | E1: Auth & User Mgmt | Onboarding | Should Have | Done | Admin/HR users can update onboarding status while staff/member users are denied; covered by `tests/test_auth_rbac_department.py`. |
+| US043 | E1: Auth & User Mgmt | Onboarding | Should Have | Done | Login/AAD sync activates invited or pending users with `activated_at` and `last_login_at` evidence; covered by `tests/test_auth_security_hardening.py`. |
 | US017 | E1: Auth & User Mgmt | Notification Settings | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US018 | E1: Auth & User Mgmt | Notification Settings | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US029 | E1: Auth & User Mgmt | Notification Settings | Could Have | Partial | Partial: some workflow or scaffold evidence exists, but full UI, production integration, permission, test, or documentation acceptance remains incomplete. |
-| US036 | E1: Auth & User Mgmt | Notification Settings | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US036 | E1: Auth & User Mgmt | Notification Settings | Should Have | Done | `/users/me/notification-settings` supports self-scoped notification preferences with validation and audit evidence; covered by `tests/test_auth_rbac_department.py`. |
 | US044 | E1: Auth & User Mgmt | Notification Settings | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US019 | E1: Auth & User Mgmt | Audit | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US020 | E1: Auth & User Mgmt | Audit | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US020 | E1: Auth & User Mgmt | Audit | Should Have | Done | Auth readiness checks, login attempts, onboarding, and notification preference changes write safe audit evidence; covered by Phase 1C/1D tests. |
 | US030 | E1: Auth & User Mgmt | Audit | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US040 | E1: Auth & User Mgmt | Audit | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US021 | E1: Auth & User Mgmt | Auth & Security | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US021 | E1: Auth & User Mgmt | Auth & Security | Should Have | Done | `GET /auth/security/status` is restricted to privileged `OPS_VIEW` users; staff/member users are blocked. |
 | US022 | E1: Auth & User Mgmt | Auth & Security | Must Have | Done | DB-backed `auth_login_attempts` lockout blocks repeated failures by email/IP hash; covered by `tests/test_auth_security_hardening.py`. |
-| US031 | E1: Auth & User Mgmt | Auth & Security | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US032 | E1: Auth & User Mgmt | Auth & Security | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US031 | E1: Auth & User Mgmt | Auth & Security | Must Have | Done | Invalid bearer tokens do not fall back to `X-User-Id` when JWT validation is required; covered by `tests/test_auth_security_hardening.py`. |
+| US032 | E1: Auth & User Mgmt | Auth & Security | Must Have | Done | Production auth readiness reports unsafe JWT/header/domain/secret settings as failing status without exposing secret values. |
 | US037 | E1: Auth & User Mgmt | Auth & Security | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US046 | E1: Auth & User Mgmt | Auth & Security | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US050 | E2: Task Management | Tạo Task | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US051 | E2: Task Management | Tạo Task | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US052 | E2: Task Management | Tạo Task | Must Have | Done | Priority levels (Urgent/High/Medium/Low) selectable on task creation and displayed as colored badges on Kanban cards & List view; covered by `tests/test_task_metadata.py`. |
-| US053 | E2: Task Management | Tạo Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US053 | E2: Task Management | Tạo Task | Should Have | Done | Manual task creation is available in API and Kanban UI with `taskCreate` permission mapping, validation, audit log, and focused Phase 2 tests. |
 | US054 | E2: Task Management | Tạo Task | Must Have | Done | Task Checklist items can be created, deleted, and interactive toggled via `PATCH /tasks/{id}/metadata` with live completion progress (X/Y) on card/list; covered by `tests/test_task_metadata.py`. |
 | US055 | E2: Task Management | Tạo Task | Should Have | Done | Custom labels can be added/deleted/rendered on task cards and filtered dynamically in the Kanban board. Save endpoint `/tasks/{id}/metadata` is tested in `tests/test_task_metadata.py`. |
 | US056 | E2: Task Management | Tạo Task | Should Have | Done | Subtasks checklist can be managed interactively with markdown format (`[ ]` / `[x]`) and progress is displayed on task cards. Tested in `tests/test_task_metadata.py`. |
 | US057 | E2: Task Management | Tạo Task | Should Have | Done | Task duplication is supported via `POST /tasks/{id}/duplicate` button, restricted to admin and manager roles. Tested in `tests/test_task_metadata.py`. |
-| US091 | E2: Task Management | Tạo Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US091 | E2: Task Management | Tạo Task | Should Have | Done | Task creation persists assignment, project/sprint, deadline, priority, checklist, difficulty/story points, and audit evidence; covered by `tests/test_api_flow.py`. |
 | US095 | E2: Task Management | Tạo Task | Must Have | Done | Estimated KPI points displayed and configured during manual task creation based on selected difficulty; covered by `tests/test_task_metadata.py`. |
 | US109 | E2: Task Management | Tạo Task | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US058 | E2: Task Management | Kanban Board | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
@@ -615,26 +692,26 @@ This section records the implementation pass that completes the remaining Must/S
 | US070 | E2: Task Management | Chi tiết Task | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US071 | E2: Task Management | Chi tiết Task | Must Have | Done | File upload <=50MB, preview, download, and delete implemented in task details drawer and API; covered by `tests/test_task_attachments.py`. |
 | US072 | E2: Task Management | Chi tiết Task | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
-| US073 | E2: Task Management | Chi tiết Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US073 | E2: Task Management | Chi tiết Task | Should Have | Done | Task detail API/drawer exposes names, due state, comments, activity logs, AI detail, metadata controls, and permitted actions; covered by `tests/test_task_detail.py`. |
 | US074 | E2: Task Management | Chi tiết Task | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US093 | E2: Task Management | Chi tiết Task | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US097 | E2: Task Management | Chi tiết Task | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US103 | E2: Task Management | Chi tiết Task | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US106 | E2: Task Management | Chi tiết Task | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US110 | E2: Task Management | Chi tiết Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US110 | E2: Task Management | Chi tiết Task | Should Have | Done | Staff/member task detail and comments are scoped to assigned tasks while privileged users retain review access; covered by `tests/test_task_detail.py`. |
 | US114 | E2: Task Management | Chi tiết Task | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US075 | E2: Task Management | Deadline | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US076 | E2: Task Management | Deadline | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US077 | E2: Task Management | Deadline | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US078 | E2: Task Management | Deadline | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US079 | E2: Task Management | Deadline | Should Have | Done | Manager can extend task deadline with a mandatory reason, logs timeline activity, and notifies assignee; covered by `tests/test_task_deadline_extension.py`. |
-| US094 | E2: Task Management | Deadline | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US094 | E2: Task Management | Deadline | Should Have | Done | Manager/admin deadline extension requires a later deadline and reason, writes activity evidence, notifies assignee, and is exposed in permitted task detail UI. |
 | US107 | E2: Task Management | Deadline | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US080 | E2: Task Management | Tìm kiếm & Lọc | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US080 | E2: Task Management | Tìm kiếm & Lọc | Should Have | Done | Task search/filter supports project, sprint, assignee, status, overdue, keyword, deadline range, and Kanban/timeline UI filter state; covered by `tests/test_task_filters.py`. |
 | US081 | E2: Task Management | Tìm kiếm & Lọc | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US082 | E2: Task Management | Tìm kiếm & Lọc | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US098 | E2: Task Management | Tìm kiếm & Lọc | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US113 | E2: Task Management | Tìm kiếm & Lọc | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US098 | E2: Task Management | Tìm kiếm & Lọc | Should Have | Done | Staff/member search remains self-scoped even when another assignee filter is requested; covered by `tests/test_task_filters.py`. |
+| US113 | E2: Task Management | Tìm kiếm & Lọc | Should Have | Done | Invalid task filters return safe validation errors and UI empty/error states are present in Kanban list/board views. |
 | US083 | E2: Task Management | Bulk Actions | Should Have | Done | Done: tested manager/admin bulk status, assignee, sprint, and backlog moves with audit logging. |
 | US084 | E2: Task Management | Bulk Actions | Should Have | Done | Done: tested bulk-operation permission and validation failures for staff, empty lists, unknown tasks, invalid status, and sprint/project mismatch. |
 | US085 | E2: Task Management | Bulk Actions | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
@@ -651,14 +728,14 @@ This section records the implementation pass that completes the remaining Must/S
 | US118 | E3: KPI Management | Cấu hình KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US119 | E3: KPI Management | Cấu hình KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US120 | E3: KPI Management | Cấu hình KPI | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US121 | E3: KPI Management | Cấu hình KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US122 | E3: KPI Management | Cấu hình KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US121 | E3: KPI Management | Cấu hình KPI | Should Have | Done | KPI config read/update is permissioned, requires a change reason, writes audit evidence, and keeps default formula compatibility; covered by `tests/test_kpi_phase3.py`. |
+| US122 | E3: KPI Management | Cấu hình KPI | Should Have | Done | KPI policy validation requires the full difficulty multiplier shape and valid fallback difficulty while staff/member users are denied mutation; covered by `tests/test_kpi_phase3.py`. |
 | US123 | E3: KPI Management | Cấu hình KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US124 | E3: KPI Management | Cấu hình KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US154 | E3: KPI Management | Cấu hình KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US155 | E3: KPI Management | Cấu hình KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US164 | E3: KPI Management | Cấu hình KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US171 | E3: KPI Management | Cấu hình KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US171 | E3: KPI Management | Cấu hình KPI | Should Have | Done | Persisted KPI policy retrieval/update uses the tested policy model and preserves `DEFAULT_KPI_POLICY`; covered by `tests/test_kpi.py` and `tests/test_kpi_phase3.py`. |
 | US176 | E3: KPI Management | Cấu hình KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US125 | E3: KPI Management | Tính điểm KPI | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US126 | E3: KPI Management | Tính điểm KPI | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
@@ -669,29 +746,29 @@ This section records the implementation pass that completes the remaining Must/S
 | US131 | E3: KPI Management | Tính điểm KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US132 | E3: KPI Management | Tính điểm KPI | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US133 | E3: KPI Management | Tính điểm KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US159 | E3: KPI Management | Tính điểm KPI | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US165 | E3: KPI Management | Tính điểm KPI | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US159 | E3: KPI Management | Tính điểm KPI | Must Have | Done | KPI transaction rebuild is idempotent and stores active/reversed ledger events for task outcomes; covered by `tests/test_kpi_phase3.py`. |
+| US165 | E3: KPI Management | Tính điểm KPI | Must Have | Done | Manual adjustments require reason/audit evidence and HR/admin approval before score impact; covered by `tests/test_kpi_phase3.py`. |
 | US169 | E3: KPI Management | Tính điểm KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US174 | E3: KPI Management | Tính điểm KPI | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US177 | E3: KPI Management | Tính điểm KPI | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US174 | E3: KPI Management | Tính điểm KPI | Must Have | Done | Monthly KPI aggregation uses active task and approved-adjustment ledger transactions, not untracked score mutation; covered by `tests/test_kpi_phase3.py`. |
+| US177 | E3: KPI Management | Tính điểm KPI | Must Have | Done | Changed task outcomes reverse stale KPI ledger rows and preserve recalculation evidence; covered by `tests/test_kpi_phase3.py`. |
 | US134 | E3: KPI Management | Xem KPI | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US135 | E3: KPI Management | Xem KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US136 | E3: KPI Management | Xem KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US137 | E3: KPI Management | Xem KPI | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US138 | E3: KPI Management | Xem KPI | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US139 | E3: KPI Management | Xem KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US140 | E3: KPI Management | Xem KPI | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US140 | E3: KPI Management | Xem KPI | Must Have | Done | `/kpi/monthly` returns ledger-backed monthly KPI rows with member self-scope and target progress fields; covered by `tests/test_kpi_phase3.py`. |
 | US156 | E3: KPI Management | Xem KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US157 | E3: KPI Management | Xem KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US157 | E3: KPI Management | Xem KPI | Should Have | Done | KPI history, team summary, and department breakdown endpoints provide release-testable KPI view workflows; covered by `tests/test_kpi_phase3.py`. |
 | US161 | E3: KPI Management | Xem KPI | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US166 | E3: KPI Management | Xem KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US166 | E3: KPI Management | Xem KPI | Should Have | Done | Staff/member KPI and report access is scoped/permissioned while privileged exports remain available; covered by `tests/test_kpi_phase3.py` and `tests/test_api_flow.py`. |
 | US170 | E3: KPI Management | Xem KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US175 | E3: KPI Management | Xem KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US141 | E3: KPI Management | Mục tiêu KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US142 | E3: KPI Management | Mục tiêu KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US142 | E3: KPI Management | Mục tiêu KPI | Should Have | Done | KPI target create/list/progress workflow supports user-month targets and computes progress/gap; covered by `tests/test_kpi_phase3.py`. |
 | US143 | E3: KPI Management | Mục tiêu KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US144 | E3: KPI Management | Mục tiêu KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US145 | E3: KPI Management | Mục tiêu KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US144 | E3: KPI Management | Mục tiêu KPI | Should Have | Done | KPI target updates preserve omitted fields and recalculate progress without changing score formula defaults; covered by `tests/test_kpi_phase3.py`. |
+| US145 | E3: KPI Management | Mục tiêu KPI | Should Have | Done | KPI target CSV/XLSX import validates user/month/target fields, upserts rows, and records audit evidence; covered by `tests/test_kpi_phase3.py`. |
 | US158 | E3: KPI Management | Mục tiêu KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US167 | E3: KPI Management | Mục tiêu KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US178 | E3: KPI Management | Mục tiêu KPI | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
@@ -704,9 +781,9 @@ This section records the implementation pass that completes the remaining Must/S
 | US168 | E3: KPI Management | Báo cáo KPI | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US173 | E3: KPI Management | Báo cáo KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US150 | E3: KPI Management | Thông báo KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US151 | E3: KPI Management | Thông báo KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US152 | E3: KPI Management | Thông báo KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US153 | E3: KPI Management | Thông báo KPI | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US151 | E3: KPI Management | Thông báo KPI | Should Have | Done | KPI target warning runner creates notifications for users below target after ledger rebuild; covered by `tests/test_kpi_phase3.py`. |
+| US152 | E3: KPI Management | Thông báo KPI | Should Have | Done | KPI warning notifications deduplicate within the daily run window; covered by `tests/test_kpi_phase3.py`. |
+| US153 | E3: KPI Management | Thông báo KPI | Should Have | Done | KPI warning generation is role-gated, audited, and local-only without external delivery side effects; covered by `tests/test_kpi_phase3.py`. |
 | US162 | E3: KPI Management | Thông báo KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US172 | E3: KPI Management | Thông báo KPI | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US179 | E4: Bot & Notifications | Bot Commands | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
@@ -827,12 +904,12 @@ This section records the implementation pass that completes the remaining Must/S
 | US294 | E6: Project Management | Tạo Project | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US295 | E6: Project Management | Tạo Project | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US296 | E6: Project Management | Tạo Project | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US297 | E6: Project Management | Tạo Project | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US298 | E6: Project Management | Tạo Project | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US297 | E6: Project Management | Tạo Project | Should Have | Done | Project creation is available through `POST /projects` and the Projects drawer; manager-created projects default ownership to the creator when no manager is supplied. |
+| US298 | E6: Project Management | Tạo Project | Should Have | Done | Project creation validates status/department/manager references, requires `projects.manage`, writes project audit evidence, and refreshes the project UI. |
 | US320 | E6: Project Management | Tạo Project | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US326 | E6: Project Management | Tạo Project | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US333 | E6: Project Management | Tạo Project | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US337 | E6: Project Management | Tạo Project | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US333 | E6: Project Management | Tạo Project | Must Have | Done | Project detail UI exposes progress, members, sprints, and backlog evidence; project/sprint/member mutations preserve project-scope checks. |
+| US337 | E6: Project Management | Tạo Project | Must Have | Done | Outside managers cannot mutate another manager's project membership or sprint plan; admin/owner manager workflows remain allowed. |
 | US342 | E6: Project Management | Tạo Project | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US347 | E6: Project Management | Tạo Project | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US352 | E6: Project Management | Tạo Project | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
@@ -848,8 +925,8 @@ This section records the implementation pass that completes the remaining Must/S
 | US343 | E6: Project Management | Sprint | Could Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US348 | E6: Project Management | Sprint | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US304 | E6: Project Management | Backlog | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US305 | E6: Project Management | Backlog | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US306 | E6: Project Management | Backlog | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US305 | E6: Project Management | Backlog | Should Have | Done | Project backlog lists unsprinted project tasks with staff self-scope preserved and task detail links available from project detail UI. |
+| US306 | E6: Project Management | Backlog | Should Have | Done | Backlog move-to-sprint validates same-project sprint/task membership, moves backlog tasks, writes audit evidence, and is exposed from project detail UI. |
 | US307 | E6: Project Management | Backlog | Must Have | Done | Done: tested backlog-to-sprint move for same-project sprint with API flow coverage. |
 | US322 | E6: Project Management | Backlog | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US335 | E6: Project Management | Backlog | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |

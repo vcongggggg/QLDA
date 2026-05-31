@@ -335,6 +335,7 @@
         </div>
         <div class="toolbar-right">
           <span id="projectCount" class="text-sm text-muted"></span>
+          <button type="button" class="btn btn-primary btn-compact" data-requires-any-permission="PROJECT_CREATE,projects.manage" onclick="showProjectCreateModal()">Tạo Project</button>
         </div>
       </div>
       <div class="project-grid" id="projectGrid"></div>
@@ -840,6 +841,68 @@
       <button class="btn btn-danger" type="button" onclick="closeConfirmModal(true)">Confirm</button>
     </div>
   </div>
+</div>
+
+<!-- Project detail drawer -->
+<div id="projectDetailOverlay" class="drawer-overlay hidden" onclick="if(event.target===this) closeProjectDetail()">
+  <aside class="task-detail-drawer" aria-label="Project detail drawer">
+    <div class="task-detail-header">
+      <div>
+        <div class="task-detail-kicker">Chi tiết dự án</div>
+        <strong>Project Detail</strong>
+      </div>
+      <button type="button" class="drawer-close" onclick="closeProjectDetail()" aria-label="Đóng">×</button>
+    </div>
+    <div id="projectDetailBody" class="task-detail-body"></div>
+  </aside>
+</div>
+
+<!-- Project creation drawer -->
+<div id="projectCreateOverlay" class="drawer-overlay hidden" onclick="if(event.target===this) closeProjectCreate()">
+  <aside class="task-detail-drawer" aria-label="Project create drawer">
+    <div class="task-detail-header">
+      <div>
+        <div class="task-detail-kicker">Tạo dự án mới</div>
+        <strong>Tạo Project</strong>
+      </div>
+      <button type="button" class="drawer-close" onclick="closeProjectCreate()" aria-label="Đóng">×</button>
+    </div>
+    <div class="task-detail-body">
+      <form id="projectCreateForm" onsubmit="submitProjectCreate(event)" class="form-stack">
+        <label class="field-label">Tên project</label>
+        <input id="projectCreateName" class="input" type="text" minlength="2" maxlength="160" required placeholder="Tên dự án" />
+        <label class="field-label">Mô tả</label>
+        <textarea id="projectCreateDescription" class="textarea" rows="4" placeholder="Mục tiêu, phạm vi, ghi chú"></textarea>
+        <div class="grid-2">
+          <label>
+            <span class="field-label">Trạng thái</span>
+            <select id="projectCreateStatus" class="select">
+              <option value="active">Đang hoạt động</option>
+              <option value="on_hold">Tạm dừng</option>
+              <option value="done">Hoàn thành</option>
+              <option value="archived">Lưu trữ</option>
+            </select>
+          </label>
+          <label>
+            <span class="field-label">Manager ID</span>
+            <input id="projectCreateManagerId" class="input" type="number" min="1" placeholder="Mặc định là bạn" />
+          </label>
+          <label>
+            <span class="field-label">Start</span>
+            <input id="projectCreateStart" class="input" type="date" />
+          </label>
+          <label>
+            <span class="field-label">End</span>
+            <input id="projectCreateEnd" class="input" type="date" />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" type="submit">Tạo Project</button>
+          <button class="btn btn-outline" type="button" onclick="closeProjectCreate()">Hủy</button>
+        </div>
+      </form>
+    </div>
+  </aside>
 </div>
 
 <!-- Task creation drawer -->

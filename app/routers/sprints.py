@@ -42,8 +42,10 @@ def create_sprint_endpoint(
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     require_roles(current_user, {"admin", "manager"})
+    require_permission(current_user, "sprints.manage")
     if not project_exists(project_id):
         raise HTTPException(status_code=404, detail="project not found")
+    require_project_access(current_user, project_id)
     if payload.end_date <= payload.start_date:
         raise HTTPException(status_code=400, detail="end_date must be after start_date")
     sprint = create_sprint(

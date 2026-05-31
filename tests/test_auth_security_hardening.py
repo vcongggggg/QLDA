@@ -115,3 +115,66 @@ def test_audit_export_requires_permission_and_returns_csv_xlsx() -> None:
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     assert xlsx_response.content.startswith(b"PK")
+
+
+def test_auth_security_status_reports_production_readiness_without_secret_values(monkeypatch) -> None:
+    init_db()
+    seed_auth_demo_accounts()
+    monkeypatch.setattr(settings, "app_env", "production", raising=False)
+    monkeypatch.setattr(settings, "auth_disable_jwt_validation", True, raising=False)
+    monkeypatch.setattr(settings, "auth_allow_header_fallback", True, raising=False)
+    monkeypatch.setattr(settings, "auth_jwt_secret", "dev-secret-change-me", raising=False)
+    monkeypatch.setattr(settings, "auth_allowed_email_domains", (), raising=False)
+    admin = _login("admin@teamswork.local", "Admin@123").json()
+    member = _login("member@teamswork.local", "Member@123").json()
+
+    forbidden = client.get("/auth/security/status", headers=_bearer(member["accessToken"]))
+    assert forbidden.status_code == 403
+
+    response = client.get("/auth/security/status", headers=_bearer(admin["accessToken"]))
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "fail"
+    assert body["header_fallback_enabled"] is True
+    assert body["email_domain_allowlist_configured"] is False
+    assert "dev-secret-change-me" not in response.text
+    assert "Authorization" not in response.text
+
+
+def test_invalid_bearer_does_not_fall_back_when_jwt_validation_is_required(monkeypatch) -> None:
+    init_db()
+    seed_auth_demo_accounts()
+    monkeypatch.setattr(settings, "auth_disable_jwt_validation", False, raising=False)
+    monkeypatch.setattr(settings, "auth_allow_header_fallback", True, raising=False)
+
+    response = client.get(
+        "/auth/me",
+        headers={"Authorization": "Bearer not-a-valid-token", "X-User-Id": "1"},
+    )
+
+    assert response.status_code == 401
+    assert "not-a-valid-token" not in response.text
+
+
+def test_login_success_updates_last_login_without_storing_password() -> None:
+    init_db()
+    seed_auth_demo_accounts()
+
+    response = _login("admin@teamswork.local", "Admin@123")
+    assert response.status_code == 200
+
+    with get_connection() as conn:
+        user = conn.execute(
+            "SELECT last_login_at, password_hash FROM users WHERE email = ?",
+            ("admin@teamswork.local",),
+        ).fetchone()
+        attempts = conn.execute(
+            "SELECT outcome, reason_code FROM auth_login_attempts WHERE email = ? ORDER BY id DESC LIMIT 1",
+            ("admin@teamswork.local",),
+        ).fetchone()
+
+    assert user["last_login_at"]
+    assert user["password_hash"]
+    assert "Admin@123" not in str(dict(user))
+    assert attempts["outcome"] == "success"
+    assert attempts["reason_code"] == "authenticated"

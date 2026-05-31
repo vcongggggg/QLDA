@@ -382,6 +382,43 @@ def build_report_analytics_xlsx(summary: dict) -> bytes:
     return buffer.getvalue()
 
 
+def build_rbac_matrix_csv(matrix: dict) -> str:
+    roles = matrix["roles"]
+    permissions = matrix["permissions"]
+    role_keys = [str(role["slug"]) for role in roles]
+    lines = ["permission_key,category,name," + ",".join(role_keys)]
+    for permission in permissions:
+        row = [
+            str(permission["key"]),
+            str(permission["category"]),
+            str(permission["name"]).replace(",", " "),
+        ]
+        for role_key in role_keys:
+            granted = str(permission["key"]) in set(matrix["matrix"].get(role_key, []))
+            row.append("yes" if granted else "")
+        lines.append(",".join(row))
+    return "\n".join(lines)
+
+
+def build_rbac_matrix_xlsx(matrix: dict) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "RBAC Matrix"
+    roles = matrix["roles"]
+    permissions = matrix["permissions"]
+    role_keys = [str(role["slug"]) for role in roles]
+    ws.append(["permission_key", "category", "name", *role_keys])
+    for permission in permissions:
+        row = [permission["key"], permission["category"], permission["name"]]
+        for role_key in role_keys:
+            granted = str(permission["key"]) in set(matrix["matrix"].get(role_key, []))
+            row.append("yes" if granted else "")
+        ws.append(row)
+    buffer = BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
 def build_tasks_csv(rows: list[dict]) -> str:
     from io import StringIO
 

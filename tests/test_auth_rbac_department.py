@@ -214,6 +214,66 @@ def test_forbidden_direct_access_is_blocked_by_backend_and_static_guard_exists()
     assert "Back to dashboard" in index
 
 
+def test_admin_can_manage_custom_role_and_export_permission_matrix() -> None:
+    init_db()
+    seed_auth_demo_accounts()
+    admin = _login("admin@teamswork.local", "Admin@123")
+    member = _login("member@teamswork.local", "Member@123")
+
+    forbidden = client.post(
+        "/rbac/roles",
+        headers=_bearer(member["accessToken"]),
+        json={"slug": "qa_reviewer", "name": "QA Reviewer", "permission_keys": ["roles.view"]},
+    )
+    assert forbidden.status_code == 403
+
+    created = client.post(
+        "/rbac/roles",
+        headers=_bearer(admin["accessToken"]),
+        json={
+            "slug": "qa_reviewer",
+            "name": "QA Reviewer",
+            "description": "Release review without admin mutation rights",
+            "permission_keys": ["roles.view", "REPORT_VIEW_TEAM"],
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["slug"] == "QA_REVIEWER"
+    assert not created.json()["is_system"]
+
+    matrix = client.get("/rbac/matrix", headers=_bearer(admin["accessToken"]))
+    assert matrix.status_code == 200
+    body = matrix.json()
+    assert "QA_REVIEWER" in body["matrix"]
+    assert {"roles.view", "REPORT_VIEW_TEAM"}.issubset(set(body["matrix"]["QA_REVIEWER"]))
+
+    updated = client.patch(
+        "/rbac/roles/QA_REVIEWER",
+        headers=_bearer(admin["accessToken"]),
+        json={"name": "QA Audit Reviewer", "permission_keys": ["roles.view"]},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["role"]["name"] == "QA Audit Reviewer"
+    assert [item["key"] for item in updated.json()["permissions"]] == ["roles.view"]
+
+    csv_response = client.get("/rbac/matrix.csv", headers=_bearer(admin["accessToken"]))
+    assert csv_response.status_code == 200
+    assert csv_response.headers["content-type"].startswith("text/csv")
+    assert "permission_key,category,name" in csv_response.text
+    assert "QA_REVIEWER" in csv_response.text
+
+    xlsx_response = client.get("/rbac/matrix.xlsx", headers=_bearer(admin["accessToken"]))
+    assert xlsx_response.status_code == 200
+    assert xlsx_response.headers["content-type"].startswith("application/vnd.openxmlformats")
+    assert xlsx_response.content.startswith(b"PK")
+
+    with get_connection() as conn:
+        audit_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM audit_logs WHERE entity IN ('role', 'role_permissions')"
+        ).fetchone()["c"]
+    assert int(audit_count) >= 2
+
+
 def test_canonical_member_role_scopes_tasks_dashboard_and_kpi_to_own_data() -> None:
     init_db()
     member = create_user("Scoped Member", "scoped.member@example.com", "MEMBER", "Engineering")
@@ -279,6 +339,152 @@ def test_create_user_sets_password_role_department_without_exposing_hash() -> No
     assert "password_hash" not in body
 
     assert _login("created.user@teamswork.local", "Created@123")["user"]["email"] == body["email"]
+
+
+def test_admin_and_hr_can_manage_user_onboarding_while_member_is_denied() -> None:
+    init_db()
+    seed_auth_demo_accounts()
+    admin = _login("admin@teamswork.local", "Admin@123")
+    hr = _login("hr@teamswork.local", "Hr@123")
+    member = _login("member@teamswork.local", "Member@123")
+
+    created = client.post(
+        "/users",
+        headers=_bearer(hr["accessToken"]),
+        json={
+            "full_name": "Onboarding User",
+            "email": "onboarding.user@teamswork.local",
+            "password": "Onboard@123",
+            "role": "MEMBER",
+            "department_id": hr["user"]["department"]["id"],
+            "onboarding_status": "pending",
+            "onboarding_note": "waiting for manager intro",
+        },
+    )
+    assert created.status_code == 200
+    user_id = int(created.json()["id"])
+    assert created.json()["onboarding_status"] == "pending"
+
+    denied = client.post(f"/users/{user_id}/invite", headers=_bearer(member["accessToken"]))
+    assert denied.status_code == 403
+
+    invited = client.post(f"/users/{user_id}/invite", headers=_bearer(admin["accessToken"]))
+    assert invited.status_code == 200
+    assert invited.json()["onboarding_status"] == "invited"
+    assert invited.json()["invited_at"]
+
+    activated = client.patch(
+        f"/users/{user_id}/onboarding",
+        headers=_bearer(hr["accessToken"]),
+        json={"onboarding_status": "active", "onboarding_note": "ready for release work"},
+    )
+    assert activated.status_code == 200
+    assert activated.json()["onboarding_status"] == "active"
+    assert activated.json()["activated_at"]
+
+    with get_connection() as conn:
+        audit_actions = {
+            row["action"]
+            for row in conn.execute(
+                "SELECT action FROM audit_logs WHERE entity = 'user' AND entity_id = ?",
+                (user_id,),
+            ).fetchall()
+        }
+    assert {"create", "invite", "update_onboarding"}.issubset(audit_actions)
+
+
+def test_current_user_notification_settings_are_self_scoped_and_validated() -> None:
+    init_db()
+    seed_auth_demo_accounts()
+    member = _login("member@teamswork.local", "Member@123")
+
+    defaults = client.get("/users/me/notification-settings", headers=_bearer(member["accessToken"]))
+    assert defaults.status_code == 200
+    assert defaults.json()["user_id"] == member["user"]["id"]
+    assert defaults.json()["app_enabled"] is True
+    assert defaults.json()["teams_enabled"] is True
+
+    updated = client.patch(
+        "/users/me/notification-settings",
+        headers=_bearer(member["accessToken"]),
+        json={
+            "email_enabled": True,
+            "digest_enabled": True,
+            "quiet_hours_start": "18:30",
+            "quiet_hours_end": "08:00",
+        },
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["user_id"] == member["user"]["id"]
+    assert body["email_enabled"] is True
+    assert body["digest_enabled"] is True
+    assert body["quiet_hours_start"] == "18:30"
+
+    invalid_time = client.patch(
+        "/users/me/notification-settings",
+        headers=_bearer(member["accessToken"]),
+        json={"quiet_hours_start": "25:99"},
+    )
+    assert invalid_time.status_code == 422
+
+    unknown_option = client.patch(
+        "/users/me/notification-settings",
+        headers=_bearer(member["accessToken"]),
+        json={"sms_enabled": True},
+    )
+    assert unknown_option.status_code == 422
+
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT action, entity, entity_id
+            FROM audit_logs
+            WHERE action = 'update_notification_settings'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    assert row is not None
+    assert row["entity"] == "user_notification_preferences"
+    assert int(row["entity_id"]) == int(member["user"]["id"])
+
+
+def test_current_user_can_update_safe_profile_fields_only() -> None:
+    init_db()
+    seed_auth_demo_accounts()
+    member = _login("member@teamswork.local", "Member@123")
+
+    updated = client.patch(
+        "/users/me",
+        headers=_bearer(member["accessToken"]),
+        json={
+            "full_name": "Member Updated",
+            "position": "Product Engineer",
+            "avatar_url": "https://example.com/avatar.png",
+            "role": "ADMIN",
+            "is_active": False,
+        },
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["full_name"] == "Member Updated"
+    assert body["position"] == "Product Engineer"
+    assert body["avatar_url"] == "https://example.com/avatar.png"
+    assert body["role_detail"]["code"] == "MEMBER"
+    assert body["is_active"] is True
+
+    me = client.get("/auth/me", headers=_bearer(member["accessToken"]))
+    assert me.status_code == 200
+    assert me.json()["fullName"] == "Member Updated"
+
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT action, entity, entity_id FROM audit_logs WHERE action = 'update_profile' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert row is not None
+    assert row["entity"] == "user"
+    assert int(row["entity_id"]) == int(member["user"]["id"])
 
 
 def _sidebar_nav_items(index_html: str) -> list[tuple[str, set[str]]]:

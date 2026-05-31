@@ -58,7 +58,182 @@ function projectCard(p) {
         <span>${icon('list-checks', 'text-icon')} ${p.progress?.done_tasks ?? 0}/${p.progress?.total_tasks ?? 0} tasks</span>
         <span>${icon('calendar', 'text-icon')} ${start} ? ${end}</span>
       </div>
+      <div class="project-footer">
+        <button type="button" class="btn btn-outline btn-sm" onclick="openProjectDetail(${Number(p.id)})">Backlog / Sprint</button>
+        ${canDo('sprintManage') ? `<button type="button" class="btn btn-outline btn-sm" onclick="quickCreateSprint(${Number(p.id)})">Tạo sprint</button>` : ''}
+      </div>
     </div>`;
+}
+
+function showProjectCreateModal() {
+  if (!canDo('projectCreate')) {
+    toast('Ban khong co quyen tao project', 'error');
+    return;
+  }
+  const form = document.getElementById('projectCreateForm');
+  if (form) form.reset();
+  const managerInput = document.getElementById('projectCreateManagerId');
+  if (managerInput && state.currentUser?.id) managerInput.value = state.currentUser.id;
+  document.getElementById('projectCreateOverlay')?.classList.remove('hidden');
+}
+
+function closeProjectCreate() {
+  document.getElementById('projectCreateOverlay')?.classList.add('hidden');
+}
+
+function dateInputToIso(value, endOfDay = false) {
+  if (!value) return null;
+  const suffix = endOfDay ? 'T17:00:00' : 'T09:00:00';
+  const date = new Date(`${value}${suffix}`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+async function submitProjectCreate(event) {
+  event.preventDefault();
+  if (!canDo('projectCreate')) {
+    toast('Ban khong co quyen tao project', 'error');
+    return;
+  }
+  const name = document.getElementById('projectCreateName').value.trim();
+  const description = document.getElementById('projectCreateDescription').value.trim() || null;
+  const managerValue = document.getElementById('projectCreateManagerId').value;
+  const payload = {
+    name,
+    description,
+    manager_id: managerValue ? Number(managerValue) : null,
+    status: document.getElementById('projectCreateStatus').value,
+    start_date: dateInputToIso(document.getElementById('projectCreateStart').value),
+    end_date: dateInputToIso(document.getElementById('projectCreateEnd').value, true),
+  };
+  try {
+    const project = await api('/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    toast('Da tao project', 'success');
+    closeProjectCreate();
+    await loadProjects();
+    openProjectDetail(project.id);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function closeProjectDetail() {
+  document.getElementById('projectDetailOverlay')?.classList.add('hidden');
+}
+
+async function openProjectDetail(projectId) {
+  const overlay = document.getElementById('projectDetailOverlay');
+  const body = document.getElementById('projectDetailBody');
+  if (!overlay || !body) return;
+  overlay.classList.remove('hidden');
+  body.innerHTML = '<div class="skeleton" style="height:240px"></div>';
+  try {
+    const [progress, backlog, sprints, members] = await Promise.all([
+      api(`/projects/${projectId}/progress`).catch(() => null),
+      api(`/projects/${projectId}/backlog`).catch(() => []),
+      api(`/projects/${projectId}/sprints`).catch(() => []),
+      api(`/projects/${projectId}/members`).catch(() => []),
+    ]);
+    body.innerHTML = projectDetailHtml(projectId, progress, backlog, sprints, members);
+  } catch (e) {
+    body.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${escHtml(e.message)}</div>`;
+  }
+}
+
+function projectDetailHtml(projectId, progress, backlog, sprints, members) {
+  const backlogRows = (backlog || []).map(t => `
+    <tr>
+      <td><strong>${escHtml(t.title)}</strong><br><span class="text-muted">#${Number(t.id)}</span></td>
+      <td>${escHtml(statusLabel(t.status))}</td>
+      <td>${Number(t.story_points || 0)}</td>
+      <td>${new Date(t.deadline).toLocaleDateString('vi-VN')}</td>
+      <td><button type="button" class="btn btn-outline btn-sm" onclick="openTaskDetail(${Number(t.id)})">Chi tiết</button></td>
+    </tr>`).join('');
+  const sprintOptions = (sprints || []).map(s => `<option value="${Number(s.id)}">${escHtml(s.name)} (${escHtml(s.status)})</option>`).join('');
+  return `
+    <div class="task-detail-section">
+      <div class="task-detail-subhead">
+        <h3>Progress</h3>
+        <span class="tag">${Number(progress?.completion_rate || 0).toFixed(0)}%</span>
+      </div>
+      <div class="task-detail-grid">
+        ${taskDetailField('Tasks', `${progress?.done_tasks ?? 0}/${progress?.total_tasks ?? 0}`)}
+        ${taskDetailField('Overdue', progress?.overdue_tasks ?? 0)}
+        ${taskDetailField('Story points', `${progress?.completed_story_points ?? 0}/${progress?.total_story_points ?? 0}`)}
+        ${taskDetailField('Members', members?.length ?? 0)}
+      </div>
+    </div>
+    <div class="task-detail-section">
+      <div class="task-detail-subhead">
+        <h3>Sprints</h3>
+        <span class="tag">${sprints?.length ?? 0}</span>
+      </div>
+      <div class="activity-list">
+        ${(sprints || []).map(s => `<div class="activity-item"><div><strong>${escHtml(s.name)}</strong><span>${escHtml(s.status)}</span></div><div>${fmtDateTime(s.start_date)} - ${fmtDateTime(s.end_date)}</div></div>`).join('') || '<div class="empty-state compact">Chua co sprint</div>'}
+      </div>
+      ${canDo('sprintManage') ? `<button type="button" class="btn btn-outline btn-sm" onclick="quickCreateSprint(${Number(projectId)})">Tạo sprint</button>` : ''}
+    </div>
+    <div class="task-detail-section">
+      <div class="task-detail-subhead">
+        <h3>Backlog</h3>
+        <span class="tag">${backlog?.length ?? 0}</span>
+      </div>
+      ${canDo('sprintManage') && (backlog || []).length && (sprints || []).length ? `
+        <div class="comment-form">
+          <select id="projectBacklogSprintTarget" class="select">${sprintOptions}</select>
+          <button type="button" class="btn btn-primary btn-sm" onclick="moveVisibleBacklogToSprint(${Number(projectId)})">Đưa backlog vào sprint</button>
+        </div>` : ''}
+      <table class="kanban-list-table">
+        <thead><tr><th>Task</th><th>Status</th><th>SP</th><th>Deadline</th><th></th></tr></thead>
+        <tbody>${backlogRows || '<tr><td colspan="5"><div class="empty-state compact">Backlog rong</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function quickCreateSprint(projectId) {
+  if (!canDo('sprintManage')) {
+    toast('Ban khong co quyen tao sprint', 'error');
+    return;
+  }
+  const name = prompt('Ten sprint moi');
+  if (!name || !name.trim()) return;
+  const start = new Date();
+  const end = new Date();
+  end.setDate(end.getDate() + 14);
+  try {
+    await api(`/projects/${projectId}/sprints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), goal: null, start_date: start.toISOString(), end_date: end.toISOString() }),
+    });
+    toast('Da tao sprint', 'success');
+    openProjectDetail(projectId);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function moveVisibleBacklogToSprint(projectId) {
+  const sprintId = Number(document.getElementById('projectBacklogSprintTarget')?.value || 0);
+  if (!sprintId) return;
+  try {
+    const backlog = await api(`/projects/${projectId}/backlog`);
+    const taskIds = backlog.map(t => Number(t.id));
+    if (!taskIds.length) return;
+    const result = await api(`/projects/${projectId}/backlog/move-to-sprint`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_ids: taskIds, sprint_id: sprintId }),
+    });
+    toast(`Da chuyen ${result.updated || 0} task`, 'success');
+    openProjectDetail(projectId);
+    if (state.currentSection === 'kanban') loadKanban();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 // -------------------------------- KPI ----------
