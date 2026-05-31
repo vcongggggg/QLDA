@@ -1,4 +1,4 @@
-﻿# TeamsWork User Story Completion Audit
+# TeamsWork User Story Completion Audit
 
 Generated: 2026-05-31
 Source backlog: `d:\DownLoad\TeamsWork_ProductBacklog.docx`
@@ -11,10 +11,10 @@ Strict rule used: only `Done` is counted as completed. `Partial` stories are sti
 | Metric | Count |
 | --- | ---: |
 | Total user stories in backlog | 513 |
-| Completed (`Done`) | 194 |
+| Completed (`Done`) | 202 |
 | Partially implemented (`Partial`) | 4 |
-| Not started | 315 |
-| **Unfinished (`Partial` + `Not started`)** | **319** |
+| Not started | 307 |
+| **Unfinished (`Partial` + `Not started`)** | **311** |
 
 ## Production Release Scope
 
@@ -22,7 +22,7 @@ Roadmap scope for production release is `Must Have` + `Should Have` only. `Could
 
 | Scope | Total | Done | Partial | Not started | Remaining |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Must Have + Should Have | 374 | 190 | 0 | 184 | 184 |
+| Must Have + Should Have | 374 | 198 | 0 | 176 | 176 |
 | Could Have + Won't Have | 139 | 4 | 4 | 131 | 135 |
 
 ## Traceability Rules
@@ -566,14 +566,14 @@ This section records the implementation pass that completes the remaining Must/S
 | US046 | E1: Auth & User Mgmt | Auth & Security | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US050 | E2: Task Management | Tạo Task | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US051 | E2: Task Management | Tạo Task | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US052 | E2: Task Management | Tạo Task | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US052 | E2: Task Management | Tạo Task | Must Have | Done | Priority levels (Urgent/High/Medium/Low) selectable on task creation and displayed as colored badges on Kanban cards & List view; covered by `tests/test_task_metadata.py`. |
 | US053 | E2: Task Management | Tạo Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US054 | E2: Task Management | Tạo Task | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US055 | E2: Task Management | Tạo Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US056 | E2: Task Management | Tạo Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US057 | E2: Task Management | Tạo Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US054 | E2: Task Management | Tạo Task | Must Have | Done | Task Checklist items can be created, deleted, and interactive toggled via `PATCH /tasks/{id}/metadata` with live completion progress (X/Y) on card/list; covered by `tests/test_task_metadata.py`. |
+| US055 | E2: Task Management | Tạo Task | Should Have | Done | Custom labels can be added/deleted/rendered on task cards and filtered dynamically in the Kanban board. Save endpoint `/tasks/{id}/metadata` is tested in `tests/test_task_metadata.py`. |
+| US056 | E2: Task Management | Tạo Task | Should Have | Done | Subtasks checklist can be managed interactively with markdown format (`[ ]` / `[x]`) and progress is displayed on task cards. Tested in `tests/test_task_metadata.py`. |
+| US057 | E2: Task Management | Tạo Task | Should Have | Done | Task duplication is supported via `POST /tasks/{id}/duplicate` button, restricted to admin and manager roles. Tested in `tests/test_task_metadata.py`. |
 | US091 | E2: Task Management | Tạo Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US095 | E2: Task Management | Tạo Task | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US095 | E2: Task Management | Tạo Task | Must Have | Done | Estimated KPI points displayed and configured during manual task creation based on selected difficulty; covered by `tests/test_task_metadata.py`. |
 | US109 | E2: Task Management | Tạo Task | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US058 | E2: Task Management | Kanban Board | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US059 | E2: Task Management | Kanban Board | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
@@ -597,7 +597,7 @@ This section records the implementation pass that completes the remaining Must/S
 | US068 | E2: Task Management | Chi tiết Task | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US069 | E2: Task Management | Chi tiết Task | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US070 | E2: Task Management | Chi tiết Task | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US071 | E2: Task Management | Chi tiết Task | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US071 | E2: Task Management | Chi tiết Task | Must Have | Done | File upload <=50MB, preview, download, and delete implemented in task details drawer and API; covered by `tests/test_task_attachments.py`. |
 | US072 | E2: Task Management | Chi tiết Task | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US073 | E2: Task Management | Chi tiết Task | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US074 | E2: Task Management | Chi tiết Task | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
@@ -611,7 +611,7 @@ This section records the implementation pass that completes the remaining Must/S
 | US076 | E2: Task Management | Deadline | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US077 | E2: Task Management | Deadline | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US078 | E2: Task Management | Deadline | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US079 | E2: Task Management | Deadline | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US079 | E2: Task Management | Deadline | Should Have | Done | Manager can extend task deadline with a mandatory reason, logs timeline activity, and notifies assignee; covered by `tests/test_task_deadline_extension.py`. |
 | US094 | E2: Task Management | Deadline | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US107 | E2: Task Management | Deadline | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US080 | E2: Task Management | Tìm kiếm & Lọc | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |

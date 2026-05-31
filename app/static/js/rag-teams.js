@@ -238,7 +238,7 @@ async function importKanbanTasks() {
 }
 
 async function resetKanbanFilters() {
-  ['kanbanProjectFilter', 'kanbanAssigneeFilter', 'kanbanStatusFilter', 'kanbanOverdueFilter'].forEach(id => {
+  ['kanbanProjectFilter', 'kanbanAssigneeFilter', 'kanbanStatusFilter', 'kanbanOverdueFilter', 'kanbanLabelFilter'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });

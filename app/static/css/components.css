@@ -212,6 +212,10 @@
 .badge-draft   { background: #F1F5F9; color: #64748B; }
 .badge-reviewed{ background: var(--warning-bg); color: var(--warning); }
 .badge-imported{ background: var(--success-bg); color: var(--success); }
+.badge-priority-urgent { background: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5; }
+.badge-priority-high   { background: #FFEDD5; color: #C2410C; border: 1px solid #FED7AA; }
+.badge-priority-medium { background: #DBEAFE; color: #1E40AF; border: 1px solid #BFDBFE; }
+.badge-priority-low    { background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0; }
 
 /* ── Tags ── */
 .tag {

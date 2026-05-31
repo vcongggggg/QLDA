@@ -158,3 +158,136 @@ def test_duplicate_task_copies_metadata_and_resets_status() -> None:
     assert payload["completed_at"] is None
     assert payload["priority"] == "high"
     assert payload["labels"] == ["copy-me"]
+
+
+def test_task_checklist_interactive_toggle_and_validation() -> None:
+    init_db()
+    manager = create_user("Checklist Manager", f"{_unique('checklist.manager')}@example.com", "manager", "PMO")
+    staff = create_user("Checklist Staff", f"{_unique('checklist.staff')}@example.com", "staff", "Engineering")
+    
+    deadline = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    # 1. Create a task with checklist items
+    created = client.post(
+        "/tasks",
+        headers=_hdr(int(manager["id"])),
+        json={
+            "title": "Interactive checklist task",
+            "assignee_id": int(staff["id"]),
+            "story_points": 2,
+            "difficulty": "easy",
+            "priority": "medium",
+            "checklist": ["[ ] Item 1", "[x] Item 2"],
+            "deadline": deadline,
+        },
+    )
+    assert created.status_code == 200
+    task_id = created.json()["id"]
+    assert created.json()["checklist"] == ["[ ] Item 1", "[x] Item 2"]
+
+    # 2. Update checklist (toggle item)
+    updated = client.patch(
+        f"/tasks/{task_id}/metadata",
+        headers=_hdr(int(staff["id"])),
+        json={
+            "checklist": ["[x] Item 1", "[ ] Item 2"],
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["checklist"] == ["[x] Item 1", "[ ] Item 2"]
+
+    # 3. Add and delete items in checklist
+    updated_again = client.patch(
+        f"/tasks/{task_id}/metadata",
+        headers=_hdr(int(staff["id"])),
+        json={
+            "checklist": ["[x] Item 1", "[ ] Item 2", "[ ] Item 3"],
+        },
+    )
+    assert updated_again.status_code == 200
+    assert updated_again.json()["checklist"] == ["[x] Item 1", "[ ] Item 2", "[ ] Item 3"]
+
+    # 4. Check details endpoint returns checklist correctly
+    detail = client.get(f"/tasks/{task_id}", headers=_hdr(int(staff["id"])))
+    assert detail.status_code == 200
+    assert detail.json()["checklist"] == ["[x] Item 1", "[ ] Item 2", "[ ] Item 3"]
+
+
+def test_task_subtasks_interactive_toggle_and_validation() -> None:
+    init_db()
+    manager = create_user("Subtask Manager", f"{_unique('subtask.manager')}@example.com", "manager", "PMO")
+    staff = create_user("Subtask Staff", f"{_unique('subtask.staff')}@example.com", "staff", "Engineering")
+    
+    deadline = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    # 1. Create a task with subtasks
+    created = client.post(
+        "/tasks",
+        headers=_hdr(int(manager["id"])),
+        json={
+            "title": "Interactive subtasks task",
+            "assignee_id": int(staff["id"]),
+            "story_points": 2,
+            "difficulty": "easy",
+            "priority": "medium",
+            "subtasks": ["[ ] Subtask 1", "[x] Subtask 2"],
+            "deadline": deadline,
+        },
+    )
+    assert created.status_code == 200
+    task_id = created.json()["id"]
+    assert created.json()["subtasks"] == ["[ ] Subtask 1", "[x] Subtask 2"]
+
+    # 2. Update subtasks (toggle item)
+    updated = client.patch(
+        f"/tasks/{task_id}/metadata",
+        headers=_hdr(int(staff["id"])),
+        json={
+            "subtasks": ["[x] Subtask 1", "[ ] Subtask 2"],
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["subtasks"] == ["[x] Subtask 1", "[ ] Subtask 2"]
+
+    # 3. Add and delete subtasks
+    updated_again = client.patch(
+        f"/tasks/{task_id}/metadata",
+        headers=_hdr(int(staff["id"])),
+        json={
+            "subtasks": ["[x] Subtask 1", "[ ] Subtask 2", "[ ] Subtask 3"],
+        },
+    )
+    assert updated_again.status_code == 200
+    assert updated_again.json()["subtasks"] == ["[x] Subtask 1", "[ ] Subtask 2", "[ ] Subtask 3"]
+
+
+def test_duplicate_task_role_boundaries() -> None:
+    init_db()
+    manager = create_user("Dup Boundary Manager", f"{_unique('dupbound.manager')}@example.com", "manager", "PMO")
+    staff = create_user("Dup Boundary Staff", f"{_unique('dupbound.staff')}@example.com", "staff", "Engineering")
+    
+    task = create_task(
+        "Task for duplication boundary",
+        None,
+        int(staff["id"]),
+        None,
+        None,
+        2,
+        "medium",
+        (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
+    )
+    
+    # Staff cannot duplicate
+    forbidden = client.post(
+        f"/tasks/{task['id']}/duplicate",
+        headers=_hdr(int(staff["id"])),
+        json={"title": "Copied by staff"},
+    )
+    assert forbidden.status_code == 403
+
+    # Manager can duplicate
+    allowed = client.post(
+        f"/tasks/{task['id']}/duplicate",
+        headers=_hdr(int(manager["id"])),
+        json={"title": "Copied by manager"},
+    )
+    assert allowed.status_code == 200
+    assert allowed.json()["title"] == "Copied by manager"

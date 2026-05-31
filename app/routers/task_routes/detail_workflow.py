@@ -312,3 +312,122 @@ def update_task_status_endpoint(
             entity_id=task_id,
         )
     return row
+
+
+from pathlib import Path
+import uuid
+from pydantic import BaseModel
+
+class AttachmentDeletePayload(BaseModel):
+    url: str
+
+@router.post("/tasks/{task_id}/attachments", response_model=TaskOut)
+def upload_task_attachment_endpoint(
+    task_id: int,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    task = get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task not found")
+    _ensure_task_visible(task, current_user)
+    
+    if int(task["assignee_id"]) == int(current_user["id"]):
+        require_permission(current_user, "tasks.update_own")
+    else:
+        require_permission(current_user, "tasks.update_any")
+        _ensure_task_project_access(task, current_user)
+
+    MAX_SIZE = 50 * 1024 * 1024  # 50MB
+    file_size = 0
+    unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
+    upload_dir = Path("app/static/uploads")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    file_path = upload_dir / unique_filename
+
+    try:
+        with file_path.open("wb") as buffer:
+            while chunk := file.file.read(1024 * 1024):
+                file_size += len(chunk)
+                if file_size > MAX_SIZE:
+                    buffer.close()
+                    if file_path.exists():
+                        file_path.unlink()
+                    raise HTTPException(status_code=400, detail="file size exceeds 50MB limit")
+                buffer.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        if file_path.exists():
+            file_path.unlink()
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+    attachments = list(task.get("attachment_metadata") or [])
+    new_attachment = {
+        "name": file.filename,
+        "url": f"/ui/uploads/{unique_filename}",
+        "size": file_size,
+        "content_type": file.content_type or "application/octet-stream"
+    }
+    attachments.append(new_attachment)
+    
+    row = update_task_metadata(
+        task_id,
+        attachment_metadata=attachments
+    )
+    if row is None:
+        if file_path.exists():
+            file_path.unlink()
+        raise HTTPException(status_code=404, detail="task not found")
+        
+    create_audit_log(current_user["id"], "upload_attachment", "task", task_id, f"filename={file.filename}")
+    return row
+
+
+@router.delete("/tasks/{task_id}/attachments", response_model=TaskOut)
+def delete_task_attachment_endpoint(
+    task_id: int,
+    payload: AttachmentDeletePayload,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    task = get_task_by_id(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="task not found")
+    _ensure_task_visible(task, current_user)
+    
+    if int(task["assignee_id"]) == int(current_user["id"]):
+        require_permission(current_user, "tasks.update_own")
+    else:
+        require_permission(current_user, "tasks.update_any")
+        _ensure_task_project_access(task, current_user)
+
+    attachments = list(task.get("attachment_metadata") or [])
+    matching_attachment = None
+    for att in attachments:
+        if att.get("url") == payload.url:
+            matching_attachment = att
+            break
+            
+    if not matching_attachment:
+        raise HTTPException(status_code=400, detail="attachment not found for this task")
+        
+    attachments.remove(matching_attachment)
+    
+    row = update_task_metadata(
+        task_id,
+        attachment_metadata=attachments
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="task not found")
+        
+    if payload.url.startswith("/ui/uploads/"):
+        filename = payload.url.replace("/ui/uploads/", "")
+        file_path = Path("app/static/uploads") / filename
+        if file_path.exists():
+            try:
+                file_path.unlink()
+            except Exception:
+                pass
+                
+    create_audit_log(current_user["id"], "delete_attachment", "task", task_id, f"url={payload.url}")
+    return row

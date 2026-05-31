@@ -149,8 +149,33 @@ async function loadKanban() {
     const tasks = await api(url);
     const summary = await api(buildKanbanSummaryUrl()).catch(() => null);
     await loadWorkloadWarnings();
+
+    // Populate label filter dynamically with all unique labels present
+    const allLabels = new Set();
+    tasks.forEach(t => {
+      if (Array.isArray(t.labels)) {
+        t.labels.forEach(l => { if (l) allLabels.add(l.trim()); });
+      }
+    });
+    const labelFilterSelect = document.getElementById('kanbanLabelFilter');
+    if (labelFilterSelect) {
+      const selectedLabel = labelFilterSelect.value;
+      labelFilterSelect.innerHTML = '<option value="">Tất cả nhãn</option>' + 
+        Array.from(allLabels).sort().map(l => `<option value="${escHtml(l)}">${escHtml(l)}</option>`).join('');
+      if (selectedLabel && allLabels.has(selectedLabel)) {
+        labelFilterSelect.value = selectedLabel;
+      }
+    }
+
+    // Filter tasks by selected label
+    let displayedTasks = tasks;
+    const activeLabel = labelFilterSelect?.value;
+    if (activeLabel) {
+      displayedTasks = tasks.filter(t => Array.isArray(t.labels) && t.labels.includes(activeLabel));
+    }
+
     const grouped = { todo: [], doing: [], done: [] };
-    tasks.forEach(t => { if (grouped[t.status]) grouped[t.status].push(t); });
+    displayedTasks.forEach(t => { if (grouped[t.status]) grouped[t.status].push(t); });
 
     const summaryByStatus = new Map((summary?.columns || []).map(item => [item.status, item]));
     ['todo', 'doing', 'done'].forEach(status => {
@@ -163,9 +188,9 @@ async function loadKanban() {
       el.textContent = `${item.task_count} / ${item.story_points} SP${item.wip_limit != null ? ` / WIP ${item.wip_limit}` : ''}`;
       el.classList.toggle('badge-hard', Boolean(item.wip_exceeded));
     });
-    document.getElementById('kanbanCount').textContent = `${tasks.length} công việc`;
-    renderKanbanSummary(summary, tasks);
-    renderKanbanList(tasks);
+    document.getElementById('kanbanCount').textContent = `${displayedTasks.length} công việc`;
+    renderKanbanSummary(summary, displayedTasks);
+    renderKanbanList(displayedTasks);
 
     Object.entries(grouped).forEach(([status, items]) => {
       const col = cols[status];
@@ -236,11 +261,28 @@ function renderKanbanList(tasks) {
           const deadline = new Date(task.deadline);
           const overdue = isTaskOverdue(task);
           const daysLeft = Math.ceil((deadline - new Date()) / 86400000);
+          const checklist = task.checklist || [];
+          const checklistHtml = checklist.length > 0
+            ? `<span class="task-card-checklist" style="display:inline-flex; align-items:center; gap:3px; background:#f1f5f9; padding:2px 7px; border-radius:10px; font-weight:600; color:#475569; font-size:11px; margin-left:6px;" title="Tiến độ checklist">
+                ${icon('list-checks', 'text-icon')} ${checklist.filter(x => x.startsWith('[x]')).length}/${checklist.length}
+               </span>`
+            : '';
+          const subtasks = task.subtasks || [];
+          const subtasksHtml = subtasks.length > 0
+            ? `<span class="task-card-subtask-progress" style="display:inline-flex; align-items:center; gap:3px; background:#e0f2fe; padding:2px 7px; border-radius:10px; font-weight:600; color:#0369a1; font-size:11px; margin-left:6px;" title="Tiến độ công việc con">
+                ${icon('list', 'text-icon')} ${subtasks.filter(x => x.startsWith('[x]')).length}/${subtasks.length}
+               </span>`
+            : '';
+          const labelsList = task.labels || [];
+          const labelsListHtml = labelsList.map(l => {
+            const { bg, fg, border } = hashStringToColor(l);
+            return `<span style="background:${bg}; color:${fg}; border:1px solid ${border}; padding:1px 5px; font-size:9.5px; border-radius:3px; font-weight:bold; margin-left:4px; display:inline-block; vertical-align:middle;">${escHtml(l)}</span>`;
+          }).join('');
           return `
             <tr class="kanban-list-row" onclick="openTaskDetail(${Number(task.id)})">
-              <td><strong>${escHtml(task.title)}</strong><br><span class="text-muted">#${Number(task.id)}</span></td>
+              <td><strong>${escHtml(task.title)}</strong>${checklistHtml}${subtasksHtml}${labelsListHtml}<br><span class="text-muted">#${Number(task.id)}</span></td>
               <td><span class="tag">${escHtml(statusLabel(task.status))}</span></td>
-              <td>${escHtml(task.priority || 'medium')}</td>
+              <td><span class="badge badge-priority-${task.priority || 'medium'}">${priorityLabel(task.priority || 'medium')}</span></td>
               <td>${Number(task.story_points || 0)}</td>
               <td>${deadline.toLocaleDateString('vi-VN')}</td>
               <td class="${overdue ? 'text-danger' : ''}">${overdue ? 'Overdue' : `${Math.max(daysLeft, 0)}d`}</td>
@@ -333,13 +375,40 @@ function taskCard(t) {
       ? `${icon('check-circle', 'text-icon')} Hoàn thành`
       : '';
 
+  const checklist = t.checklist || [];
+  const checklistHtml = checklist.length > 0
+    ? `<span class="task-card-checklist" style="display:inline-flex; align-items:center; gap:3px; background:#f1f5f9; padding:2px 7px; border-radius:10px; font-weight:600; color:#475569;" title="Tiến độ checklist">
+        ${icon('list-checks', 'text-icon')} ${checklist.filter(x => x.startsWith('[x]')).length}/${checklist.length}
+       </span>`
+    : '';
+
+  const subtasks = t.subtasks || [];
+  const subtasksProgressHtml = subtasks.length > 0
+    ? `<span class="task-card-subtask-progress" style="display:inline-flex; align-items:center; gap:3px; background:#e0f2fe; padding:2px 7px; border-radius:10px; font-weight:600; color:#0369a1;" title="Tiến độ công việc con">
+        ${icon('list', 'text-icon')} ${subtasks.filter(x => x.startsWith('[x]')).length}/${subtasks.length}
+       </span>`
+    : '';
+
+  const labels = t.labels || [];
+  const labelsHtml = labels.map(l => {
+    const { bg, fg, border } = hashStringToColor(l);
+    return `<span class="badge" style="background:${bg}; color:${fg}; border:1px solid ${border}; padding:1px 6px; font-size:10px; border-radius:4px; font-weight:bold;">${escHtml(l)}</span>`;
+  }).join('');
+  const labelsContainer = labels.length > 0
+    ? `<div class="task-card-labels" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px;">${labelsHtml}</div>`
+    : '';
+
   return `
     <div class="task-card" draggable="${canDo('taskUpdate') ? 'true' : 'false'}" data-task-id="${t.id}" data-status="${t.status}" title="Giữ & kéo sang cột khác">
       <div class="task-card-handle" aria-hidden="true">⋮⋮</div>
       <div class="task-card-title">${escHtml(t.title)}</div>
+      ${labelsContainer}
       <div class="task-card-meta">
         <span class="task-card-sp">SP: ${t.story_points}</span>
         <span class="badge badge-${t.difficulty}">${diffLabel(t.difficulty)}</span>
+        <span class="badge badge-priority-${t.priority || 'medium'}">${priorityShortLabel(t.priority || 'medium')}</span>
+        ${checklistHtml}
+        ${subtasksProgressHtml}
         <span class="task-card-deadline ${isOverdue ? 'overdue' : ''}">
           ${icon(isOverdue ? 'alert-triangle' : 'calendar', 'text-icon')} ${deadlineStr}
           ${!isOverdue && daysLeft >= 0 ? `(${daysLeft}d)` : ''}
@@ -379,6 +448,209 @@ async function moveTask(taskId, newStatus) {
     await updateTaskStatus(Number(taskId), newStatus, { silent: false });
   } catch (e) {
     toast(`Lỗi: ${e.message}`, 'error');
+  }
+}
+
+// ════════════════════════════════ MANUAL TASK CREATION ═══════
+let taskCreateChecklist = [];
+
+async function showCreateTaskModal() {
+  if (!canDo('taskCreate')) {
+    toast('Bạn không có quyền tạo task', 'error');
+    return;
+  }
+  
+  const form = document.getElementById('taskCreateForm');
+  if (form) form.reset();
+  
+  taskCreateChecklist = [];
+  renderTaskCreateChecklist();
+  updateExpectedKpiPoints();
+  
+  // Set default deadline to 7 days from now at 17:00
+  const defaultDeadline = new Date();
+  defaultDeadline.setDate(defaultDeadline.getDate() + 7);
+  defaultDeadline.setHours(17, 0, 0, 0);
+  const deadlineInput = document.getElementById('taskCreateDeadline');
+  if (deadlineInput) {
+    // Format to yyyy-MM-ddThh:mm
+    const tzOffset = defaultDeadline.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(defaultDeadline - tzOffset)).toISOString().slice(0, 16);
+    deadlineInput.value = localISOTime;
+  }
+
+  // Populate Assignee Select
+  const assigneeSelect = document.getElementById('taskCreateAssignee');
+  if (assigneeSelect) {
+    assigneeSelect.innerHTML = '<option value="">Đang tải...</option>';
+    try {
+      const users = await api('/users');
+      assigneeSelect.innerHTML = users.map(u => `<option value="${u.id}">${escHtml(u.full_name)} (${u.role})</option>`).join('');
+    } catch (e) {
+      assigneeSelect.innerHTML = '<option value="">Lỗi tải người dùng</option>';
+    }
+  }
+
+  // Populate Project Select
+  const projectSelect = document.getElementById('taskCreateProject');
+  if (projectSelect) {
+    projectSelect.innerHTML = '<option value="">Không chọn</option>';
+    try {
+      const projects = await api('/projects');
+      projects.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        projectSelect.appendChild(opt);
+      });
+    } catch (e) {
+      toast('Lỗi tải danh sách dự án', 'error');
+    }
+  }
+
+  // Disable sprint select by default
+  const sprintSelect = document.getElementById('taskCreateSprint');
+  if (sprintSelect) {
+    sprintSelect.disabled = true;
+    sprintSelect.innerHTML = '<option value="">Không chọn</option>';
+  }
+
+  const overlay = document.getElementById('taskCreateOverlay');
+  if (overlay) overlay.classList.remove('hidden');
+}
+
+function closeTaskCreate() {
+  const overlay = document.getElementById('taskCreateOverlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+async function onTaskCreateProjectChange() {
+  const projectId = document.getElementById('taskCreateProject').value;
+  const sprintSelect = document.getElementById('taskCreateSprint');
+  if (!sprintSelect) return;
+
+  if (!projectId) {
+    sprintSelect.disabled = true;
+    sprintSelect.innerHTML = '<option value="">Không chọn</option>';
+    return;
+  }
+
+  sprintSelect.disabled = false;
+  sprintSelect.innerHTML = '<option value="">Đang tải...</option>';
+
+  try {
+    const sprints = await api(`/projects/${projectId}/sprints`);
+    sprintSelect.innerHTML = '<option value="">Không chọn</option>' + 
+      sprints.map(s => `<option value="${s.id}">${escHtml(s.name)} (${s.status})</option>`).join('');
+  } catch (e) {
+    sprintSelect.innerHTML = '<option value="">Lỗi tải sprints</option>';
+  }
+}
+
+function updateExpectedKpiPoints() {
+  const difficulty = document.getElementById('taskCreateDifficulty').value;
+  const indicator = document.getElementById('taskCreateKpiIndicator');
+  if (!indicator) return;
+
+  const points = {
+    easy: '10.0 điểm',
+    medium: '15.0 điểm',
+    hard: '20.0 điểm'
+  }[difficulty] || '10.0 điểm';
+  
+  indicator.textContent = points;
+}
+
+function addTaskCreateChecklistItem() {
+  const input = document.getElementById('taskCreateChecklistInput');
+  const text = (input?.value || '').trim();
+  if (!text) return;
+
+  taskCreateChecklist.push(`[ ] ${text}`);
+  if (input) input.value = '';
+  renderTaskCreateChecklist();
+}
+
+function removeTaskCreateChecklistItem(index) {
+  taskCreateChecklist.splice(index, 1);
+  renderTaskCreateChecklist();
+}
+
+function renderTaskCreateChecklist() {
+  const container = document.getElementById('taskCreateChecklistItems');
+  if (!container) return;
+
+  if (taskCreateChecklist.length === 0) {
+    container.innerHTML = '<div class="text-sm text-muted">Chưa có checklist item.</div>';
+    return;
+  }
+
+  container.innerHTML = taskCreateChecklist.map((item, index) => {
+    const cleanText = item.startsWith('[ ] ') ? item.substring(4) : (item.startsWith('[x] ') ? item.substring(4) : item);
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; background:#f5f5f5; padding:4px 8px; border-radius:4px;">
+        <span class="text-sm">${escHtml(cleanText)}</span>
+        <button type="button" class="btn btn-outline btn-sm" onclick="removeTaskCreateChecklistItem(${index})" style="color:red; border-color:red; padding:2px 6px;">Xóa</button>
+      </div>`;
+  }).join('');
+}
+
+async function submitTaskCreate(event) {
+  event.preventDefault();
+  
+  if (!canDo('taskCreate')) {
+    toast('Bạn không có quyền tạo task', 'error');
+    return;
+  }
+
+  const title = document.getElementById('taskCreateTitle').value.trim();
+  const description = document.getElementById('taskCreateDescription').value.trim() || null;
+  const assigneeId = Number(document.getElementById('taskCreateAssignee').value);
+  const projectVal = document.getElementById('taskCreateProject').value;
+  const sprintVal = document.getElementById('taskCreateSprint').value;
+  const priority = document.getElementById('taskCreatePriority').value;
+  const difficulty = document.getElementById('taskCreateDifficulty').value;
+  const storyPoints = Number(document.getElementById('taskCreateStoryPoints').value);
+  const deadlineStr = document.getElementById('taskCreateDeadline').value;
+
+  if (!title || !assigneeId || !deadlineStr) {
+    toast('Vui lòng điền đầy đủ thông tin bắt buộc', 'error');
+    return;
+  }
+
+  const deadline = new Date(deadlineStr);
+  if (Number.isNaN(deadline.getTime())) {
+    toast('Deadline không hợp lệ', 'error');
+    return;
+  }
+
+  try {
+    await api('/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        description,
+        assignee_id: assigneeId,
+        project_id: projectVal ? Number(projectVal) : null,
+        sprint_id: sprintVal ? Number(sprintVal) : null,
+        priority,
+        difficulty,
+        story_points: storyPoints,
+        deadline: deadline.toISOString(),
+        checklist: taskCreateChecklist,
+        labels: [],
+        subtasks: [],
+        dependencies: [],
+        attachment_metadata: []
+      }),
+    });
+
+    toast('Tạo task mới thành công', 'success');
+    closeTaskCreate();
+    loadKanban();
+  } catch (e) {
+    toast(e.message, 'error');
   }
 }
 

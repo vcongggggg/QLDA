@@ -40,6 +40,14 @@ function diffLabel(d) {
   return { easy: 'Dễ', medium: 'Trung bình', hard: 'Khó' }[d] || d;
 }
 
+function priorityLabel(p) {
+  return { low: 'Thấp', medium: 'Trung bình', high: 'Cao', urgent: 'Khẩn cấp' }[p] || p || 'Trung bình';
+}
+
+function priorityShortLabel(p) {
+  return { low: 'Thấp', medium: 'T.Bình', high: 'Cao', urgent: 'Khẩn cấp' }[p] || p || 'T.Bình';
+}
+
 function tierClass(score) {
   if (!score) return 'tier-D';
   if (score >= 90) return 'tier-A';
@@ -360,4 +368,16 @@ async function loadProjectOverview() {
   } catch (e) {
     el.innerHTML = `<div class="empty-state"><div>${icon('alert-triangle', 'empty-icon')}</div>${escHtml(e.message)}</div>`;
   }
+}
+
+function hashStringToColor(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash % 360);
+  const bg = `hsl(${h}, 70%, 92%)`;
+  const fg = `hsl(${h}, 80%, 30%)`;
+  const border = `hsl(${h}, 60%, 80%)`;
+  return { bg, fg, border };
 }

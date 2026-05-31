@@ -215,6 +215,9 @@
             <option value="true">Overdue</option>
             <option value="false">Not overdue</option>
           </select>
+          <select id="kanbanLabelFilter" class="select" onchange="loadKanban()">
+            <option value="">Tất cả nhãn</option>
+          </select>
           <input id="kanbanKeywordFilter" class="input task-filter-input" type="search" placeholder="Keyword" oninput="loadKanbanDebounced()">
           <input id="kanbanDeadlineFromFilter" class="input task-filter-date" type="date" onchange="loadKanban()">
           <input id="kanbanDeadlineToFilter" class="input task-filter-date" type="date" onchange="loadKanban()">
@@ -234,6 +237,7 @@
           <span id="kanbanCount" class="text-sm text-muted"></span>
           <button type="button" class="btn btn-outline btn-compact" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="exportKanbanTasks('csv')">CSV</button>
           <button type="button" class="btn btn-outline btn-compact" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="exportKanbanTasks('xlsx')">XLSX</button>
+          <button type="button" class="btn btn-primary btn-compact" data-requires-any-permission="KANBAN_MANAGE_TEAM,KANBAN_MANAGE_ALL,tasks.create" onclick="showCreateTaskModal()">Tạo Task</button>
           <input id="taskImportFile" class="input" type="file" accept=".csv,.xlsx" data-requires-any-permission="KANBAN_MANAGE_TEAM,KANBAN_MANAGE_ALL,tasks.create">
           <button type="button" class="btn btn-primary btn-compact" data-requires-any-permission="KANBAN_MANAGE_TEAM,KANBAN_MANAGE_ALL,tasks.create" onclick="importKanbanTasks()">Import</button>
         </div>
@@ -793,6 +797,101 @@
       <button class="btn btn-danger" type="button" onclick="closeConfirmModal(true)">Confirm</button>
     </div>
   </div>
+</div>
+
+<!-- Task creation drawer -->
+<div id="taskCreateOverlay" class="drawer-overlay hidden" onclick="if(event.target===this) closeTaskCreate()">
+  <aside class="task-detail-drawer" aria-label="Task create drawer">
+    <div class="task-detail-header">
+      <div>
+        <div class="task-detail-kicker">Tạo công việc mới</div>
+        <strong>Tạo Task mới</strong>
+      </div>
+      <button type="button" class="drawer-close" onclick="closeTaskCreate()" aria-label="Đóng">×</button>
+    </div>
+    <div class="task-detail-body">
+      <form id="taskCreateForm" onsubmit="submitTaskCreate(event)" class="form-stack">
+        <label class="field-label">Tiêu đề *</label>
+        <input id="taskCreateTitle" class="input" type="text" minlength="2" maxlength="200" required placeholder="Tên công việc" />
+        
+        <label class="field-label">Mô tả</label>
+        <textarea id="taskCreateDescription" class="textarea" rows="4" placeholder="Mô tả chi tiết công việc"></textarea>
+        
+        <div class="inline-fields">
+          <div>
+            <label class="field-label">Người thực hiện *</label>
+            <select id="taskCreateAssignee" class="select" required></select>
+          </div>
+          <div>
+            <label class="field-label">Dự án</label>
+            <select id="taskCreateProject" class="select" onchange="onTaskCreateProjectChange()">
+              <option value="">Không chọn</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="inline-fields">
+          <div>
+            <label class="field-label">Sprint</label>
+            <select id="taskCreateSprint" class="select" disabled>
+              <option value="">Không chọn</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Độ ưu tiên *</label>
+            <select id="taskCreatePriority" class="select" required>
+              <option value="low">Low (Thấp)</option>
+              <option value="medium" selected>Medium (Trung bình)</option>
+              <option value="high">High (Cao)</option>
+              <option value="urgent">Urgent (Khẩn cấp)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="inline-fields">
+          <div>
+            <label class="field-label">Độ khó *</label>
+            <select id="taskCreateDifficulty" class="select" required onchange="updateExpectedKpiPoints()">
+              <option value="easy" selected>Dễ (Easy)</option>
+              <option value="medium">Vừa (Medium)</option>
+              <option value="hard">Khó (Hard)</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label">Story Points *</label>
+            <input id="taskCreateStoryPoints" class="input" type="number" min="1" max="100" value="3" required />
+          </div>
+        </div>
+
+        <div class="inline-fields">
+          <div>
+            <label class="field-label">Deadline *</label>
+            <input id="taskCreateDeadline" class="input" type="datetime-local" required />
+          </div>
+          <div>
+            <label class="field-label">KPI dự kiến (đúng hạn)</label>
+            <div id="taskCreateKpiIndicator" style="font-weight: bold; padding: 8px 0;">10.0 điểm</div>
+          </div>
+        </div>
+
+        <div class="task-detail-section">
+          <div class="task-detail-subhead">
+            <h3>Checklist</h3>
+          </div>
+          <div id="taskCreateChecklistItems" class="checklist-builder-items" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;"></div>
+          <div class="comment-form" style="display:flex; gap:8px;">
+            <input id="taskCreateChecklistInput" class="input" type="text" placeholder="Thêm checklist item..." style="flex:1" />
+            <button type="button" class="btn btn-outline btn-sm" onclick="addTaskCreateChecklistItem()">Thêm</button>
+          </div>
+        </div>
+
+        <div class="action-row" style="margin-top:20px; display:flex; gap:12px;">
+          <button class="btn btn-primary" type="submit">Tạo Task</button>
+          <button class="btn btn-outline" type="button" onclick="closeTaskCreate()">Hủy</button>
+        </div>
+      </form>
+    </div>
+  </aside>
 </div>
 
 <script src="js/core-shell.js"></script>

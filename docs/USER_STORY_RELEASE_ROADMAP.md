@@ -9,10 +9,10 @@ This roadmap implements the production-release scope from `docs/USER_STORY_COMPL
 | Metric | Count |
 | --- | ---: |
 | Must Have + Should Have stories | 374 |
-| Already Done | 190 |
+| Already Done | 198 |
 | Partial, still unfinished | 0 |
-| Not started | 184 |
-| Remaining release stories | 184 |
+| Not started | 176 |
+| Remaining release stories | 176 |
 
 Quality gate for every phase:
 
