@@ -138,6 +138,8 @@ def find_tasks_due_within_24h(tasks: list[dict]) -> list[dict]:
 
 
 def send_card_to_teams_webhook(card: dict) -> dict:
+    if settings.teams_integration_mode == "simulation":
+        return {"sent": False, "reason": "simulation mode does not send real Teams webhooks"}
     if not settings.teams_incoming_webhook_url:
         return {"sent": False, "reason": "TEAMS_INCOMING_WEBHOOK_URL is not configured"}
 
@@ -186,6 +188,8 @@ def _get_bot_access_token() -> dict:
 
 
 def send_text_to_teams_conversation(conversation_ref: dict, text: str) -> dict:
+    if settings.teams_integration_mode == "simulation" or not settings.teams_real_graph_enabled:
+        return {"sent": False, "reason": "real Teams bot calls are disabled"}
     service_url = (conversation_ref.get("service_url") or "").rstrip("/")
     conversation_id = conversation_ref.get("conversation_id")
     if not service_url or not conversation_id:
@@ -215,6 +219,8 @@ def send_text_to_teams_conversation(conversation_ref: dict, text: str) -> dict:
 
 
 def _get_graph_access_token() -> dict:
+    if not settings.teams_real_graph_enabled:
+        return {"ok": False, "reason": "real graph calls are disabled"}
     if settings.teams_proactive_mode != "graph":
         return {"ok": False, "reason": "graph mode is not enabled"}
     if not settings.teams_client_id or not settings.teams_client_secret or not settings.teams_tenant_id:
@@ -242,6 +248,8 @@ def _get_graph_access_token() -> dict:
 def send_text_to_graph_channel(text: str, team_id: str | None = None, channel_id: str | None = None) -> dict:
     target_team_id = team_id or getattr(settings, "teams_graph_team_id", "")
     target_channel_id = channel_id or getattr(settings, "teams_graph_channel_id", "") or settings.teams_channel_id
+    if not settings.teams_real_graph_enabled:
+        return {"sent": False, "reason": "real graph calls are disabled"}
     if settings.teams_proactive_mode != "graph":
         return {"sent": False, "reason": "graph mode is not enabled"}
     if not target_team_id or not target_channel_id:

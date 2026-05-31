@@ -341,3 +341,120 @@ async function loadTeams() {
 // ════════════════════════════════ ADMIN ════════
 
 // Audit & Ops
+
+function setTeamsSimulatorCommand(command) {
+  const input = document.getElementById('teamsSimulatorCommand');
+  if (input) input.value = command;
+}
+
+async function loadTeamsSimulator() {
+  await Promise.all([loadTeamsSimulatorHealth(), loadTeamsSimulatorQueue()]);
+  if (document.getElementById('teamsCardJson')?.textContent === 'No card loaded.') {
+    runTeamsSimulatorCommand().catch(() => {});
+  }
+}
+
+async function loadTeamsSimulatorHealth() {
+  const el = document.getElementById('teamsSimulatorHealth');
+  if (!el) return;
+  try {
+    const health = await api('/integrations/teams/health');
+    const queue = health.queue || {};
+    el.innerHTML = `
+      <div class="stat-card"><div class="stat-label">Mode</div><div class="stat-value">Simulation</div><div class="stat-change up">${escHtml(health.mode)}</div></div>
+      <div class="stat-card"><div class="stat-label">Real Graph</div><div class="stat-value">${health.real_graph_enabled ? 'On' : 'Off'}</div><div class="stat-change ${health.real_graph_enabled ? 'down' : 'up'}">No tenant call</div></div>
+      <div class="stat-card"><div class="stat-label">Queued</div><div class="stat-value">${queue.queued || 0}</div><div class="stat-change">Adaptive cards</div></div>
+      <div class="stat-card"><div class="stat-label">Failed</div><div class="stat-value">${queue.failed || 0}</div><div class="stat-change ${queue.failed ? 'down' : 'up'}">Retry ready</div></div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+async function runTeamsSimulatorCommand() {
+  const input = document.getElementById('teamsSimulatorCommand');
+  const preview = document.getElementById('teamsCardPreview');
+  const raw = document.getElementById('teamsCardJson');
+  if (!input || !preview || !raw) return;
+  preview.innerHTML = '<div class="skeleton" style="height:160px"></div>';
+  try {
+    const result = await api('/integrations/teams/simulator/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: input.value || '/help', month: state.month }),
+    });
+    preview.innerHTML = result.preview_html || '<div class="empty-state compact">No preview available.</div>';
+    raw.textContent = JSON.stringify(result.card || result, null, 2);
+  } catch (e) {
+    preview.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+    raw.textContent = e.message;
+  }
+}
+
+async function queueTeamsDeadlineReminders() {
+  try {
+    const result = await api('/integrations/teams/notifications/queue', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'deadline_reminder' }),
+    });
+    toast(`Queued ${result.queued_count || 0} Teams simulation cards`, 'success');
+    await loadTeamsSimulator();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function processTeamsSimulatorQueue() {
+  try {
+    const result = await api('/integrations/teams/notifications/process', { method: 'POST' });
+    toast(`Processed ${result.processed || 0}; sent ${result.sent || 0}; failed ${result.failed || 0}`, 'success');
+    await loadTeamsSimulator();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function loadTeamsSimulatorQueue() {
+  const el = document.getElementById('teamsSimulatorQueue');
+  if (!el) return;
+  el.innerHTML = '<div class="skeleton" style="height:120px"></div>';
+  try {
+    const rows = await api('/integrations/teams/proactive/queue?status=all&limit=100');
+    if (!rows.length) {
+      el.innerHTML = '<div class="empty-state compact">Notification queue is empty.</div>';
+      return;
+    }
+    el.innerHTML = `
+      <table class="audit-table">
+        <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Retry</th><th>Created</th><th>Sent</th><th></th></tr></thead>
+        <tbody>
+          ${rows.map(row => {
+            const payload = row.payload || {};
+            const type = payload.notification_type || payload.type || 'message';
+            const retry = row.retry_count ?? row.attempts ?? 0;
+            return `<tr>
+              <td>#${row.id}</td>
+              <td>${escHtml(type)}</td>
+              <td><span class="tag">${escHtml(row.status)}</span></td>
+              <td>${retry}/${row.max_attempts || 3}</td>
+              <td>${escHtml(fmtDateTime(row.created_at))}</td>
+              <td>${escHtml(fmtDateTime(row.sent_at))}</td>
+              <td>${row.status === 'failed' ? `<button class="btn btn-outline btn-sm" onclick="retryTeamsSimulatorNotification(${row.id})">Retry failed</button>` : ''}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state compact">${escHtml(e.message)}</div>`;
+  }
+}
+
+async function retryTeamsSimulatorNotification(id) {
+  try {
+    await api(`/integrations/teams/notifications/retry/${id}`, { method: 'POST' });
+    toast('Notification requeued', 'success');
+    await loadTeamsSimulator();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}

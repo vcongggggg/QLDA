@@ -108,21 +108,22 @@ Key message:
 - If no external AI key is configured, the local heuristic fallback still supports the demo.
 - Local/dev RAG defaults to lexical search; PostgreSQL pgvector embeddings are optional.
 
-### 6:00-7:10 - Microsoft Teams Integration
+### 6:00-7:10 - Teams-ready Simulation Mode
 
-Open Teams.
+Open `/admin/integrations/teams-simulator`.
 
 Show:
 
-- Teams tab URLs.
-- Notification queue stats.
-- Deployment checklist for public HTTPS, manifest, Azure AD app, and environment variables.
-- Mention bot callback and proactive queue endpoints.
+- Simulation Mode badge and health panel.
+- `/task-list`, `/kpi-me`, and `/help` command simulator.
+- Adaptive Card JSON and Teams-like preview.
+- Notification queue stats, Process queue, and Retry failed flow.
 
 Key message:
 
-- Local demo does not send real Teams messages.
-- Teams token and webhook boundaries are treated as external trust boundaries.
+- MVP does not send real Teams messages or call Microsoft Graph.
+- Student Teams accounts usually cannot upload tenant apps or configure production SSO.
+- Real Teams can be enabled later with a Microsoft 365 Developer/E5 tenant.
 
 ### 7:10-8:30 - Audit, Ops, And Evidence
 

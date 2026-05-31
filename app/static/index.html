@@ -89,6 +89,10 @@
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
       <span>Teams</span>
     </a>
+    <a class="nav-item" data-section="teams-simulator" data-permission="TEAM_VIEW" onclick="navigate('teams-simulator')">
+      <svg class="nav-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10"/><path d="M7 13h6"/></svg>
+      <span>Teams Simulator</span>
+    </a>
     <a class="nav-item" data-section="ops" data-any-permission="AUDIT_VIEW,OPS_VIEW" onclick="navigate('ops')">
       <svg class="nav-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg>
       <span>Audit & Ops</span>
@@ -609,7 +613,7 @@
     <section id="sec-teams" class="section hidden">
       <div class="two-col">
         <div class="card">
-          <div class="card-header"><h3><svg class="heading-icon" aria-hidden="true"><use href="#i-link"></use></svg>Tích hợp Microsoft Teams</h3></div>
+          <div class="card-header"><h3><svg class="heading-icon" aria-hidden="true"><use href="#i-link"></use></svg>Teams-ready Simulation</h3></div>
           <div class="info-list">
             <div class="info-row">
               <span class="info-label">Tab URL (Personal)</span>
@@ -625,8 +629,8 @@
             </div>
           </div>
           <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
-            <a class="btn btn-primary btn-sm" href="/teams/tab" target="_blank">Mở Teams Tab</a>
-            <a class="btn btn-outline btn-sm" href="/teams/tab/prod" target="_blank">Tab Production</a>
+            <button class="btn btn-primary btn-sm" type="button" onclick="navigate('teams-simulator')">Open Simulator</button>
+            <a class="btn btn-outline btn-sm" href="/teams/tab" target="_blank">Legacy Tab Preview</a>
             <a class="btn btn-outline btn-sm" href="/docs" target="_blank">API Docs</a>
           </div>
         </div>
@@ -641,14 +645,53 @@
         </div>
       </div>
       <div class="card mt-16">
-        <div class="card-header"><h3><svg class="heading-icon" aria-hidden="true"><use href="#i-list-checks"></use></svg>Hướng dẫn triển khai</h3></div>
+        <div class="card-header"><h3><svg class="heading-icon" aria-hidden="true"><use href="#i-list-checks"></use></svg>Simulation scope</h3></div>
         <div class="deploy-steps">
-          <div class="step"><span class="step-num">1</span><div><strong>Expose HTTPS</strong> – Dùng ngrok hoặc Azure App Service để có URL công khai</div></div>
-          <div class="step"><span class="step-num">2</span><div><strong>Cập nhật manifest.json</strong> – Đồng bộ hostname, <code>validDomains</code> và <code>webApplicationInfo</code> với Azure</div></div>
-          <div class="step"><span class="step-num">3</span><div><strong>Tạo Azure AD App</strong> – Đăng ký App Registration, lấy Client ID và Secret</div></div>
-          <div class="step"><span class="step-num">4</span><div><strong>Cập nhật .env</strong> – Điền <code>APP_BASE_URL</code>, <code>TEAMS_CLIENT_ID</code>, <code>TEAMS_TENANT_ID</code>, <code>TEAMS_CLIENT_SECRET</code></div></div>
-          <div class="step"><span class="step-num">5</span><div><strong>Upload lên Teams</strong> – Zip thư mục <code>teams-app/</code> và upload qua Developer Portal</div></div>
+          <div class="step"><span class="step-num">1</span><div><strong>No real Graph calls</strong> - queue processing is local in simulation mode.</div></div>
+          <div class="step"><span class="step-num">2</span><div><strong>No Teams Admin Center</strong> - demo bot commands and cards in the web simulator.</div></div>
+          <div class="step"><span class="step-num">3</span><div><strong>Upgrade later</strong> - use a Microsoft 365 Developer/E5 tenant before enabling real Teams delivery.</div></div>
         </div>
+      </div>
+    </section>
+
+    <section id="sec-teams-simulator" class="section hidden">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <span class="tag">Simulation Mode</span>
+          <input id="teamsSimulatorCommand" class="input" type="text" value="/task-list" placeholder="/task-list, /kpi-me, /help" />
+          <button class="btn btn-primary btn-sm" type="button" onclick="runTeamsSimulatorCommand()">Run</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="setTeamsSimulatorCommand('/task-list')">/task-list</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="setTeamsSimulatorCommand('/kpi-me')">/kpi-me</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="setTeamsSimulatorCommand('/help')">/help</button>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn btn-outline btn-sm" type="button" onclick="queueTeamsDeadlineReminders()">Queue deadline cards</button>
+          <button class="btn btn-primary btn-sm" type="button" onclick="processTeamsSimulatorQueue()">Process queue</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="loadTeamsSimulator()">Refresh</button>
+        </div>
+      </div>
+      <div id="teamsSimulatorHealth" class="stat-grid mt-16">
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+        <div class="stat-card skeleton"></div>
+      </div>
+      <div class="two-col mt-16">
+        <div class="card">
+          <div class="card-header"><h3>Adaptive Card Preview</h3></div>
+          <div id="teamsCardPreview" class="teams-card-preview"><div class="empty-state compact">Run a simulator command to preview a card.</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Adaptive Card JSON</h3></div>
+          <pre id="teamsCardJson" class="code-block">No card loaded.</pre>
+        </div>
+      </div>
+      <div class="card mt-16">
+        <div class="card-header">
+          <h3>Notification Queue</h3>
+          <button class="btn btn-outline btn-sm" type="button" onclick="loadTeamsSimulatorQueue()">Reload queue</button>
+        </div>
+        <div id="teamsSimulatorQueue"><div class="skeleton" style="height:120px"></div></div>
       </div>
     </section>
 

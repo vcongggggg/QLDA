@@ -1,0 +1,88 @@
+.teams-card-preview {
+  min-height: 220px;
+  overflow: auto;
+}
+
+.tw-adaptive-card {
+  max-width: 520px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  padding: 16px;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.tw-card-title {
+  color: #242424;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.tw-card-subtitle {
+  color: #6264a7;
+  font-size: 12px;
+  font-weight: 650;
+  margin-bottom: 12px;
+}
+
+.tw-card-body {
+  display: grid;
+  gap: 8px;
+}
+
+.tw-card-fact,
+.tw-card-container {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  padding: 10px;
+}
+
+.tw-card-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tw-card-fact span,
+.tw-card-meta {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.tw-card-task {
+  color: #111827;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.tw-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tw-card-actions button {
+  border: 1px solid #6264a7;
+  border-radius: 6px;
+  background: #6264a7;
+  color: #fff;
+  padding: 7px 12px;
+  font: inherit;
+}
+
+.code-block {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e5e7eb;
+  padding: 12px;
+  font-size: 12px;
+}

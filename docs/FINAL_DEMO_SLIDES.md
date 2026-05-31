@@ -98,17 +98,16 @@ Evidence: `app/routers/rag.py`, `app/rag.py`, `tests/test_rbac_rag.py`, `tests/t
 
 ---
 
-## 8. Microsoft Teams
+## 8. Teams-ready Simulation
 
-Teams integration is demoed locally without real tenant side effects.
+TeamsWork demos Teams workflows locally without Graph, Teams Admin Center, or sideloading.
 
-- Teams tab pages
-- AAD identity endpoints
-- Bot callback command shape
-- Reminder preview
-- Proactive notification queue, process, retry/requeue
+- Web simulator at `/admin/integrations/teams-simulator`
+- `/task-list`, `/kpi-me`, `/help`
+- Adaptive Card JSON and Teams-like preview
+- Deadline reminder queue, process, retry, health
 
-Evidence: `app/routers/teams.py`, `tests/test_teams_mvp.py`, `tests/test_notifications.py`.
+Evidence: `docs/TEAMS_SIMULATION_MODE.md`, `app/routers/teams.py`, `tests/test_teams_simulation.py`.
 
 ---
 

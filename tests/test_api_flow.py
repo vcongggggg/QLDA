@@ -362,25 +362,30 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
     assert process_queue_resp.status_code == 200
     assert "processed" in process_queue_resp.json()
 
-    # With webhook likely not configured in test env, first run should schedule retry.
-    queued_after_first = client.get("/integrations/teams/proactive/queue?status=queued&limit=200", headers=_hdr(manager_id))
-    assert queued_after_first.status_code == 200
-    assert any(int(x["id"]) == notif_id for x in queued_after_first.json())
+    if settings.teams_integration_mode == "simulation":
+        sent_after_first = client.get("/integrations/teams/proactive/queue?status=sent&limit=200", headers=_hdr(manager_id))
+        assert sent_after_first.status_code == 200
+        assert any(int(x["id"]) == notif_id for x in sent_after_first.json())
+    else:
+        # With webhook likely not configured in test env, first run should schedule retry.
+        queued_after_first = client.get("/integrations/teams/proactive/queue?status=queued&limit=200", headers=_hdr(manager_id))
+        assert queued_after_first.status_code == 200
+        assert any(int(x["id"]) == notif_id for x in queued_after_first.json())
 
-    # Force immediate retry by resetting next_retry_at in DB for this item.
-    with get_connection() as conn:
-        conn.execute("UPDATE notification_queue SET next_retry_at = ? WHERE id = ?", (datetime.now(timezone.utc).isoformat(), notif_id))
+        # Force immediate retry by resetting next_retry_at in DB for this item.
+        with get_connection() as conn:
+            conn.execute("UPDATE notification_queue SET next_retry_at = ? WHERE id = ?", (datetime.now(timezone.utc).isoformat(), notif_id))
 
-    process_queue_resp_2 = client.post("/integrations/teams/proactive/process", headers=_hdr(manager_id))
-    assert process_queue_resp_2.status_code == 200
+        process_queue_resp_2 = client.post("/integrations/teams/proactive/process", headers=_hdr(manager_id))
+        assert process_queue_resp_2.status_code == 200
 
-    failed_list_resp = client.get("/integrations/teams/proactive/queue?status=failed&limit=200", headers=_hdr(manager_id))
-    assert failed_list_resp.status_code == 200
-    assert any(int(x["id"]) == notif_id for x in failed_list_resp.json())
+        failed_list_resp = client.get("/integrations/teams/proactive/queue?status=failed&limit=200", headers=_hdr(manager_id))
+        assert failed_list_resp.status_code == 200
+        assert any(int(x["id"]) == notif_id for x in failed_list_resp.json())
 
-    requeue_resp = client.post(f"/integrations/teams/proactive/requeue/{notif_id}", headers=_hdr(manager_id))
-    assert requeue_resp.status_code == 200
-    assert requeue_resp.json()["status"] == "queued"
+        requeue_resp = client.post(f"/integrations/teams/proactive/requeue/{notif_id}", headers=_hdr(manager_id))
+        assert requeue_resp.status_code == 200
+        assert requeue_resp.json()["status"] == "queued"
 
     completion_resp = client.get("/plan/completion", headers=_hdr(manager_id))
     assert completion_resp.status_code == 200

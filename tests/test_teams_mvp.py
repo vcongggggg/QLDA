@@ -377,6 +377,7 @@ def test_graph_channel_send_is_disabled_by_default_and_mockable(monkeypatch: pyt
     original_client = settings.teams_client_id
     original_secret = settings.teams_client_secret
     original_tenant = settings.teams_tenant_id
+    original_real_graph = settings.teams_real_graph_enabled
     try:
         settings.teams_proactive_mode = "webhook"
         assert send_text_to_graph_channel("hello")["sent"] is False
@@ -403,6 +404,7 @@ def test_graph_channel_send_is_disabled_by_default_and_mockable(monkeypatch: pyt
         settings.teams_client_id = "client-1"
         settings.teams_client_secret = "secret-1"
         settings.teams_tenant_id = "tenant-1"
+        settings.teams_real_graph_enabled = True
         monkeypatch.setattr("app.teams_bot.httpx.post", fake_post)
 
         result = send_text_to_graph_channel("hello graph")
@@ -416,6 +418,7 @@ def test_graph_channel_send_is_disabled_by_default_and_mockable(monkeypatch: pyt
         settings.teams_client_id = original_client
         settings.teams_client_secret = original_secret
         settings.teams_tenant_id = original_tenant
+        settings.teams_real_graph_enabled = original_real_graph
 
 
 def test_teams_summary_queue_stats_count_beyond_list_page_limit() -> None:

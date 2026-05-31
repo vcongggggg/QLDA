@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from html import escape
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from app.auth import current_role_code, get_current_user, is_member_role, require_email_domain_allowed, require_permission, require_roles
@@ -15,6 +16,7 @@ from app.repository import (
     create_audit_log,
     create_app_notification,
     create_task,
+    create_task_comment,
     get_user_by_aad_object_id,
     get_user_by_id,
     get_user_by_username_or_email,
@@ -28,6 +30,7 @@ from app.repository import (
     rebuild_kpi_transactions,
     queue_notification,
     requeue_notification,
+    update_task_deadline,
     update_task_status,
     upsert_teams_conversation_ref,
     upsert_user_from_aad,
@@ -376,6 +379,344 @@ def _queue_stats() -> dict:
     return count_notifications_by_status()
 
 
+def _card_action_buttons(task: dict) -> list[dict]:
+    task_id = task.get("id")
+    return [
+        {
+            "type": "Action.Submit",
+            "title": "Complete",
+            "data": {"action": "complete", "task_id": task_id},
+        },
+        {
+            "type": "Action.Submit",
+            "title": "Extend",
+            "data": {"action": "extend", "task_id": task_id},
+        },
+        {
+            "type": "Action.Submit",
+            "title": "Comment",
+            "data": {"action": "comment", "task_id": task_id},
+        },
+    ]
+
+
+def _task_due_state(task: dict) -> str:
+    if task.get("status") == "done":
+        return "done"
+    raw = task.get("deadline")
+    if not raw:
+        return "none"
+    try:
+        deadline = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return "unknown"
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    if deadline < now:
+        return "overdue"
+    if deadline <= now + timedelta(hours=24):
+        return "due_soon"
+    return "scheduled"
+
+
+def _build_task_list_card(tasks: list[dict], title: str = "TeamsWork - Task List") -> dict:
+    body: list[dict] = [
+        {"type": "TextBlock", "size": "Large", "weight": "Bolder", "text": title},
+        {"type": "TextBlock", "text": "Teams-ready Simulation Mode", "color": "Accent", "wrap": True},
+    ]
+    if not tasks:
+        body.append({"type": "TextBlock", "text": "No active tasks found.", "wrap": True})
+    for task in tasks[:8]:
+        due_state = _task_due_state(task)
+        body.append(
+            {
+                "type": "Container",
+                "items": [
+                    {
+                        "type": "TextBlock",
+                        "weight": "Bolder",
+                        "text": f"#{task.get('id')} {task.get('title', 'Untitled task')}",
+                        "wrap": True,
+                    },
+                    {
+                        "type": "FactSet",
+                        "facts": [
+                            {"title": "Status", "value": str(task.get("status") or "-")},
+                            {"title": "Deadline", "value": str(task.get("deadline") or "-")[:16]},
+                            {"title": "Due state", "value": due_state},
+                        ],
+                    },
+                ],
+            }
+        )
+    actions = _card_action_buttons(tasks[0]) if tasks else []
+    return {"type": "AdaptiveCard", "version": "1.5", "body": body, "actions": actions}
+
+
+def _build_personal_kpi_card(month: str, row: dict) -> dict:
+    return {
+        "type": "AdaptiveCard",
+        "version": "1.5",
+        "body": [
+            {"type": "TextBlock", "size": "Large", "weight": "Bolder", "text": f"TeamsWork - KPI {month}"},
+            {"type": "TextBlock", "text": "Teams-ready Simulation Mode", "color": "Accent", "wrap": True},
+            {
+                "type": "FactSet",
+                "facts": [
+                    {"title": "Score", "value": str(row.get("score", 0))},
+                    {"title": "Done on time", "value": str(row.get("done_on_time", 0))},
+                    {"title": "Done late", "value": str(row.get("done_late", 0))},
+                    {"title": "Overdue unfinished", "value": str(row.get("overdue_unfinished", 0))},
+                ],
+            },
+        ],
+        "actions": [
+            {
+                "type": "Action.OpenUrl",
+                "title": "Open KPI",
+                "url": f"{settings.app_base_url}/ui/#kpi",
+            }
+        ],
+    }
+
+
+def _build_deadline_simulation_card(task: dict) -> dict:
+    card = build_deadline_card(task)
+    card["body"].append({"type": "TextBlock", "text": "Simulation only - no Microsoft Graph call.", "wrap": True})
+    card["actions"] = _card_action_buttons(task)
+    return card
+
+
+def _adaptive_card_preview_html(card: dict) -> str:
+    title = "Adaptive Card"
+    facts: list[str] = []
+    actions: list[str] = []
+    for block in card.get("body", []):
+        if block.get("type") == "TextBlock" and block.get("size") == "Large":
+            title = str(block.get("text") or title)
+        if block.get("type") == "FactSet":
+            for fact in block.get("facts") or []:
+                facts.append(
+                    f"<div class='tw-card-fact'><span>{escape(str(fact.get('title') or ''))}</span>"
+                    f"<strong>{escape(str(fact.get('value') or ''))}</strong></div>"
+                )
+        if block.get("type") == "Container":
+            parts = []
+            for item in block.get("items") or []:
+                if item.get("type") == "TextBlock":
+                    parts.append(f"<div class='tw-card-task'>{escape(str(item.get('text') or ''))}</div>")
+                if item.get("type") == "FactSet":
+                    parts.extend(
+                        f"<div class='tw-card-meta'>{escape(str(f.get('title') or ''))}: {escape(str(f.get('value') or ''))}</div>"
+                        for f in item.get("facts") or []
+                    )
+            facts.append("<div class='tw-card-container'>" + "".join(parts) + "</div>")
+    for action in card.get("actions") or []:
+        actions.append(f"<button type='button'>{escape(str(action.get('title') or 'Action'))}</button>")
+    return (
+        "<div class='tw-adaptive-card'>"
+        f"<div class='tw-card-title'>{escape(title)}</div>"
+        "<div class='tw-card-subtitle'>Teams-ready Simulation Mode</div>"
+        f"<div class='tw-card-body'>{''.join(facts) or '<div>No preview fields.</div>'}</div>"
+        f"<div class='tw-card-actions'>{''.join(actions)}</div>"
+        "</div>"
+    )
+
+
+def _sim_notification_out(item: dict) -> dict:
+    out = dict(item)
+    out["retry_count"] = int(out.get("attempts") or 0)
+    payload = out.get("payload") or {}
+    out["notification_type"] = payload.get("notification_type") or payload.get("type") or "message"
+    return out
+
+
+def _personal_kpi_row(user: dict, month: str) -> dict:
+    rows = _monthly_kpi_rows(month, user_id=int(user["id"]))
+    if rows:
+        return rows[0]
+    return {
+        "user_id": int(user["id"]),
+        "user_name": user.get("full_name") or user.get("email") or f"User {user['id']}",
+        "month": month,
+        "done_on_time": 0,
+        "done_late": 0,
+        "overdue_unfinished": 0,
+        "score": 0,
+    }
+
+
+def _simulator_task_rows(user: dict) -> list[dict]:
+    tasks = list_tasks(assignee_id=int(user["id"]) if is_member_role(user) else None)
+    return [task for task in tasks if task.get("status") != "done"]
+
+
+SIMULATOR_HELP_TEXT = "Supported commands: /task-list, /kpi-me, /help"
+
+
+@router.get("/integrations/teams/health")
+def teams_simulation_health(current_user: dict = Depends(get_current_user)) -> dict:
+    require_permission(current_user, "TEAM_VIEW")
+    counts = _queue_stats()
+    return {
+        "status": "ready",
+        "mode": settings.teams_integration_mode,
+        "real_graph_enabled": settings.teams_real_graph_enabled,
+        "real_outbound_enabled": settings.teams_integration_mode != "simulation" and settings.teams_real_graph_enabled,
+        "queue": counts,
+        "supported_commands": ["/task-list", "/kpi-me", "/help"],
+    }
+
+
+@router.post("/integrations/teams/simulator/command")
+def teams_simulator_command(
+    payload: dict = Body(default_factory=dict),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    require_permission(current_user, "TEAM_VIEW")
+    command = str(payload.get("command") or "").strip().lower()
+    if command == "/help":
+        card = {
+            "type": "AdaptiveCard",
+            "version": "1.5",
+            "body": [
+                {"type": "TextBlock", "size": "Large", "weight": "Bolder", "text": "TeamsWork Bot Simulator"},
+                {"type": "TextBlock", "text": SIMULATOR_HELP_TEXT, "wrap": True},
+            ],
+        }
+        return {"type": "message", "text": SIMULATOR_HELP_TEXT, "card": card, "preview_html": _adaptive_card_preview_html(card)}
+    if command == "/task-list":
+        tasks = _simulator_task_rows(current_user)[:8]
+        card = _build_task_list_card(tasks)
+        text = _bot_task_list(current_user)
+        return {"type": "message", "text": text, "tasks": tasks, "card": card, "preview_html": _adaptive_card_preview_html(card)}
+    if command == "/kpi-me":
+        month = str(payload.get("month") or datetime.now(timezone.utc).strftime("%Y-%m"))
+        if not re.fullmatch(r"\d{4}-\d{2}", month):
+            raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+        row = _personal_kpi_row(current_user, month)
+        card = _build_personal_kpi_card(month, row)
+        return {
+            "type": "message",
+            "text": f"My KPI {month}: {row['score']} points.",
+            "kpi": row,
+            "card": card,
+            "preview_html": _adaptive_card_preview_html(card),
+        }
+    raise HTTPException(status_code=400, detail=SIMULATOR_HELP_TEXT)
+
+
+@router.get("/integrations/teams/cards/preview")
+def teams_card_preview(
+    kind: str = Query(default="task-list"),
+    task_id: int | None = Query(default=None),
+    month: str | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    require_permission(current_user, "TEAM_VIEW")
+    if kind == "kpi-me":
+        kpi_month = month or datetime.now(timezone.utc).strftime("%Y-%m")
+        row = _personal_kpi_row(current_user, kpi_month)
+        card = _build_personal_kpi_card(kpi_month, row)
+    elif kind == "deadline":
+        task = get_task_by_id(task_id) if task_id else None
+        if not task:
+            tasks = _simulator_task_rows(current_user)
+            task = tasks[0] if tasks else None
+        if not task or not _task_visible_to_bot_user(task, current_user):
+            raise HTTPException(status_code=404, detail="task not found")
+        card = _build_deadline_simulation_card(task)
+    else:
+        card = _build_task_list_card(_simulator_task_rows(current_user)[:8])
+    return {"card": card, "preview_html": _adaptive_card_preview_html(card)}
+
+
+@router.post("/integrations/teams/notifications/queue")
+def queue_teams_simulation_notification(
+    payload: dict = Body(default_factory=dict),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    require_roles(current_user, {"admin", "manager", "hr"})
+    notification_type = str(payload.get("type") or payload.get("notification_type") or "deadline_reminder").strip()
+    max_attempts = int(payload.get("max_attempts") or 3)
+    if max_attempts != 3:
+        max_attempts = 3
+
+    queued: list[dict] = []
+    if notification_type == "deadline_reminder":
+        task_ids = payload.get("task_ids")
+        if payload.get("task_id"):
+            task_ids = [payload.get("task_id")]
+        if task_ids:
+            tasks = [get_task_by_id(int(item)) for item in task_ids]
+            due_tasks = [task for task in tasks if task and task.get("status") != "done"]
+        else:
+            due_tasks = find_tasks_due_within_24h(all_tasks_with_users())
+        for task in due_tasks:
+            card = _build_deadline_simulation_card(task)
+            item = queue_notification(
+                user_id=int(task["assignee_id"]),
+                channel="teams",
+                payload={
+                    "type": "adaptive_card",
+                    "notification_type": "deadline_reminder",
+                    "text": f"Deadline reminder: {task['title']}",
+                    "task_id": task["id"],
+                    "card": card,
+                    "preview_html": _adaptive_card_preview_html(card),
+                    "simulate_failure": bool(payload.get("simulate_failure")),
+                    "dedup_key": payload.get("dedup_key") or f"deadline_reminder:{task['id']}",
+                    "target": {"type": "simulation"},
+                },
+                max_attempts=max_attempts,
+            )
+            queued.append(_sim_notification_out(item))
+    else:
+        item = queue_notification(
+            user_id=payload.get("user_id"),
+            channel="teams",
+            payload={
+                "type": "message",
+                "notification_type": notification_type,
+                "text": str(payload.get("text") or "TeamsWork simulation notification"),
+                "simulate_failure": bool(payload.get("simulate_failure")),
+                "target": {"type": "simulation"},
+            },
+            max_attempts=max_attempts,
+        )
+        queued.append(_sim_notification_out(item))
+    create_audit_log(current_user["id"], "queue", "teams_simulation_notification", None, f"count={len(queued)}")
+    return {"queued_count": len(queued), "notifications": queued}
+
+
+@router.post("/integrations/teams/notifications/process")
+def process_teams_simulation_notifications(
+    limit: int = Query(default=1000, ge=1, le=1000),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    require_roles(current_user, {"admin", "manager", "hr"})
+    result = process_notification_queue(limit=limit)
+    create_audit_log(current_user["id"], "process", "teams_simulation_queue", None, f"processed={result['processed']}")
+    return {**result, "mode": settings.teams_integration_mode}
+
+
+@router.post("/integrations/teams/notifications/retry/{notification_id}")
+def retry_teams_simulation_notification(
+    notification_id: int,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    require_roles(current_user, {"admin", "manager", "hr"})
+    item = get_notification_by_id(notification_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="notification not found")
+    if item.get("status") != "failed":
+        raise HTTPException(status_code=400, detail="only failed notifications can be retried")
+    updated = requeue_notification(notification_id)
+    create_audit_log(current_user["id"], "retry", "teams_simulation_notification", notification_id, "queued")
+    return _sim_notification_out(updated)
+
+
 @router.get("/integrations/teams/summary", response_model=TeamsSummaryOut)
 def teams_summary_endpoint(
     month: str = Query(description="YYYY-MM"),
@@ -512,7 +853,14 @@ def _card_action_value(activity: TeamsBotActivity) -> dict:
 def teams_card_actions_endpoint(activity: TeamsBotActivity) -> dict:
     value = _card_action_value(activity)
     action = str(value.get("action") or "").strip().lower()
-    if action not in {"task_view", "task_status", "task_assign", "acknowledge"}:
+    if action in {"complete", "task_complete"}:
+        action = "task_status"
+        value["status"] = "done"
+    if action in {"extend", "task_extend"}:
+        action = "task_extend"
+    if action in {"comment", "task_comment"}:
+        action = "task_comment"
+    if action not in {"task_view", "task_status", "task_assign", "task_extend", "task_comment", "acknowledge"}:
         raise HTTPException(status_code=400, detail="unsupported card action")
 
     user = _resolve_bot_user(activity)
@@ -542,6 +890,41 @@ def teams_card_actions_endpoint(activity: TeamsBotActivity) -> dict:
         if status not in {"todo", "doing", "done"}:
             raise HTTPException(status_code=400, detail="status must be one of todo|doing|done")
         return {"type": "message", "text": _bot_status_update(user, task_id, status)}
+    if action == "task_comment":
+        body = str(value.get("comment") or value.get("body") or "Comment from Teams simulation").strip()
+        if not body:
+            raise HTTPException(status_code=400, detail="comment body is required")
+        comment = create_task_comment(task_id=task_id, author_user_id=int(user["id"]), body=body)
+        create_audit_log(user["id"], "teams_card_comment", "task", task_id, f"comment_id={comment['id']}")
+        return {"type": "message", "text": f"Comment added to task #{task_id}.", "comment": comment}
+    if action == "task_extend":
+        reason = str(value.get("reason") or "Teams simulation extend request").strip()
+        raw_deadline = value.get("deadline")
+        if raw_deadline:
+            new_deadline = _parse_due_date(str(raw_deadline))
+        else:
+            current_deadline = _parse_due_date(str(task.get("deadline") or ""))
+            new_deadline = (current_deadline or datetime.now(timezone.utc)) + timedelta(days=1)
+        if not new_deadline:
+            raise HTTPException(status_code=400, detail="valid deadline is required")
+        try:
+            require_permission(user, "tasks.update_any")
+            if task.get("status") == "done":
+                raise HTTPException(status_code=400, detail="completed tasks cannot be extended")
+            row = update_task_deadline(task_id, new_deadline.isoformat())
+            create_audit_log(
+                user["id"],
+                "teams_card_extend_deadline",
+                "task",
+                task_id,
+                f"new_deadline={new_deadline.isoformat()};reason={reason}",
+            )
+            return {"type": "message", "text": f"Task #{task_id} deadline extended.", "task": row}
+        except HTTPException as exc:
+            if exc.status_code not in {403, 401}:
+                raise
+            create_audit_log(user["id"], "teams_card_extend_requested", "task", task_id, f"reason={reason}")
+            return {"type": "message", "text": f"Extension request logged for task #{task_id}."}
     assignee = value.get("assignee_id") or value.get("assignee")
     return {"type": "message", "text": _bot_assign_task(user, task_id, str(assignee) if assignee is not None else None)}
 

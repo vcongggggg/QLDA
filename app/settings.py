@@ -99,6 +99,13 @@ class Settings:
             "teams_incoming_webhook_url",
             os.getenv("TEAMS_INCOMING_WEBHOOK_URL", ""),
         )
+        self.teams_integration_mode = str(
+            overrides.get("teams_integration_mode", os.getenv("TEAMS_INTEGRATION_MODE", "simulation"))
+        ).lower()
+        self.teams_real_graph_enabled = parse_bool(
+            overrides.get("teams_real_graph_enabled", os.getenv("TEAMS_REAL_GRAPH_ENABLED")),
+            default=False,
+        )
         self.teams_channel_id = overrides.get("teams_channel_id", os.getenv("TEAMS_CHANNEL_ID", ""))
         self.teams_service_url = overrides.get("teams_service_url", os.getenv("TEAMS_SERVICE_URL", ""))
         self.teams_disable_jwt_validation = parse_bool(

@@ -153,8 +153,10 @@ Main story groups:
 
 Implementation direction:
 
-- Harden Teams app behavior for Personal Tab, Channel Tab by project, Teams mobile smoke path, and deploy/admin checklist.
-- Add Graph-backed channel posting behind environment-controlled configuration with mocked test path.
+- Default the MVP to Teams-ready Simulation Mode because the current student Teams account cannot provide tenant/admin approval for production app upload, SSO, or Graph permissions.
+- Do not claim production Teams integration in release evidence until a Microsoft 365 Developer/E5 tenant is available.
+- Harden Teams-ready behavior through the web simulator, local tab preview, Adaptive Card JSON, queue retry, and readiness endpoints.
+- Keep Graph-backed channel posting behind environment-controlled configuration with mocked test path only.
 - Implement bot commands: `/task-list`, `/team-kpi`, `/new-task`, `/assign`, `/status`, `/report`, `/my-deadlines`, `/top-kpi`, `/search`, `/help`.
 - Implement Adaptive Cards for deadline/KPI summaries and task actions; validate all action payloads before DB writes.
 - Complete notification routing, retry, deduplication, channel selection, and role/project membership targeting.

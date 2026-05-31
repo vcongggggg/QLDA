@@ -26,11 +26,11 @@ const state = {
 };
 
 const ROLE_NAV_POLICY = {
-  ADMIN:   ['dashboard', 'projects', 'kanban', 'timeline', 'teams', 'kpi', 'reports', 'ai', 'ops', 'admin'],
-  MANAGER: ['dashboard', 'projects', 'kanban', 'timeline', 'teams', 'kpi', 'reports', 'ai'],
+  ADMIN:   ['dashboard', 'projects', 'kanban', 'timeline', 'teams', 'teams-simulator', 'kpi', 'reports', 'ai', 'ops', 'admin'],
+  MANAGER: ['dashboard', 'projects', 'kanban', 'timeline', 'teams', 'teams-simulator', 'kpi', 'reports', 'ai'],
   LEADER:  ['dashboard', 'projects', 'kanban', 'timeline', 'teams', 'kpi', 'reports', 'ai'],
   MEMBER:  ['dashboard', 'kanban', 'timeline', 'kpi'],
-  HR:      ['dashboard', 'admin', 'kpi', 'reports', 'teams'],
+  HR:      ['dashboard', 'admin', 'kpi', 'reports', 'teams', 'teams-simulator'],
   AUDITOR: ['dashboard', 'reports', 'ops'],
 };
 
@@ -57,6 +57,7 @@ const MODULE_VIEW_PERMISSIONS = {
   reports: ['REPORT_VIEW_TEAM', 'REPORT_VIEW_ALL'],
   ai: ['AI_TASK_VIEW'],
   teams: ['TEAM_VIEW'],
+  'teams-simulator': ['TEAM_VIEW'],
   ops: ['AUDIT_VIEW', 'OPS_VIEW'],
   admin: ['USER_VIEW', 'ROLE_VIEW', 'DEPARTMENT_VIEW'],
 };
@@ -406,7 +407,8 @@ const TITLES = {
   kpi:       'KPI – Chỉ số hiệu suất',
   reports:   'Báo cáo',
   ai:        'AI – Phân rã yêu cầu thành task',
-  teams:     'Tích hợp Microsoft Teams',
+  teams:     'Teams-ready Simulation',
+  'teams-simulator': 'Teams Simulation Mode',
   ops:       'Audit & Ops',
   admin:     'Quản trị hệ thống',
 };
@@ -479,6 +481,7 @@ function loadSection(section) {
     case 'reports':   setupReports();  break;
     case 'ai':        loadAI();        break;
     case 'teams':     loadTeams();     break;
+    case 'teams-simulator': loadTeamsSimulator(); break;
     case 'ops':       loadOpsDashboard(); break;
     case 'admin':     loadAdmin();     break;
   }

@@ -9,11 +9,11 @@ ROLE_ACCOUNTS = {
 
 
 EXPECTED_ROLE_MODULES = {
-    "ADMIN": ("dashboard", "projects", "kanban", "timeline", "teams", "kpi", "reports", "ai", "ops", "admin"),
-    "MANAGER": ("dashboard", "projects", "kanban", "timeline", "teams", "kpi", "reports", "ai"),
+    "ADMIN": ("dashboard", "projects", "kanban", "timeline", "teams", "teams-simulator", "kpi", "reports", "ai", "ops", "admin"),
+    "MANAGER": ("dashboard", "projects", "kanban", "timeline", "teams", "teams-simulator", "kpi", "reports", "ai"),
     "LEADER": ("dashboard", "projects", "kanban", "timeline", "teams", "kpi", "reports", "ai"),
     "MEMBER": ("dashboard", "kanban", "timeline", "kpi"),
-    "HR": ("dashboard", "admin", "kpi", "reports", "teams"),
+    "HR": ("dashboard", "admin", "kpi", "reports", "teams", "teams-simulator"),
     "AUDITOR": ("dashboard", "reports", "ops"),
 }
 
@@ -24,6 +24,7 @@ MODULE_PRIMARY_ENDPOINTS = {
     "kanban": (("GET", "/tasks"),),
     "timeline": (("GET", "/tasks"),),
     "teams": (("GET", "/integrations/teams/summary?month=2026-08"),),
+    "teams-simulator": (("GET", "/integrations/teams/health"),),
     "kpi": (("GET", "/kpi/monthly?month=2026-08"),),
     "reports": (("GET", "/reports/kpi.csv?month=2026-08"),),
     "ai": (("GET", "/ai/task-breakdown/drafts"),),

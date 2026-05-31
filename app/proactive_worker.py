@@ -19,6 +19,25 @@ def process_notification_queue(limit: int = 1000) -> dict:
         target = payload.get("target") or {}
         result = {"sent": False, "reason": "not attempted"}
 
+        if settings.teams_integration_mode == "simulation":
+            result = (
+                {"sent": False, "reason": "simulated send failure"}
+                if payload.get("simulate_failure")
+                else {"sent": True, "reason": "simulation mode"}
+            )
+            updated = mark_notification_result(
+                notification_id=int(item["id"]),
+                success=bool(result.get("sent")),
+                error_message=result.get("reason"),
+            )
+            if result.get("sent"):
+                sent += 1
+            elif updated and updated.get("status") == "failed":
+                failed += 1
+            else:
+                retried += 1
+            continue
+
         conversation_refs: list[dict] = []
         if item.get("user_id") is not None:
             conversation_refs = list_teams_conversation_refs(user_id=int(item["user_id"]), limit=1)

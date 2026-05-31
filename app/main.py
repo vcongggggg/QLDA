@@ -65,6 +65,11 @@ def root_redirect() -> RedirectResponse:
     return RedirectResponse(url="/ui/")
 
 
+@app.get("/admin/integrations/teams-simulator", include_in_schema=False)
+def teams_simulator_redirect() -> RedirectResponse:
+    return RedirectResponse(url="/ui/#teams-simulator")
+
+
 # ── Routers ────────────────────────────────────────────────────────────────────
 app.include_router(monitoring.router)
 app.include_router(ai.router)

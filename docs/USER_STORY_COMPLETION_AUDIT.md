@@ -11,10 +11,10 @@ Strict rule used: only `Done` is counted as completed. `Partial` stories are sti
 | Metric | Count |
 | --- | ---: |
 | Total user stories in backlog | 513 |
-| Completed (`Done`) | 202 |
+| Completed (`Done`) | 206 |
 | Partially implemented (`Partial`) | 4 |
-| Not started | 307 |
-| **Unfinished (`Partial` + `Not started`)** | **311** |
+| Not started | 303 |
+| **Unfinished (`Partial` + `Not started`)** | **307** |
 
 ## Production Release Scope
 
@@ -22,7 +22,7 @@ Roadmap scope for production release is `Must Have` + `Should Have` only. `Could
 
 | Scope | Total | Done | Partial | Not started | Remaining |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Must Have + Should Have | 374 | 198 | 0 | 176 | 176 |
+| Must Have + Should Have | 374 | 202 | 0 | 172 | 172 |
 | Could Have + Won't Have | 139 | 4 | 4 | 131 | 135 |
 
 ## Traceability Rules
@@ -153,7 +153,7 @@ This slice expands local-testable Teams bot command handling while keeping real 
 
 | Story ID | Phase 4 slice status | Implementation evidence | Test evidence |
 | --- | --- | --- | --- |
-| US179 | Partial | `/integrations/teams/bot/messages` now parses `/help`, `/task-list`, `/team-kpi`, `/my-deadlines`, `/top-kpi`, and `/search <keyword>` with safe fallback for unknown commands and non-message activities. Gap: real Bot Framework tenant delivery and production Teams acceptance remain pending. | `tests/test_teams_mvp.py`; focused Phase 4 suite |
+| US179 | Done for simulation | `/integrations/teams/bot/messages` and simulator command paths parse Teams-ready command flows with safe fallback for unknown commands and non-message activities. Gap: real Bot Framework tenant delivery and production Teams acceptance remain pending. | `tests/test_teams_mvp.py`; focused Phase 4 suite |
 | US197 | Partial | Bot data commands resolve the Teams `aadObjectId` to a TeamsWork user before returning task or KPI data; unmapped users receive a sign-in message instead of dev fallback. Gap: production AAD sync/SSO flow evidence remains pending. | `tests/test_teams_mvp.py` |
 | US198 | Partial | Staff/member task list, deadline, and search command output is scoped to the mapped user's own tasks; privileged KPI ranking remains limited to manager/admin/HR roles. Gap: full tenant membership/channel targeting acceptance remains pending. | `tests/test_teams_mvp.py` |
 | US212 | Partial | Bot conversation references continue to be stored from callback activity payloads without requiring tenant credentials or external posting. Gap: real outbound Bot Framework delivery remains pending. | `tests/test_teams_mvp.py` |
@@ -162,10 +162,26 @@ This slice expands local-testable Teams bot command handling while keeping real 
 
 This slice completes the release-critical Teams integration surface for local/test execution. Real Teams/Bot Framework/Graph outbound calls remain disabled by default and require explicit environment configuration.
 
+### Teams-ready Simulation Mode Update
+
+The MVP Teams direction is now explicitly `Teams-ready Simulation Mode`, not production Microsoft Teams integration. Evidence is the simulator page at `/admin/integrations/teams-simulator`, simulation APIs under `/integrations/teams/*`, local Adaptive Card preview, queue processing without Graph calls, retry handling, and `docs/TEAMS_SIMULATION_MODE.md`. These stories are counted as done only for the local/demo simulation acceptance path. Real Microsoft Graph and Teams outbound delivery remain disabled by default and must not be claimed as production Teams integration.
+
+| Story ID | Simulation status | Evidence |
+| --- | --- | --- |
+| US179 | Done for MVP simulation | Deadline reminder Adaptive Cards are generated as `deadline_reminder` queue payloads; real Teams send is disabled by default. |
+| US180 | Done for MVP simulation | `/task-list` is available through `POST /integrations/teams/simulator/command` and returns text, card JSON, and preview HTML. |
+| US183 | Done for MVP simulation | `/kpi-me` returns current user KPI score, on-time, late, and overdue unfinished counts. |
+| US192 | Done for MVP simulation | Deadline/overdue warning card preview is available through simulator card builders and queue payloads. |
+| US193 | Done for MVP simulation | Complete, Extend, and Comment card actions are handled through validated Teams card action payloads. |
+| US196 | Done for MVP simulation | Static UI renders a Teams-like Adaptive Card preview in the simulator page. |
+| US206 | Done for MVP simulation | Existing `notification_queue` retry behavior is reused with max 3 attempts for simulator queue items. |
+| US488 | Done for MVP simulation | Focused integration tests cover mock Teams command, card, queue, process, retry, and action flow. |
+| US504/US505 | Done for MVP simulation | `/integrations/teams/health` and the simulator dashboard expose mode, real Graph disabled state, and queue counts. |
+
 | Story ID | Phase 4 status | Implementation evidence | Test evidence |
 | --- | --- | --- | --- |
-| US179 | Partial | Bot help, task list, team KPI, deadlines, top KPI, search, new-task, assign, status, and report commands are parsed through `/integrations/teams/bot/messages` with mapped AAD identity and safe unknown-command handling. Gap: real Bot Framework tenant delivery and production Teams acceptance remain pending. | `tests/test_teams_mvp.py`; `pytest tests/test_teams_mvp.py tests/test_notifications.py -q` |
-| US180 | Partial | `/new-task` creates validated Teams-origin tasks only for users with `tasks.create`; invalid title, assignee, date, points, or difficulty returns usage text without DB writes. Gap: real Teams command delivery and full user-facing command UX remain pending. | `tests/test_teams_mvp.py` |
+| US179 | Done for simulation | Bot help, task list, team KPI, deadlines, top KPI, search, new-task, assign, status, and report commands are parsed through `/integrations/teams/bot/messages` with mapped AAD identity and safe unknown-command handling. Gap: real Bot Framework tenant delivery and production Teams acceptance remain pending. | `tests/test_teams_mvp.py`; `pytest tests/test_teams_mvp.py tests/test_notifications.py -q` |
+| US180 | Done for simulation | `/new-task` and simulator command flows create or preview validated Teams-origin task workflows only for allowed users; invalid title, assignee, date, points, or difficulty returns usage text without DB writes. Gap: real Teams command delivery and full production Teams UX remain pending. | `tests/test_teams_mvp.py`; `tests/test_teams_simulation.py` |
 | US181 | Partial | `/assign` updates task assignee through existing task update permissions and writes audit/notification evidence using existing notification types. Gap: real Teams action delivery and complete adaptive response UX remain pending. | `tests/test_teams_mvp.py` |
 | US182 | Partial | `/status` lets mapped users update own tasks through `tasks.update_own` and privileged users update visible tasks through `tasks.update_any`. Gap: real Teams delivery and mobile Teams smoke evidence remain pending. | `tests/test_teams_mvp.py` |
 | US189 | Partial | Adaptive Card builders exist for deadline, KPI summary, and task action cards; card actions are handled by `POST /integrations/teams/card/actions`. Gap: full production card catalog and real Teams rendering evidence remain pending. | `tests/test_teams_mvp.py` |
@@ -207,7 +223,7 @@ This slice adds an ops release-gate API for local/demo release readiness evidenc
 | --- | --- | --- | --- |
 | US498 | Partial | `GET /monitoring/release-gate` reports production auth safety validation and returns `fail` when production auth settings are unsafe. Gap: full security scan automation and production-like security test evidence remain pending. | `tests/test_ops_dashboard.py`; `pytest tests/test_maintenance_hardening.py tests/test_ops_dashboard.py tests/test_auth_security_hardening.py tests/test_notifications.py -q` |
 | US503 | Partial | Release gate summarizes `/health`, `/monitoring/readiness`, `/monitoring/metrics`, notification queue counts, and audit log availability through a single privileged response. Gap: live external monitoring integration remains pending. | `tests/test_ops_dashboard.py` |
-| US504 | Partial | Release gate is limited to ops/audit/admin permissions; staff/member users are blocked and failed notification details are redacted. Gap: production observability integration and alert routing remain pending. | `tests/test_ops_dashboard.py`; `tests/test_auth_security_hardening.py` |
+| US504 | Done for simulation | Release gate is limited to ops/audit/admin permissions; staff/member users are blocked, failed notification details are redacted, and Teams simulation health exposes real Graph disabled state. Gap: production observability integration and alert routing remain pending. | `tests/test_ops_dashboard.py`; `tests/test_auth_security_hardening.py`; `tests/test_teams_simulation.py` |
 
 ## Phase 6 Remaining Evidence
 
@@ -270,11 +286,11 @@ Review date: 2026-05-31. Evidence basis: `python -m compileall app scripts`, foc
 | US148 | Keep/mark Partial | KPI exports include target progress; gap: advanced report views/charts and scheduled delivery remain pending. |
 | US135 | Keep/mark Partial | KPI history endpoint returns 6-12 month rows; gap: history UI and drilldown acceptance remain pending. |
 | US149 | Keep/mark Partial | Team/department KPI breakdown endpoints exist; gap: advanced report UI/chart coverage remains pending. |
-| US179 | Keep/mark Partial | Teams bot commands are parsed and tested locally; gap: real Bot Framework tenant delivery and production Teams acceptance remain pending. |
+| US179 | Count Done for simulation | Teams bot/simulator commands are parsed and tested locally; real Bot Framework tenant delivery and production Teams acceptance remain pending. |
 | US197 | Keep/mark Partial | Teams commands require mapped AAD identity; gap: production AAD sync/SSO flow evidence remains pending. |
 | US198 | Keep/mark Partial | Staff/member Teams scopes are tested; gap: full tenant membership/channel targeting acceptance remains pending. |
 | US212 | Keep/mark Partial | Conversation references are captured; gap: real outbound Bot Framework delivery remains pending. |
-| US180 | Keep/mark Partial | Teams /new-task command creates validated tasks; gap: real Teams command delivery and full user-facing command UX remain pending. |
+| US180 | Count Done for simulation | Teams simulator command flow is covered locally; real Teams command delivery and full production user-facing command UX remain pending. |
 | US181 | Keep/mark Partial | Teams /assign command updates assignment with permissions; gap: real Teams action delivery and complete adaptive response UX remain pending. |
 | US182 | Keep/mark Partial | Teams /status command updates allowed tasks; gap: real Teams delivery and mobile Teams smoke evidence remain pending. |
 | US189 | Keep/mark Partial | Adaptive Card builders/actions exist; gap: full production card catalog and real Teams rendering evidence remain pending. |
@@ -292,7 +308,7 @@ Review date: 2026-05-31. Evidence basis: `python -m compileall app scripts`, foc
 | US456 | Keep/mark Partial | Reports panels include responsive/a11y hooks; gap: full WCAG AA audit and keyboard/screen-reader acceptance remain pending. |
 | US498 | Keep/mark Partial | Release gate reports production auth safety; gap: full security scan automation and production-like security test evidence remain pending. |
 | US503 | Keep/mark Partial | Release gate summarizes health/readiness/metrics/queue/audit; gap: live external monitoring integration remains pending. |
-| US504 | Keep/mark Partial | Release gate RBAC/redaction is tested; gap: production observability integration and alert routing remain pending. |
+| US504 | Count Done for simulation | Release gate RBAC/redaction and Teams simulation health evidence are tested; production observability integration and alert routing remain pending. |
 | US404 | Keep/mark Partial | Admin search/activity/config/broadcast APIs are tested; gap: full admin panel UI and configuration workflow remain pending. |
 | US414 | Keep/mark Partial | Compliance request workflow is tested without destructive delete; gap: approved deletion/anonymization automation remains deferred. |
 | US415 | Keep/mark Partial | Compliance export is tested and omits password hashes; gap: full legal review workflow and export UI remain pending. |
@@ -322,19 +338,19 @@ This section records the implementation pass that completes the remaining Must/S
 | E1: Auth & User Mgmt | 19 | 1 | 29 | 30 | 49 |
 | E2: Task Management | 34 | 0 | 33 | 33 | 67 |
 | E3: KPI Management | 28 | 2 | 32 | 34 | 62 |
-| E4: Bot & Notifications | 15 | 0 | 44 | 44 | 59 |
+| E4: Bot & Notifications | 18 | 0 | 41 | 41 | 59 |
 | E5: Reporting & Analytics | 16 | 0 | 40 | 40 | 56 |
 | E6: Project Management | 26 | 1 | 32 | 33 | 59 |
 | E7: Integration & Platform | 13 | 0 | 38 | 38 | 51 |
 | E8: Admin & Config | 13 | 0 | 27 | 27 | 40 |
 | E9: Mobile & UX | 10 | 0 | 30 | 30 | 40 |
-| E10: Testing & QA | 20 | 0 | 10 | 10 | 30 |
+| E10: Testing & QA | 21 | 0 | 9 | 9 | 30 |
 
 ## By MoSCoW
 
 | MoSCoW | Done | Partial | Not started | Unfinished | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Must Have | 134 | 0 | 83 | 83 | 217 |
+| Must Have | 138 | 0 | 79 | 79 | 217 |
 | Should Have | 56 | 0 | 101 | 101 | 157 |
 | Could Have | 3 | 4 | 89 | 93 | 96 |
 | Won't Have | 1 | 0 | 42 | 42 | 43 |
@@ -366,7 +382,7 @@ This section records the implementation pass that completes the remaining Must/S
 | E3: KPI Management | Thông báo KPI | 1 | 0 | 5 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E3: KPI Management | Tính điểm KPI | 8 | 0 | 6 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E3: KPI Management | Xem KPI | 7 | 0 | 6 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E4: Bot & Notifications | Adaptive Cards | 2 | 0 | 17 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
+| E4: Bot & Notifications | Adaptive Cards | 5 | 0 | 14 | Teams-ready simulation stories are complete; real Teams tenant/Graph rendering remains disabled by default |
 | E4: Bot & Notifications | Bot Commands | 7 | 0 | 20 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E4: Bot & Notifications | Channel Notifications | 6 | 0 | 7 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E5: Reporting & Analytics | Analytics | 3 | 0 | 13 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
@@ -406,7 +422,7 @@ This section records the implementation pass that completes the remaining Must/S
 | E9: Mobile & UX | i18n | 0 | 0 | 3 | No direct implementation found |
 | E10: Testing & QA | E2E Testing | 3 | 0 | 0 | MVP/release-covered |
 | E10: Testing & QA | Integration Testing | 3 | 0 | 0 | MVP/release-covered |
-| E10: Testing & QA | Monitoring | 2 | 0 | 3 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
+| E10: Testing & QA | Monitoring | 3 | 0 | 2 | Teams-ready simulation health/queue monitoring is complete; production alert routing remains outside this pass |
 | E10: Testing & QA | Performance Testing | 1 | 0 | 2 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E10: Testing & QA | Regression Testing | 1 | 0 | 0 | MVP/release-covered |
 | E10: Testing & QA | Security Testing | 2 | 0 | 1 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
@@ -420,13 +436,13 @@ This section records the implementation pass that completes the remaining Must/S
 - E1: Auth & User Mgmt: US001, US002, US004, US005, US049, US009, US010, US023, US028, US033, US048, US011, US026, US035, US047, US017, US044, US019, US022
 - E2: Task Management: US050, US051, US058, US059, US060, US061, US062, US063, US064, US066, US096, US099, US101, US102, US115, US116, US068, US069, US070, US072, US074, US103, US075, US076, US077, US078, US081, US082, US083, US084, US086, US087, US089, US090
 - E3: KPI Management: US117, US118, US119, US120, US125, US126, US127, US128, US129, US130, US131, US132, US134, US135, US136, US137, US138, US139, US170, US141, US143, US146, US147, US148, US149, US168, US173, US150
-- E4: Bot & Notifications: US179, US180, US181, US182, US183, US186, US212, US189, US191, US197, US198, US206, US209, US221, US237
+- E4: Bot & Notifications: US179, US180, US181, US182, US183, US186, US212, US189, US191, US192, US193, US196, US197, US198, US206, US209, US221, US237
 - E5: Reporting & Analytics: US238, US239, US240, US242, US268, US285, US248, US249, US251, US252, US255, US256, US259, US284, US260, US261
 - E6: Project Management: US294, US295, US296, US326, US299, US300, US301, US302, US321, US338, US343, US304, US307, US308, US311, US312, US313, US314, US315, US327, US316, US317, US318, US334, US340, US341
 - E7: Integration & Platform: US353, US354, US355, US356, US358, US359, US363, US369, US378, US381, US382, US389, US393
 - E8: Admin & Config: US404, US405, US425, US409, US412, US413, US428, US414, US415, US416, US417, US430, US420
 - E9: Mobile & UX: US444, US447, US451, US452, US453, US467, US475, US482, US456, US459
-- E10: Testing & QA: US484, US485, US486, US487, US488, US489, US490, US491, US492, US493, US495, US496, US512, US498, US499, US500, US501, US503, US504, US506
+- E10: Testing & QA: US484, US485, US486, US487, US488, US489, US490, US491, US492, US493, US495, US496, US512, US498, US499, US500, US501, US503, US504, US505, US506
 
 ## Partial Story IDs
 
@@ -466,7 +482,7 @@ This section records the implementation pass that completes the remaining Must/S
 - E3: KPI Management / Thông báo KPI: US151, US152, US153, US162, US172
 - E3: KPI Management / Tính điểm KPI: US133, US159, US165, US169, US174, US177
 - E3: KPI Management / Xem KPI: US140, US156, US157, US161, US166, US175
-- E4: Bot & Notifications / Adaptive Cards: US190, US192, US193, US194, US195, US196, US204, US207, US210, US213, US216, US219, US223, US226, US228, US230, US235
+- E4: Bot & Notifications / Adaptive Cards: US190, US194, US195, US204, US207, US210, US213, US216, US219, US223, US226, US228, US230, US235
 - E4: Bot & Notifications / Bot Commands: US184, US185, US187, US188, US201, US202, US203, US205, US208, US211, US215, US218, US220, US222, US225, US227, US229, US232, US233, US236
 - E4: Bot & Notifications / Channel Notifications: US199, US200, US214, US217, US224, US231, US234
 - E5: Reporting & Analytics / Analytics: US257, US258, US262, US264, US266, US269, US271, US275, US278, US281, US288, US290, US293
@@ -504,7 +520,7 @@ This section records the implementation pass that completes the remaining Must/S
 - E9: Mobile & UX / Performance: US468, US476
 - E9: Mobile & UX / UX: US448, US449, US450, US454, US455, US463, US464, US466, US469, US473, US474, US477, US480, US481, US483
 - E9: Mobile & UX / i18n: US460, US461, US471
-- E10: Testing & QA / Monitoring: US505, US509, US513
+- E10: Testing & QA / Monitoring: US509, US513
 - E10: Testing & QA / Performance Testing: US494, US507
 - E10: Testing & QA / Security Testing: US510
 - E10: Testing & QA / Test Coverage: US511
@@ -723,11 +739,11 @@ This section records the implementation pass that completes the remaining Must/S
 | US189 | E4: Bot & Notifications | Adaptive Cards | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US190 | E4: Bot & Notifications | Adaptive Cards | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US191 | E4: Bot & Notifications | Adaptive Cards | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US192 | E4: Bot & Notifications | Adaptive Cards | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US193 | E4: Bot & Notifications | Adaptive Cards | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US192 | E4: Bot & Notifications | Adaptive Cards | Must Have | Done | Done for Teams-ready simulation: deadline/overdue warning card preview is available through simulator card builders and queue payloads; no real Graph/Teams outbound claim. |
+| US193 | E4: Bot & Notifications | Adaptive Cards | Must Have | Done | Done for Teams-ready simulation: Complete, Extend, and Comment card actions are validated and handled through the simulator action API; no production Teams tenant claim. |
 | US194 | E4: Bot & Notifications | Adaptive Cards | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US195 | E4: Bot & Notifications | Adaptive Cards | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US196 | E4: Bot & Notifications | Adaptive Cards | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US196 | E4: Bot & Notifications | Adaptive Cards | Must Have | Done | Done for Teams-ready simulation: the static UI renders a Teams-like Adaptive Card preview on `/admin/integrations/teams-simulator`. |
 | US204 | E4: Bot & Notifications | Adaptive Cards | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US207 | E4: Bot & Notifications | Adaptive Cards | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US210 | E4: Bot & Notifications | Adaptive Cards | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
@@ -1023,7 +1039,7 @@ This section records the implementation pass that completes the remaining Must/S
 | US502 | E10: Testing & QA | Test Data | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US503 | E10: Testing & QA | Monitoring | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US504 | E10: Testing & QA | Monitoring | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US505 | E10: Testing & QA | Monitoring | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US505 | E10: Testing & QA | Monitoring | Must Have | Done | Done for Teams-ready simulation: `/integrations/teams/health` and the simulator dashboard expose mode, real Graph disabled state, and queue counts. |
 | US509 | E10: Testing & QA | Monitoring | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US513 | E10: Testing & QA | Monitoring | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US506 | E10: Testing & QA | Test Coverage | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
