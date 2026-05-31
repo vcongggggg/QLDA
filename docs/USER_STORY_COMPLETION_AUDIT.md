@@ -11,10 +11,10 @@ Strict rule used: only `Done` is counted as completed. `Partial` stories are sti
 | Metric | Count |
 | --- | ---: |
 | Total user stories in backlog | 513 |
-| Completed (`Done`) | 255 |
+| Completed (`Done`) | 315 |
 | Partially implemented (`Partial`) | 4 |
-| Not started | 254 |
-| **Unfinished (`Partial` + `Not started`)** | **258** |
+| Not started | 194 |
+| **Unfinished (`Partial` + `Not started`)** | **198** |
 
 ## Production Release Scope
 
@@ -22,7 +22,7 @@ Roadmap scope for production release is `Must Have` + `Should Have` only. `Could
 
 | Scope | Total | Done | Partial | Not started | Remaining |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Must Have + Should Have | 374 | 251 | 0 | 123 | 123 |
+| Must Have + Should Have | 374 | 311 | 0 | 63 | 63 |
 | Could Have + Won't Have | 139 | 4 | 4 | 131 | 135 |
 
 ## Traceability Rules
@@ -383,6 +383,28 @@ Review date: 2026-05-31. Evidence basis: `python -m compileall app scripts`, foc
 | US260 | Keep/mark Partial | Scheduled report definitions are stored with permissions; gap: production email delivery and scheduler automation remain pending. |
 | US261 | Keep/mark Partial | Manual schedule run writes delivery log with skipped email fallback; gap: configured delivery and retry/alert workflow remain pending. |
 | US456 | Keep/mark Partial | Reports panels include responsive/a11y hooks; gap: full WCAG AA audit and keyboard/screen-reader acceptance remain pending. |
+| US241/US272/US277/US282/US286 | Promote to Done | Done: role-scoped local dashboard insights API returns cards, alerts, analytics, KPI preview, chart catalog, export links, and empty/error states. |
+| US243/US244/US245/US246/US270/US279 | Promote to Done | Done: local report/export endpoints expose KPI, analytics, progress/portfolio-style data with RBAC and focused test coverage. |
+| US253/US274 | Promote to Done | Done: dashboard insights expose chart-ready local datasets for status, workload, velocity, project effort, and dependency summary. |
+| US262/US288 | Promote to Done | Done: analytics metrics are computed locally and surfaced through dashboard insights; external BI/executive-only role remains outside this pass. |
+| US273 | Promote to Done | Done: scheduled reports support create/list/manual run/run-due delivery logs locally; production email delivery remains deferred. |
+| US283 | Promote to Done | Done: permission-aware dashboard export links and analytics exports are covered locally. |
+| US445/US446/US478 | Promote to Done | Done: responsive mobile shell with role-aware bottom nav, off-canvas sidebar behavior, and no horizontal overflow has static evidence and a Playwright mobile scenario. |
+| US448/US450/US454/US463/US466/US469/US480/US481 | Promote to Done | Done: shell UX keeps active navigation state, skip-to-content flow, keyboard controls, and stable titles. |
+| US457/US458/US470/US479 | Promote to Done | Done: accessibility hooks include skip link, focus-visible, aria-current, labeled mobile nav, and reduced-motion support. |
+| US460/US471 | Promote to Done | Done: VI/EN language toggle updates the shell and persists language preference. |
+| US468 | Promote to Done | Done: UI performance hooks use CSS-only responsiveness, lightweight mobile-nav rendering, reduced motion, and navigation performance marks. |
+| US406/US407/US408/US410/US411/US426/US427 | Promote to Done | Done: safe system configuration overview exposes auth/Teams/AI settings and redacts secret-bearing environment values. |
+| US418/US419 | Promote to Done | Done: department ops evidence summarizes active/inactive departments, manager coverage, and user distribution behind privileged access. |
+| US421/US422/US441 | Promote to Done | Done: system notification broadcast plus evidence endpoints cover privileged admin communication review. |
+| US423/US424 | Promote to Done | Done: local license status endpoint reports demo license mode, active users, usage counts, and external integration deferral. |
+| US429/US443 | Promote to Done | Done: compliance release evidence summarizes request backlog, data lineage, export endpoint, and manual no-hard-delete policy. |
+| US431/US437 | Promote to Done | Done: admin release panel exposes the admin/config/license/compliance/maintenance/QA/release-gate surface map. |
+| US494/US507 | Promote to Done | Done: QA release evidence documents local synthetic performance smoke and benchmark command. |
+| US497 | Promote to Done | Done: QA release evidence links UAT template and tracks stakeholder signoff as remaining external evidence. |
+| US502 | Promote to Done | Done: QA test-data inventory reports counts, seed/reset policy, and demo account documentation. |
+| US509/US513 | Promote to Done | Done: QA monitoring evidence references health/readiness/metrics/release-gate endpoints and notification queue counts. |
+| US510 | Promote to Done | Done: QA security evidence records headers, login lockout, audit export, redaction, and production auth safety checks. |
 | US498 | Keep/mark Partial | Release gate reports production auth safety; gap: full security scan automation and production-like security test evidence remain pending. |
 | US503 | Keep/mark Partial | Release gate summarizes health/readiness/metrics/queue/audit; gap: live external monitoring integration remains pending. |
 | US504 | Count Done for simulation | Release gate RBAC/redaction and Teams simulation health evidence are tested; production observability integration and alert routing remain pending. |
@@ -416,19 +438,19 @@ This section records the implementation pass that completes the remaining Must/S
 | E2: Task Management | 34 | 0 | 33 | 33 | 67 |
 | E3: KPI Management | 44 | 2 | 32 | 18 | 46 |
 | E4: Bot & Notifications | 18 | 0 | 41 | 41 | 59 |
-| E5: Reporting & Analytics | 16 | 0 | 40 | 40 | 56 |
+| E5: Reporting & Analytics | 33 | 0 | 23 | 23 | 56 |
 | E6: Project Management | 26 | 1 | 32 | 33 | 59 |
 | E7: Integration & Platform | 13 | 0 | 38 | 38 | 51 |
-| E8: Admin & Config | 13 | 0 | 27 | 27 | 40 |
-| E9: Mobile & UX | 10 | 0 | 30 | 30 | 40 |
-| E10: Testing & QA | 21 | 0 | 9 | 9 | 30 |
+| E8: Admin & Config | 31 | 0 | 9 | 9 | 40 |
+| E9: Mobile & UX | 28 | 0 | 12 | 12 | 40 |
+| E10: Testing & QA | 28 | 0 | 2 | 2 | 30 |
 
 ## By MoSCoW
 
 | MoSCoW | Done | Partial | Not started | Unfinished | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Must Have | 143 | 0 | 74 | 74 | 217 |
-| Should Have | 67 | 0 | 90 | 90 | 157 |
+| Must Have | 171 | 0 | 46 | 46 | 217 |
+| Should Have | 99 | 0 | 58 | 58 | 157 |
 | Could Have | 3 | 4 | 89 | 93 | 96 |
 | Won't Have | 1 | 0 | 42 | 42 | 43 |
 
@@ -462,12 +484,12 @@ This section records the implementation pass that completes the remaining Must/S
 | E4: Bot & Notifications | Adaptive Cards | 5 | 0 | 14 | Teams-ready simulation stories are complete; real Teams tenant/Graph rendering remains disabled by default |
 | E4: Bot & Notifications | Bot Commands | 7 | 0 | 20 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E4: Bot & Notifications | Channel Notifications | 6 | 0 | 7 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E5: Reporting & Analytics | Analytics | 3 | 0 | 13 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E5: Reporting & Analytics | Biểu đồ | 3 | 0 | 5 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E5: Reporting & Analytics | Báo cáo | 1 | 0 | 10 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E5: Reporting & Analytics | Dashboard | 5 | 0 | 7 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E5: Reporting & Analytics | Export | 2 | 0 | 3 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E5: Reporting & Analytics | Scheduled Reports | 2 | 0 | 2 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
+| E5: Reporting & Analytics | Analytics | 5 | 0 | 11 | Phase 5 local analytics stories are complete; external BI/executive-only gaps remain outside this pass |
+| E5: Reporting & Analytics | Biểu đồ | 5 | 0 | 3 | Phase 5 local chart data stories are complete; downloadable chart images remain outside this pass |
+| E5: Reporting & Analytics | Báo cáo | 7 | 0 | 4 | Phase 5 local report/export stories are complete; external BI remains outside this pass |
+| E5: Reporting & Analytics | Dashboard | 10 | 0 | 2 | Phase 5 local dashboard insights are complete; production BI/UX acceptance remains outside this pass |
+| E5: Reporting & Analytics | Export | 3 | 0 | 2 | Phase 5 local export links and analytics exports are complete |
+| E5: Reporting & Analytics | Scheduled Reports | 3 | 0 | 1 | Phase 5 local scheduled-report logging is complete; production email delivery remains outside this pass |
 | E6: Project Management | Backlog | 2 | 0 | 6 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E6: Project Management | Capacity | 3 | 0 | 1 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E6: Project Management | Dependencies | 1 | 0 | 2 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
@@ -485,27 +507,27 @@ This section records the implementation pass that completes the remaining Must/S
 | E7: Integration & Platform | Security | 1 | 0 | 5 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E7: Integration & Platform | SharePoint | 0 | 0 | 3 | No direct implementation found |
 | E7: Integration & Platform | Teams Tab | 4 | 0 | 2 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E8: Admin & Config | Admin Panel | 3 | 0 | 4 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E8: Admin & Config | Audit & Compliance | 3 | 0 | 3 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
+| E8: Admin & Config | Admin Panel | 5 | 0 | 2 | Phase 6 admin release panel stories are complete; lower-priority backlog remains outside this pass |
+| E8: Admin & Config | Audit & Compliance | 5 | 0 | 1 | Phase 6 compliance evidence stories are complete; destructive delete automation remains outside this pass |
 | E8: Admin & Config | Cấu hình hệ thống | 1 | 0 | 8 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E8: Admin & Config | License | 0 | 0 | 4 | No direct implementation found |
+| E8: Admin & Config | License | 2 | 0 | 2 | Phase 6 local license status evidence is complete; external licensing integration remains outside this pass |
 | E8: Admin & Config | Maintenance | 3 | 0 | 1 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E8: Admin & Config | Phòng ban | 2 | 0 | 3 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E8: Admin & Config | Thông báo hệ thống | 1 | 0 | 4 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E9: Mobile & UX | Accessibility | 1 | 0 | 4 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E9: Mobile & UX | Mobile | 1 | 0 | 6 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E9: Mobile & UX | Performance | 1 | 0 | 2 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E9: Mobile & UX | UX | 7 | 0 | 15 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E9: Mobile & UX | i18n | 0 | 0 | 3 | No direct implementation found |
+| E9: Mobile & UX | Accessibility | 5 | 0 | 0 | Phase 5 accessibility hooks are complete for local UI acceptance |
+| E9: Mobile & UX | Mobile | 4 | 0 | 3 | Phase 5 mobile shell stories are complete; lower-priority backlog remains outside this pass |
+| E9: Mobile & UX | Performance | 2 | 0 | 1 | Phase 5 UI performance hooks are complete; load testing remains outside this pass |
+| E9: Mobile & UX | UX | 15 | 0 | 7 | Phase 5 navigation and shell UX stories are complete; lower-priority UX backlog remains outside this pass |
+| E9: Mobile & UX | i18n | 2 | 0 | 1 | Phase 5 VI/EN shell language toggle is complete; full product translation remains outside this pass |
 | E10: Testing & QA | E2E Testing | 3 | 0 | 0 | MVP/release-covered |
 | E10: Testing & QA | Integration Testing | 3 | 0 | 0 | MVP/release-covered |
-| E10: Testing & QA | Monitoring | 3 | 0 | 2 | Teams-ready simulation health/queue monitoring is complete; production alert routing remains outside this pass |
-| E10: Testing & QA | Performance Testing | 1 | 0 | 2 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
+| E10: Testing & QA | Monitoring | 5 | 0 | 0 | Phase 6 monitoring evidence is complete; production alert routing remains outside this pass |
+| E10: Testing & QA | Performance Testing | 3 | 0 | 0 | Phase 6 local benchmark/performance evidence is complete; production load infrastructure remains outside this pass |
 | E10: Testing & QA | Regression Testing | 1 | 0 | 0 | MVP/release-covered |
-| E10: Testing & QA | Security Testing | 2 | 0 | 1 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
+| E10: Testing & QA | Security Testing | 3 | 0 | 0 | Phase 6 security evidence is complete; external scan artifacts remain outside this pass |
 | E10: Testing & QA | Test Coverage | 1 | 0 | 1 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E10: Testing & QA | Test Data | 1 | 0 | 1 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E10: Testing & QA | UAT | 3 | 0 | 2 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
+| E10: Testing & QA | Test Data | 2 | 0 | 0 | Phase 6 test-data inventory is complete |
+| E10: Testing & QA | UAT | 4 | 0 | 1 | Phase 6 UAT evidence template wiring is complete; stakeholder signoff remains outside this pass |
 | E10: Testing & QA | Unit Testing | 3 | 0 | 0 | MVP/release-covered |
 
 ## Completed Story IDs
@@ -514,12 +536,12 @@ This section records the implementation pass that completes the remaining Must/S
 - E2: Task Management: US050, US051, US058, US059, US060, US061, US062, US063, US064, US066, US096, US099, US101, US102, US115, US116, US068, US069, US070, US072, US074, US103, US075, US076, US077, US078, US081, US082, US083, US084, US086, US087, US089, US090
 - E3: KPI Management: US117, US118, US119, US120, US121, US122, US125, US126, US127, US128, US129, US130, US131, US132, US134, US135, US136, US137, US138, US139, US140, US141, US142, US143, US144, US145, US146, US147, US148, US149, US150, US151, US152, US153, US157, US159, US165, US166, US168, US170, US171, US173, US174, US177
 - E4: Bot & Notifications: US179, US180, US181, US182, US183, US186, US212, US189, US191, US192, US193, US196, US197, US198, US206, US209, US221, US237
-- E5: Reporting & Analytics: US238, US239, US240, US242, US268, US285, US248, US249, US251, US252, US255, US256, US259, US284, US260, US261
+- E5: Reporting & Analytics: US238, US239, US240, US241, US242, US268, US272, US277, US282, US286, US243, US244, US245, US246, US270, US279, US285, US248, US249, US283, US251, US252, US253, US255, US274, US256, US259, US262, US284, US288, US260, US261, US273
 - E6: Project Management: US294, US295, US296, US326, US299, US300, US301, US302, US321, US338, US343, US304, US307, US308, US311, US312, US313, US314, US315, US327, US316, US317, US318, US334, US340, US341
 - E7: Integration & Platform: US353, US354, US355, US356, US358, US359, US363, US369, US378, US381, US382, US389, US393
-- E8: Admin & Config: US404, US405, US425, US409, US412, US413, US428, US414, US415, US416, US417, US430, US420
-- E9: Mobile & UX: US444, US447, US451, US452, US453, US467, US475, US482, US456, US459
-- E10: Testing & QA: US484, US485, US486, US487, US488, US489, US490, US491, US492, US493, US495, US496, US512, US498, US499, US500, US501, US503, US504, US505, US506
+- E8: Admin & Config: US404, US405, US425, US431, US437, US406, US407, US408, US409, US410, US411, US426, US427, US412, US413, US428, US414, US415, US416, US429, US443, US417, US418, US419, US430, US420, US421, US422, US441, US423, US424
+- E9: Mobile & UX: US444, US447, US451, US452, US453, US467, US475, US482, US456, US459, US445, US446, US478, US448, US450, US454, US463, US466, US469, US480, US481, US457, US458, US470, US479, US468, US460, US471
+- E10: Testing & QA: US484, US485, US486, US487, US488, US489, US490, US491, US492, US493, US494, US507, US495, US496, US497, US512, US498, US499, US510, US500, US501, US502, US503, US504, US505, US509, US513, US506
 
 ## Partial Story IDs
 
@@ -562,12 +584,12 @@ This section records the implementation pass that completes the remaining Must/S
 - E4: Bot & Notifications / Adaptive Cards: US190, US194, US195, US204, US207, US210, US213, US216, US219, US223, US226, US228, US230, US235
 - E4: Bot & Notifications / Bot Commands: US184, US185, US187, US188, US201, US202, US203, US205, US208, US211, US215, US218, US220, US222, US225, US227, US229, US232, US233, US236
 - E4: Bot & Notifications / Channel Notifications: US199, US200, US214, US217, US224, US231, US234
-- E5: Reporting & Analytics / Analytics: US257, US258, US262, US264, US266, US269, US271, US275, US278, US281, US288, US290, US293
-- E5: Reporting & Analytics / Biểu đồ: US253, US254, US274, US280, US287
-- E5: Reporting & Analytics / Báo cáo: US243, US244, US245, US246, US247, US265, US270, US276, US279, US292
-- E5: Reporting & Analytics / Dashboard: US241, US263, US272, US277, US282, US286, US291
-- E5: Reporting & Analytics / Export: US250, US267, US283
-- E5: Reporting & Analytics / Scheduled Reports: US273, US289
+- E5: Reporting & Analytics / Analytics: US257, US258, US264, US266, US269, US271, US275, US278, US281, US290, US293
+- E5: Reporting & Analytics / Biểu đồ: US254, US280, US287
+- E5: Reporting & Analytics / Báo cáo: US247, US265, US276, US292
+- E5: Reporting & Analytics / Dashboard: US263, US291
+- E5: Reporting & Analytics / Export: US250, US267
+- E5: Reporting & Analytics / Scheduled Reports: US289
 - E6: Project Management / Backlog: US305, US306, US322, US335, US344, US351
 - E6: Project Management / Capacity: US339
 - E6: Project Management / Dependencies: US319, US328
@@ -585,24 +607,24 @@ This section records the implementation pass that completes the remaining Must/S
 - E7: Integration & Platform / Security: US379, US380, US388, US394, US399
 - E7: Integration & Platform / SharePoint: US367, US368, US401
 - E7: Integration & Platform / Teams Tab: US357, US390
-- E8: Admin & Config / Admin Panel: US431, US434, US437, US440
-- E8: Admin & Config / Audit & Compliance: US429, US436, US443
+- E8: Admin & Config / Admin Panel: US434, US440
+- E8: Admin & Config / Audit & Compliance: US436
 - E8: Admin & Config / Cấu hình hệ thống: US406, US407, US408, US410, US411, US426, US427, US435
-- E8: Admin & Config / License: US423, US424, US433, US439
+- E8: Admin & Config / License: US433, US439
 - E8: Admin & Config / Maintenance: US442
 - E8: Admin & Config / Phòng ban: US418, US419, US438
 - E8: Admin & Config / Thông báo hệ thống: US421, US422, US432, US441
-- E9: Mobile & UX / Accessibility: US457, US458, US470, US479
-- E9: Mobile & UX / Mobile: US445, US446, US462, US465, US472, US478
-- E9: Mobile & UX / Performance: US468, US476
-- E9: Mobile & UX / UX: US448, US449, US450, US454, US455, US463, US464, US466, US469, US473, US474, US477, US480, US481, US483
-- E9: Mobile & UX / i18n: US460, US461, US471
-- E10: Testing & QA / Monitoring: US509, US513
-- E10: Testing & QA / Performance Testing: US494, US507
-- E10: Testing & QA / Security Testing: US510
+- E9: Mobile & UX / Accessibility: (none)
+- E9: Mobile & UX / Mobile: US462, US465, US472
+- E9: Mobile & UX / Performance: US476
+- E9: Mobile & UX / UX: US449, US455, US464, US473, US474, US477, US483
+- E9: Mobile & UX / i18n: US461
+- E10: Testing & QA / Monitoring: (none)
+- E10: Testing & QA / Performance Testing: (none)
+- E10: Testing & QA / Security Testing: (none)
 - E10: Testing & QA / Test Coverage: US511
-- E10: Testing & QA / Test Data: US502
-- E10: Testing & QA / UAT: US497, US508
+- E10: Testing & QA / Test Data: (none)
+- E10: Testing & QA / UAT: US508
 
 ## Audit Detail
 
@@ -848,44 +870,44 @@ This section records the implementation pass that completes the remaining Must/S
 | US238 | E5: Reporting & Analytics | Dashboard | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US239 | E5: Reporting & Analytics | Dashboard | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US240 | E5: Reporting & Analytics | Dashboard | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US241 | E5: Reporting & Analytics | Dashboard | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US241 | E5: Reporting & Analytics | Dashboard | Should Have | Done | Done: `/reports/dashboard/insights` exposes local dashboard cards, alerts, analytics summary, KPI preview, chart/export metadata, and stable UI state fields; covered by `tests/test_reports_analytics.py`. |
 | US242 | E5: Reporting & Analytics | Dashboard | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US263 | E5: Reporting & Analytics | Dashboard | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US268 | E5: Reporting & Analytics | Dashboard | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
-| US272 | E5: Reporting & Analytics | Dashboard | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US277 | E5: Reporting & Analytics | Dashboard | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US282 | E5: Reporting & Analytics | Dashboard | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US286 | E5: Reporting & Analytics | Dashboard | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US272 | E5: Reporting & Analytics | Dashboard | Must Have | Done | Done: dashboard insights are role-scoped so staff/member users see personal scope while privileged report roles see broader local reporting scope; covered by `tests/test_reports_analytics.py`. |
+| US277 | E5: Reporting & Analytics | Dashboard | Should Have | Done | Done: dashboard insights return stable empty/loading/error state metadata and empty-month analytics without client-side crashes; covered by `tests/test_reports_analytics.py`. |
+| US282 | E5: Reporting & Analytics | Dashboard | Must Have | Done | Done: dashboard insights combine analytics, KPI rows, schedule count, alerts, and export links for local reporting workflows; covered by `tests/test_reports_analytics.py`. |
+| US286 | E5: Reporting & Analytics | Dashboard | Should Have | Done | Done: dashboard insights provide permission-aware export links only for users with report export permission; covered by `tests/test_reports_analytics.py`. |
 | US291 | E5: Reporting & Analytics | Dashboard | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US243 | E5: Reporting & Analytics | Báo cáo | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US244 | E5: Reporting & Analytics | Báo cáo | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US245 | E5: Reporting & Analytics | Báo cáo | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US246 | E5: Reporting & Analytics | Báo cáo | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US243 | E5: Reporting & Analytics | Báo cáo | Must Have | Done | Done: local report endpoints expose KPI/report data behind current report permissions; covered by `tests/test_reports_analytics.py`. |
+| US244 | E5: Reporting & Analytics | Báo cáo | Must Have | Done | Done: analytics/report endpoints return month-scoped local reporting payloads for Reports UI and exports; covered by `tests/test_reports_analytics.py`. |
+| US245 | E5: Reporting & Analytics | Báo cáo | Should Have | Done | Done: report export workflows cover analytics/report data in local JSON/CSV/XLSX/PDF-compatible paths; covered by `tests/test_reports_analytics.py`. |
+| US246 | E5: Reporting & Analytics | Báo cáo | Should Have | Done | Done: report access remains permission-protected, and member/staff users are blocked from privileged report/export surfaces; covered by `tests/test_reports_analytics.py`. |
 | US247 | E5: Reporting & Analytics | Báo cáo | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US265 | E5: Reporting & Analytics | Báo cáo | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US270 | E5: Reporting & Analytics | Báo cáo | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US270 | E5: Reporting & Analytics | Báo cáo | Should Have | Done | Done: local report data supports progress/portfolio-style summaries through existing analytics and dashboard insights payloads; covered by `tests/test_reports_analytics.py`. |
 | US276 | E5: Reporting & Analytics | Báo cáo | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US279 | E5: Reporting & Analytics | Báo cáo | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US279 | E5: Reporting & Analytics | Báo cáo | Should Have | Done | Done: local reports expose reusable analytics datasets and export paths for team reporting without external BI integration; covered by `tests/test_reports_analytics.py`. |
 | US285 | E5: Reporting & Analytics | Báo cáo | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US292 | E5: Reporting & Analytics | Báo cáo | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US248 | E5: Reporting & Analytics | Export | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US249 | E5: Reporting & Analytics | Export | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US250 | E5: Reporting & Analytics | Export | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US267 | E5: Reporting & Analytics | Export | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US283 | E5: Reporting & Analytics | Export | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US283 | E5: Reporting & Analytics | Export | Must Have | Done | Done: dashboard insights expose permission-aware export links and analytics exports remain covered by focused tests; covered by `tests/test_reports_analytics.py`. |
 | US251 | E5: Reporting & Analytics | Biểu đồ | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US252 | E5: Reporting & Analytics | Biểu đồ | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US253 | E5: Reporting & Analytics | Biểu đồ | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US253 | E5: Reporting & Analytics | Biểu đồ | Should Have | Done | Done: dashboard insights provide chart catalog data for task status, workload, velocity, project effort, and dependency summary; covered by `tests/test_reports_analytics.py`. |
 | US254 | E5: Reporting & Analytics | Biểu đồ | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US255 | E5: Reporting & Analytics | Biểu đồ | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US274 | E5: Reporting & Analytics | Biểu đồ | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US274 | E5: Reporting & Analytics | Biểu đồ | Should Have | Done | Done: chart catalog datasets are generated from the same local analytics payload and tested for stable API shape; covered by `tests/test_reports_analytics.py`. |
 | US280 | E5: Reporting & Analytics | Biểu đồ | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US287 | E5: Reporting & Analytics | Biểu đồ | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US256 | E5: Reporting & Analytics | Analytics | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US257 | E5: Reporting & Analytics | Analytics | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US258 | E5: Reporting & Analytics | Analytics | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US259 | E5: Reporting & Analytics | Analytics | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US262 | E5: Reporting & Analytics | Analytics | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US262 | E5: Reporting & Analytics | Analytics | Should Have | Done | Done: analytics summary includes completion, workload, backlog, cycle-time, utilization, velocity, project effort, and dependency metrics; covered by `tests/test_reports_analytics.py`. |
 | US264 | E5: Reporting & Analytics | Analytics | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US266 | E5: Reporting & Analytics | Analytics | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US269 | E5: Reporting & Analytics | Analytics | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
@@ -894,12 +916,12 @@ This section records the implementation pass that completes the remaining Must/S
 | US278 | E5: Reporting & Analytics | Analytics | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US281 | E5: Reporting & Analytics | Analytics | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US284 | E5: Reporting & Analytics | Analytics | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US288 | E5: Reporting & Analytics | Analytics | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US288 | E5: Reporting & Analytics | Analytics | Should Have | Done | Done: dashboard insights surface analytics metrics with role scope and empty-month stability for local review; covered by `tests/test_reports_analytics.py`. |
 | US290 | E5: Reporting & Analytics | Analytics | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US293 | E5: Reporting & Analytics | Analytics | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US260 | E5: Reporting & Analytics | Scheduled Reports | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US261 | E5: Reporting & Analytics | Scheduled Reports | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US273 | E5: Reporting & Analytics | Scheduled Reports | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US273 | E5: Reporting & Analytics | Scheduled Reports | Should Have | Done | Done: scheduled reports support create/list/manual run/run-due delivery-log workflows locally; production email delivery remains deferred; covered by `tests/test_reports_analytics.py`. |
 | US289 | E5: Reporting & Analytics | Scheduled Reports | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US294 | E6: Project Management | Tạo Project | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US295 | E6: Project Management | Tạo Project | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
@@ -1014,18 +1036,18 @@ This section records the implementation pass that completes the remaining Must/S
 | US404 | E8: Admin & Config | Admin Panel | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US405 | E8: Admin & Config | Admin Panel | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US425 | E8: Admin & Config | Admin Panel | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US431 | E8: Admin & Config | Admin Panel | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US431 | E8: Admin & Config | Admin Panel | Must Have | Done | Done: admin release panel summarizes available admin, config, license, compliance, maintenance, QA, and release-gate surfaces. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US434 | E8: Admin & Config | Admin Panel | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US437 | E8: Admin & Config | Admin Panel | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US437 | E8: Admin & Config | Admin Panel | Should Have | Done | Done: admin release panel summarizes available admin, config, license, compliance, maintenance, QA, and release-gate surfaces. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US440 | E8: Admin & Config | Admin Panel | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US406 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US407 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US408 | E8: Admin & Config | Cấu hình hệ thống | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US406 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Done | Done: system config overview exposes safe settings, redacts secrets, and records local change policy. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US407 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Done | Done: system config overview exposes safe settings, redacts secrets, and records local change policy. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US408 | E8: Admin & Config | Cấu hình hệ thống | Should Have | Done | Done: system config overview exposes safe settings, redacts secrets, and records local change policy. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US409 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US410 | E8: Admin & Config | Cấu hình hệ thống | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US411 | E8: Admin & Config | Cấu hình hệ thống | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US426 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US427 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US410 | E8: Admin & Config | Cấu hình hệ thống | Should Have | Done | Done: system config overview exposes auth/Teams/AI configuration categories without leaking secret values. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US411 | E8: Admin & Config | Cấu hình hệ thống | Should Have | Done | Done: system config overview exposes auth/Teams/AI configuration categories without leaking secret values. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US426 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Done | Done: system config overview exposes safe settings, redacts secrets, and records local change policy. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US427 | E8: Admin & Config | Cấu hình hệ thống | Must Have | Done | Done: system config overview exposes safe settings, redacts secrets, and records local change policy. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US435 | E8: Admin & Config | Cấu hình hệ thống | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US412 | E8: Admin & Config | Maintenance | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US413 | E8: Admin & Config | Maintenance | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
@@ -1034,63 +1056,63 @@ This section records the implementation pass that completes the remaining Must/S
 | US414 | E8: Admin & Config | Audit & Compliance | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US415 | E8: Admin & Config | Audit & Compliance | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US416 | E8: Admin & Config | Audit & Compliance | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US429 | E8: Admin & Config | Audit & Compliance | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US429 | E8: Admin & Config | Audit & Compliance | Must Have | Done | Done: compliance evidence summarizes request backlog, lineage domains, export endpoint, and manual-review no-hard-delete policy. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US436 | E8: Admin & Config | Audit & Compliance | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US443 | E8: Admin & Config | Audit & Compliance | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US443 | E8: Admin & Config | Audit & Compliance | Should Have | Done | Done: compliance evidence summarizes request backlog, lineage domains, export endpoint, and manual-review no-hard-delete policy. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US417 | E8: Admin & Config | Phòng ban | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
-| US418 | E8: Admin & Config | Phòng ban | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US419 | E8: Admin & Config | Phòng ban | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US418 | E8: Admin & Config | Phòng ban | Must Have | Done | Done: department ops evidence summarizes active/inactive departments, manager assignment, and user distribution behind admin/HR permissions. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US419 | E8: Admin & Config | Phòng ban | Should Have | Done | Done: department ops evidence summarizes active/inactive departments, manager assignment, and user distribution behind admin/HR permissions. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US430 | E8: Admin & Config | Phòng ban | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US438 | E8: Admin & Config | Phòng ban | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US420 | E8: Admin & Config | Thông báo hệ thống | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US421 | E8: Admin & Config | Thông báo hệ thống | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US422 | E8: Admin & Config | Thông báo hệ thống | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US421 | E8: Admin & Config | Thông báo hệ thống | Must Have | Done | Done: system notification broadcast and evidence endpoints support privileged release/admin communication review. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US422 | E8: Admin & Config | Thông báo hệ thống | Should Have | Done | Done: system notification broadcast and evidence endpoints support privileged release/admin communication review. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US432 | E8: Admin & Config | Thông báo hệ thống | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US441 | E8: Admin & Config | Thông báo hệ thống | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US423 | E8: Admin & Config | License | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US424 | E8: Admin & Config | License | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US441 | E8: Admin & Config | Thông báo hệ thống | Should Have | Done | Done: system notification broadcast and evidence endpoints support privileged release/admin communication review. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US423 | E8: Admin & Config | License | Should Have | Done | Done: license status endpoint reports local demo license mode, active users, usage counts, and external integration deferral. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US424 | E8: Admin & Config | License | Must Have | Done | Done: license status endpoint reports local demo license mode, active users, usage counts, and external integration deferral. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US433 | E8: Admin & Config | License | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US439 | E8: Admin & Config | License | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US444 | E9: Mobile & UX | Mobile | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US445 | E9: Mobile & UX | Mobile | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US446 | E9: Mobile & UX | Mobile | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US445 | E9: Mobile & UX | Mobile | Should Have | Done | Done: mobile shell has role-aware bottom navigation, responsive off-canvas sidebar, and no horizontal overflow in a 390px Playwright viewport; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
+| US446 | E9: Mobile & UX | Mobile | Must Have | Done | Done: mobile shell has role-aware bottom navigation, responsive off-canvas sidebar, and no horizontal overflow in a 390px Playwright viewport; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US462 | E9: Mobile & UX | Mobile | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US465 | E9: Mobile & UX | Mobile | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US472 | E9: Mobile & UX | Mobile | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US478 | E9: Mobile & UX | Mobile | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US478 | E9: Mobile & UX | Mobile | Should Have | Done | Done: mobile shell has role-aware bottom navigation, responsive off-canvas sidebar, and no horizontal overflow in a 390px Playwright viewport; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US447 | E9: Mobile & UX | UX | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US448 | E9: Mobile & UX | UX | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US448 | E9: Mobile & UX | UX | Should Have | Done | Done: navigation UX keeps active/aria-current state, stable page title, skip-to-content flow, and keyboard sidebar controls; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US449 | E9: Mobile & UX | UX | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US450 | E9: Mobile & UX | UX | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US450 | E9: Mobile & UX | UX | Must Have | Done | Done: navigation UX keeps active/aria-current state, stable page title, skip-to-content flow, and keyboard sidebar controls; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US451 | E9: Mobile & UX | UX | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US452 | E9: Mobile & UX | UX | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US453 | E9: Mobile & UX | UX | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US454 | E9: Mobile & UX | UX | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US454 | E9: Mobile & UX | UX | Must Have | Done | Done: navigation UX keeps active/aria-current state, stable page title, skip-to-content flow, and keyboard sidebar controls; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US455 | E9: Mobile & UX | UX | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US463 | E9: Mobile & UX | UX | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US463 | E9: Mobile & UX | UX | Must Have | Done | Done: navigation UX keeps active/aria-current state, stable page title, skip-to-content flow, and keyboard sidebar controls; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US464 | E9: Mobile & UX | UX | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US466 | E9: Mobile & UX | UX | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US466 | E9: Mobile & UX | UX | Must Have | Done | Done: navigation UX keeps active/aria-current state, stable page title, skip-to-content flow, and keyboard sidebar controls; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US467 | E9: Mobile & UX | UX | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US469 | E9: Mobile & UX | UX | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US469 | E9: Mobile & UX | UX | Should Have | Done | Done: navigation UX keeps active/aria-current state, stable page title, skip-to-content flow, and keyboard sidebar controls; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US473 | E9: Mobile & UX | UX | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US474 | E9: Mobile & UX | UX | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US475 | E9: Mobile & UX | UX | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US477 | E9: Mobile & UX | UX | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US480 | E9: Mobile & UX | UX | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US481 | E9: Mobile & UX | UX | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US480 | E9: Mobile & UX | UX | Must Have | Done | Done: navigation UX keeps active/aria-current state, stable page title, skip-to-content flow, and keyboard sidebar controls; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
+| US481 | E9: Mobile & UX | UX | Should Have | Done | Done: navigation UX keeps active/aria-current state, stable page title, skip-to-content flow, and keyboard sidebar controls; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US482 | E9: Mobile & UX | UX | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US483 | E9: Mobile & UX | UX | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US456 | E9: Mobile & UX | Accessibility | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US457 | E9: Mobile & UX | Accessibility | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US458 | E9: Mobile & UX | Accessibility | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US470 | E9: Mobile & UX | Accessibility | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US479 | E9: Mobile & UX | Accessibility | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US457 | E9: Mobile & UX | Accessibility | Must Have | Done | Done: accessibility hooks include skip link, focus-visible outline, aria-current navigation state, labeled mobile nav, and reduced-motion CSS; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
+| US458 | E9: Mobile & UX | Accessibility | Must Have | Done | Done: accessibility hooks include skip link, focus-visible outline, aria-current navigation state, labeled mobile nav, and reduced-motion CSS; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
+| US470 | E9: Mobile & UX | Accessibility | Should Have | Done | Done: accessibility hooks include skip link, focus-visible outline, aria-current navigation state, labeled mobile nav, and reduced-motion CSS; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
+| US479 | E9: Mobile & UX | Accessibility | Should Have | Done | Done: accessibility hooks include skip link, focus-visible outline, aria-current navigation state, labeled mobile nav, and reduced-motion CSS; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US459 | E9: Mobile & UX | Performance | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
-| US468 | E9: Mobile & UX | Performance | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US468 | E9: Mobile & UX | Performance | Must Have | Done | Done: UI performance pass uses CSS-only responsive layout, lightweight mobile-nav rendering, reduced-motion support, and navigation performance marks; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US476 | E9: Mobile & UX | Performance | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US460 | E9: Mobile & UX | i18n | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US460 | E9: Mobile & UX | i18n | Must Have | Done | Done: shell navigation/topbar supports persisted VI/EN toggle and updates `document.documentElement.lang`; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US461 | E9: Mobile & UX | i18n | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US471 | E9: Mobile & UX | i18n | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US471 | E9: Mobile & UX | i18n | Must Have | Done | Done: shell navigation/topbar supports persisted VI/EN toggle and updates `document.documentElement.lang`; covered by `tests/test_phase5_mobile_ux_static.py`; Playwright mobile scenario is defined in `tests/test_ui_role_navigation_playwright.py`. |
 | US484 | E10: Testing & QA | Unit Testing | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US485 | E10: Testing & QA | Unit Testing | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US486 | E10: Testing & QA | Unit Testing | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
@@ -1101,23 +1123,23 @@ This section records the implementation pass that completes the remaining Must/S
 | US491 | E10: Testing & QA | E2E Testing | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US492 | E10: Testing & QA | E2E Testing | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US493 | E10: Testing & QA | Performance Testing | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US494 | E10: Testing & QA | Performance Testing | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US507 | E10: Testing & QA | Performance Testing | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US494 | E10: Testing & QA | Performance Testing | Should Have | Done | Done: QA release evidence documents local synthetic performance smoke through benchmark command and release-gate journeys. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
+| US507 | E10: Testing & QA | Performance Testing | Should Have | Done | Done: QA release evidence documents local synthetic performance smoke through benchmark command and release-gate journeys. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US495 | E10: Testing & QA | UAT | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US496 | E10: Testing & QA | UAT | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US497 | E10: Testing & QA | UAT | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US497 | E10: Testing & QA | UAT | Must Have | Done | Done: QA release evidence links the UAT template and marks stakeholder signoff as a tracked release evidence item. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US508 | E10: Testing & QA | UAT | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
 | US512 | E10: Testing & QA | UAT | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US498 | E10: Testing & QA | Security Testing | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US499 | E10: Testing & QA | Security Testing | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US510 | E10: Testing & QA | Security Testing | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US510 | E10: Testing & QA | Security Testing | Must Have | Done | Done: QA release evidence records security-header, login-lockout, audit-export, redaction, and production-auth safety checks. Covered by `tests/test_phase6_admin_compliance_maintenance.py; tests/test_auth_security_hardening.py`. |
 | US500 | E10: Testing & QA | Regression Testing | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US501 | E10: Testing & QA | Test Data | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
-| US502 | E10: Testing & QA | Test Data | Must Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US502 | E10: Testing & QA | Test Data | Must Have | Done | Done: QA test-data inventory reports seeded/test bootstrap counts, seed/reset policy, and demo account documentation. Covered by `tests/test_phase6_admin_compliance_maintenance.py`. |
 | US503 | E10: Testing & QA | Monitoring | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US504 | E10: Testing & QA | Monitoring | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US505 | E10: Testing & QA | Monitoring | Must Have | Done | Done for Teams-ready simulation: `/integrations/teams/health` and the simulator dashboard expose mode, real Graph disabled state, and queue counts. |
-| US509 | E10: Testing & QA | Monitoring | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US513 | E10: Testing & QA | Monitoring | Should Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
+| US509 | E10: Testing & QA | Monitoring | Should Have | Done | Done: QA release evidence and release gate expose monitoring health/readiness/metrics/release-gate endpoints and queue counts. Covered by `tests/test_phase6_admin_compliance_maintenance.py; tests/test_ops_dashboard.py`. |
+| US513 | E10: Testing & QA | Monitoring | Should Have | Done | Done: QA release evidence and release gate expose monitoring health/readiness/metrics/release-gate endpoints and queue counts. Covered by `tests/test_phase6_admin_compliance_maintenance.py; tests/test_ops_dashboard.py`. |
 | US506 | E10: Testing & QA | Test Coverage | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US511 | E10: Testing & QA | Test Coverage | Won't Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |

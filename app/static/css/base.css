@@ -79,6 +79,43 @@ html, body {
   line-height: 1.5;
 }
 
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 10px;
+  z-index: 1000;
+  transform: translateY(-140%);
+  background: var(--brand);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--shadow-md);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 3px solid #93C5FD;
+  outline-offset: 2px;
+}
+
+:focus-visible {
+  outline: 3px solid #93C5FD;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
 .hidden {
   display: none !important;
 }

@@ -168,6 +168,71 @@ def test_analytics_exports_require_export_permission_and_reuse_summary_shape() -
     assert "teamswork-analytics-2099-12.xlsx" in xlsx_export.headers["content-disposition"]
 
 
+def test_dashboard_insights_are_role_scoped_and_export_aware() -> None:
+    init_db()
+    year = 2300 + (datetime.now(timezone.utc).microsecond % 6000)
+    month = f"{year}-04"
+    manager = create_user("Dashboard Manager", _email("dashboard.manager"), "MANAGER", "PMO")
+    staff = create_user("Dashboard Staff", _email("dashboard.staff"), "MEMBER", "Engineering")
+    other = create_user("Dashboard Other", _email("dashboard.other"), "MEMBER", "Engineering")
+    own = create_task(
+        "Dashboard own task",
+        None,
+        int(staff["id"]),
+        None,
+        None,
+        3,
+        "easy",
+        f"{month}-10T09:00:00+00:00",
+    )
+    _set_task_dates(
+        int(own["id"]),
+        created_at=f"{month}-01T09:00:00+00:00",
+        completed_at=f"{month}-03T09:00:00+00:00",
+        status="done",
+    )
+    create_task(
+        "Dashboard other task",
+        None,
+        int(other["id"]),
+        None,
+        None,
+        5,
+        "medium",
+        f"{month}-12T09:00:00+00:00",
+    )
+
+    staff_resp = client.get(f"/reports/dashboard/insights?month={month}", headers=_hdr(int(staff["id"])))
+    assert staff_resp.status_code == 200
+    staff_payload = staff_resp.json()
+    assert staff_payload["scope"] == {"type": "personal", "user_id": staff["id"]}
+    assert staff_payload["analytics"]["productivity"]["total_tasks"] == 1
+    assert staff_payload["analytics"]["productivity"]["done_tasks"] == 1
+    assert staff_payload["export_links"] == {}
+    assert staff_payload["states"] == {"loading": False, "empty": False, "error": None}
+    assert {item["key"] for item in staff_payload["chart_catalog"]} >= {"task_status", "workload", "velocity", "project_effort"}
+
+    manager_resp = client.get(f"/reports/dashboard/insights?month={month}", headers=_hdr(int(manager["id"])))
+    assert manager_resp.status_code == 200
+    manager_payload = manager_resp.json()
+    assert manager_payload["scope"]["type"] == "team"
+    assert manager_payload["analytics"]["productivity"]["total_tasks"] == 2
+    assert manager_payload["export_links"]["analytics_csv"] == f"/reports/analytics.csv?month={month}"
+
+
+def test_dashboard_insights_empty_month_has_stable_empty_state() -> None:
+    init_db()
+    auditor = create_user("Dashboard Empty Auditor", _email("dashboard.empty.auditor"), "AUDITOR", "QA")
+
+    resp = client.get("/reports/dashboard/insights?month=2099-11", headers=_hdr(int(auditor["id"])))
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["states"]["empty"] is True
+    assert payload["analytics"]["productivity"]["total_tasks"] == 0
+    assert any(alert["code"] == "empty_dashboard" for alert in payload["alerts"])
+    assert payload["cards"][0]["state"] == "empty"
+
+
 def test_scheduled_report_queue_is_permissioned_and_logs_default_skip_delivery() -> None:
     init_db()
     member = create_user("Schedule Member", _email("schedule.member"), "MEMBER", "Engineering")

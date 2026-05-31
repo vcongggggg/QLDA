@@ -125,3 +125,34 @@ def test_visible_modules_open_without_access_denied(live_server: str, browser) -
                 assert "không có quyền truy cập" not in text, f"{role} {section}: {text}"
     finally:
         page.close()
+
+
+def test_phase5_mobile_shell_i18n_and_accessibility_hooks(live_server: str, browser) -> None:
+    page = browser.new_page(viewport={"width": 390, "height": 844})
+    try:
+        _login(page, live_server, *ROLE_ACCOUNTS["ADMIN"])
+
+        mobile_nav = page.locator("#mobileBottomNav")
+        mobile_nav.wait_for(state="visible", timeout=10000)
+        assert 1 <= mobile_nav.locator("button").count() <= 5
+        assert page.locator("#mobileBottomNav button[aria-current='page']").count() == 1
+
+        page.locator(".skip-link").focus()
+        assert page.evaluate("() => document.activeElement?.classList.contains('skip-link')") is True
+        page.locator(".skip-link").click()
+        assert page.evaluate("() => document.activeElement?.id") == "appContent"
+
+        page.locator("#languageToggle").click()
+        assert page.evaluate("() => document.documentElement.lang") == "en"
+        assert page.locator("#pageTitle").inner_text() == "Dashboard"
+        page.evaluate("() => window.navigate('reports')")
+        page.wait_for_function("() => document.querySelector('#pageTitle')?.textContent === 'Reports'", timeout=10000)
+
+        page.keyboard.press("Alt+M")
+        assert page.locator("#sidebar.open").count() == 1
+        page.keyboard.press("Escape")
+        assert page.locator("#sidebar.open").count() == 0
+
+        assert page.evaluate("() => document.documentElement.scrollWidth <= window.innerWidth + 1") is True
+    finally:
+        page.close()

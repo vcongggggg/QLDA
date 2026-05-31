@@ -135,16 +135,17 @@ Phase 6 ops release-gate checks:
 - Release-gate output must not include raw webhook URLs, bearer tokens, client secrets, stack traces, provider raw errors, or notification payload bodies.
 - Failed Teams notification details must use redacted summaries only.
 - `/monitoring/release-acceptance` must require privileged ops/audit/admin permission.
-- Release acceptance output must list the 114 completed Must/Should stories from the Phase 1-6 partial scope, mark them `Done`, and include approved deferrals for external tenant/load/WCAG/UAT evidence where applicable.
+- Release acceptance output must list the 141 completed Must/Should stories from the Phase 1-6 local/release scope, mark them `Done`, and include approved deferrals for external tenant/load/WCAG/UAT evidence where applicable.
 - Staff/member users must not see release-acceptance evidence.
 
 Phase 6 admin/compliance/maintenance checks:
 
-- Admin global search, activity, config flags, and system notification broadcast must be privileged.
+- Admin global search, activity, config flags, license status, department ops evidence, admin release panel, system notification broadcast/evidence, QA release evidence, and test-data inventory must be privileged.
 - Config flags must redact environment values whose names indicate secrets, tokens, keys, passwords, webhooks, or authorization material.
 - GDPR/PDPA delete handling uses request/export/manual-review only; no hard delete is automated in Phase 6.
 - Compliance exports must not include password hashes or raw secret material.
 - Maintenance log cleanup must support dry-run evidence; destructive cleanup stays deferred unless explicitly approved and audited.
+- Phase 6 local endpoints covered by focused tests: `/admin/system-config/overview`, `/admin/license/status`, `/admin/departments/ops-evidence`, `/admin/system-notifications/evidence`, `/admin/release-panel`, `/compliance/evidence`, `/qa/release-evidence`, and `/qa/test-data`.
 - Run `python scripts/benchmark_smoke.py --json` for local Phase 6 synthetic journey evidence.
 
 Approved Phase 6 deferrals:

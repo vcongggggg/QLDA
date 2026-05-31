@@ -20,6 +20,7 @@ const state = {
   activeTaskId: null,
   draggingTaskId: null,
   notificationsOpen: false,
+  uiLanguage: localStorage.getItem('tw_lang') || 'vi',
   loginMessage: '',
   adminUsers: { rows: [], search: '', role: '', department: '', status: '', sort: 'name', dir: 'asc', page: 1, pageSize: 8 },
   adminDepartments: { rows: [], search: '', status: '', sort: 'name', dir: 'asc', page: 1, pageSize: 8 },
@@ -46,6 +47,75 @@ const ROLE_COLORS = {
   MEMBER: 'role-member',
   HR: 'role-hr',
   AUDITOR: 'role-auditor',
+};
+
+const MOBILE_NAV_PRIORITY = ['dashboard', 'kanban', 'projects', 'reports', 'kpi', 'teams-simulator', 'ops', 'admin'];
+
+const I18N = {
+  vi: {
+    refresh: 'Làm mới',
+    month: 'Tháng:',
+    notifications: 'Thông báo',
+    switchLanguage: 'Switch language',
+    nav: {
+      dashboard: 'Dashboard',
+      kanban: 'Kanban',
+      timeline: 'Timeline',
+      projects: 'Dự án',
+      kpi: 'KPI',
+      reports: 'Báo cáo',
+      ai: 'AI Tasks',
+      teams: 'Teams',
+      'teams-simulator': 'Teams Simulator',
+      ops: 'Audit & Ops',
+      admin: 'Quản trị',
+    },
+    titles: {
+      dashboard: 'Dashboard',
+      timeline: 'Timeline',
+      kanban: 'Kanban - Bảng công việc',
+      projects: 'Dự án',
+      kpi: 'KPI - Chỉ số hiệu suất',
+      reports: 'Báo cáo',
+      ai: 'AI - Phân rã yêu cầu thành task',
+      teams: 'Teams-ready Simulation',
+      'teams-simulator': 'Teams Simulation Mode',
+      ops: 'Audit & Ops',
+      admin: 'Quản trị hệ thống',
+    },
+  },
+  en: {
+    refresh: 'Refresh',
+    month: 'Month:',
+    notifications: 'Notifications',
+    switchLanguage: 'Đổi ngôn ngữ',
+    nav: {
+      dashboard: 'Dashboard',
+      kanban: 'Kanban',
+      timeline: 'Timeline',
+      projects: 'Projects',
+      kpi: 'KPI',
+      reports: 'Reports',
+      ai: 'AI Tasks',
+      teams: 'Teams',
+      'teams-simulator': 'Teams Simulator',
+      ops: 'Audit & Ops',
+      admin: 'Admin',
+    },
+    titles: {
+      dashboard: 'Dashboard',
+      timeline: 'Timeline',
+      kanban: 'Kanban - Task board',
+      projects: 'Projects',
+      kpi: 'KPI - Performance index',
+      reports: 'Reports',
+      ai: 'AI - Requirement breakdown',
+      teams: 'Teams-ready Simulation',
+      'teams-simulator': 'Teams Simulation Mode',
+      ops: 'Audit & Ops',
+      admin: 'System admin',
+    },
+  },
 };
 
 const MODULE_VIEW_PERMISSIONS = {
@@ -104,6 +174,8 @@ function icon(name, className = 'ui-icon') {
 
 // ── Init ───────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  applyI18n();
+  installShellKeyboardShortcuts();
   const mp = document.getElementById('monthPicker');
   if (mp) mp.value = state.month;
 
@@ -176,7 +248,70 @@ function roleAllowsSection(section) {
 }
 
 function navLabel(section) {
-  return (ROLE_NAV_LABELS[currentRoleCode()] || {})[section] || TITLES[section] || section;
+  return (ROLE_NAV_LABELS[currentRoleCode()] || {})[section] || tNav(section);
+}
+
+function t(key, fallback = key) {
+  return (I18N[state.uiLanguage] || I18N.vi)[key] || fallback;
+}
+
+function tNav(section) {
+  return (I18N[state.uiLanguage] || I18N.vi).nav[section] || TITLES[section] || section;
+}
+
+function tTitle(section) {
+  return (I18N[state.uiLanguage] || I18N.vi).titles[section] || TITLES[section] || section;
+}
+
+function applyI18n() {
+  document.documentElement.lang = state.uiLanguage;
+  const toggle = document.getElementById('languageToggle');
+  if (toggle) {
+    toggle.textContent = state.uiLanguage === 'vi' ? 'EN' : 'VI';
+    toggle.setAttribute('aria-label', t('switchLanguage', 'Switch language'));
+  }
+  const monthLabel = document.querySelector('.month-picker label');
+  if (monthLabel) monthLabel.textContent = t('month', 'Tháng:');
+  const refreshBtn = document.querySelector("button[onclick='refreshCurrent()']");
+  if (refreshBtn) refreshBtn.innerHTML = `${icon('refresh', 'btn-icon')}${t('refresh', 'Làm mới')}`;
+  const bell = document.getElementById('notificationBell');
+  if (bell) bell.setAttribute('aria-label', t('notifications', 'Notifications'));
+  document.querySelectorAll('.nav-item').forEach(el => {
+    const span = el.querySelector('span');
+    if (span && el.dataset.section) span.textContent = navLabel(el.dataset.section);
+  });
+  const title = document.getElementById('pageTitle');
+  if (title && state.currentSection !== 'access-denied') title.textContent = navLabel(state.currentSection);
+  renderMobileNav();
+}
+
+function toggleLanguage() {
+  state.uiLanguage = state.uiLanguage === 'vi' ? 'en' : 'vi';
+  localStorage.setItem('tw_lang', state.uiLanguage);
+  applyI18n();
+}
+
+function installShellKeyboardShortcuts() {
+  if (window.__twShellShortcutsInstalled) return;
+  window.__twShellShortcutsInstalled = true;
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      document.getElementById('sidebar')?.classList.remove('open');
+      if (typeof closeNotificationPanel === 'function') closeNotificationPanel();
+      return;
+    }
+    if (!event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key === 'm') {
+      event.preventDefault();
+      toggleSidebar();
+    }
+    if (key === '/') {
+      event.preventDefault();
+      const selector = '.section:not(.hidden) input, .section:not(.hidden) select, .section:not(.hidden) textarea, .section:not(.hidden) button';
+      document.querySelector(selector)?.focus();
+    }
+  });
 }
 
 // ── Toast ──────────────────────────────────────
@@ -376,6 +511,7 @@ function applyPermissionNavigation() {
     el.classList.toggle('hidden', !navAllowed(el));
   });
   applyPermissionVisibility();
+  renderMobileNav();
 }
 
 function applyPermissionVisibility(root = document) {
@@ -417,6 +553,7 @@ const TITLES = {
 };
 
 function navigate(section, options = {}) {
+  performance.mark?.('tw:navigate:start');
   if (!MODULE_VIEW_PERMISSIONS[section]) {
     section = firstAllowedSection() || 'dashboard';
   }
@@ -431,6 +568,8 @@ function navigate(section, options = {}) {
   }
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.toggle('active', el.dataset.section === section);
+    if (el.dataset.section === section) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
   });
   document.querySelectorAll('.section').forEach(el => el.classList.add('hidden'));
   const sec = document.getElementById(`sec-${section}`);
@@ -439,8 +578,14 @@ function navigate(section, options = {}) {
   state.currentSection = section;
   document.getElementById('pageTitle').textContent = navLabel(section);
   syncSectionUrl(section, options);
+  syncMobileNav(section);
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    document.getElementById('sidebar')?.classList.remove('open');
+  }
   loadSection(section);
   applyPermissionVisibility();
+  performance.mark?.('tw:navigate:end');
+  performance.measure?.('tw:navigate', 'tw:navigate:start', 'tw:navigate:end');
 }
 
 function showAccessDenied(section, options = {}) {
@@ -499,5 +644,53 @@ function onMonthChange(val) {
 }
 
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
+  const sidebar = document.getElementById('sidebar');
+  sidebar?.classList.toggle('open');
+  document.querySelector('.menu-btn')?.setAttribute('aria-expanded', String(sidebar?.classList.contains('open')));
+}
+
+function mobileNavItems() {
+  return MOBILE_NAV_PRIORITY
+    .filter(section => MODULE_VIEW_PERMISSIONS[section] && canViewModule(section))
+    .slice(0, 5);
+}
+
+function renderMobileNav() {
+  const nav = document.getElementById('mobileBottomNav');
+  if (!nav || !state.currentUser) return;
+  const items = mobileNavItems();
+  nav.style.setProperty('--mobile-nav-count', String(Math.max(items.length, 1)));
+  nav.innerHTML = items.map(section => `
+    <button type="button" data-section="${section}" onclick="navigate('${section}')" aria-label="${escHtml(navLabel(section))}">
+      ${mobileNavIcon(section)}
+      <span>${escHtml(navLabel(section))}</span>
+    </button>
+  `).join('');
+  document.getElementById('mainWrap')?.classList.toggle('mobile-nav-ready', items.length > 0);
+  syncMobileNav(state.currentSection);
+}
+
+function mobileNavIcon(section) {
+  const names = {
+    dashboard: 'bar-chart',
+    kanban: 'list-checks',
+    projects: 'folder',
+    reports: 'activity',
+    kpi: 'target',
+    'teams-simulator': 'link',
+    ops: 'alert-triangle',
+    admin: 'database',
+  };
+  return icon(names[section] || 'square');
+}
+
+function syncMobileNav(section) {
+  const nav = document.getElementById('mobileBottomNav');
+  if (!nav) return;
+  nav.querySelectorAll('button').forEach(btn => {
+    const active = btn.dataset.section === section;
+    btn.classList.toggle('active', active);
+    if (active) btn.setAttribute('aria-current', 'page');
+    else btn.removeAttribute('aria-current');
+  });
 }

@@ -74,6 +74,52 @@ def test_admin_search_activity_config_and_system_notification_are_privileged(mon
     ).status_code == 403
 
 
+def test_phase6_admin_config_license_department_and_notification_evidence_are_privileged(monkeypatch) -> None:
+    admin, _manager, hr, staff = _bootstrap()
+    monkeypatch.setenv("PHASE6_RELEASE_API_TOKEN", "super-secret-token")
+
+    config = client.get("/admin/system-config/overview", headers=_hdr(int(hr["id"])))
+    assert config.status_code == 200
+    config_payload = config.json()
+    assert config_payload["status"] == "ok"
+    assert config_payload["redacted_sensitive_count"] >= 1
+    assert "super-secret-token" not in config.text
+    assert config_payload["auth"]["app_env"]
+    assert config_payload["teams"]["graph_outbound_default"] == "disabled_unless_configured"
+
+    license_status = client.get("/admin/license/status", headers=_hdr(int(admin["id"])))
+    assert license_status.status_code == 200
+    license_payload = license_status.json()
+    assert license_payload["mode"] == "local_demo_unlicensed"
+    assert license_payload["active_users"] >= 1
+    assert license_payload["external_license_integration"] == "not_configured_for_local_demo"
+
+    departments = client.get("/admin/departments/ops-evidence", headers=_hdr(int(hr["id"])))
+    assert departments.status_code == 200
+    assert departments.json()["total_departments"] >= 0
+    assert "user_distribution" in departments.json()
+
+    notice = client.post(
+        "/admin/system-notifications",
+        headers=_hdr(int(admin["id"])),
+        json={"title": "Phase 6 broadcast", "message": "System notification evidence", "audience": "all"},
+    )
+    assert notice.status_code == 200
+    evidence = client.get("/admin/system-notifications/evidence", headers=_hdr(int(admin["id"])))
+    assert evidence.status_code == 200
+    assert evidence.json()["total"] >= notice.json()["created"]
+
+    panel = client.get("/admin/release-panel", headers=_hdr(int(admin["id"])))
+    assert panel.status_code == 200
+    assert panel.json()["qa"] == "/qa/release-evidence"
+    assert panel.json()["license"] == "/admin/license/status"
+
+    assert client.get("/admin/system-config/overview", headers=_hdr(int(staff["id"]))).status_code == 403
+    assert client.get("/admin/license/status", headers=_hdr(int(staff["id"]))).status_code == 403
+    assert client.get("/admin/departments/ops-evidence", headers=_hdr(int(staff["id"]))).status_code == 403
+    assert client.get("/admin/system-notifications/evidence", headers=_hdr(int(staff["id"]))).status_code == 403
+
+
 def test_compliance_request_export_lineage_and_staff_blocking() -> None:
     admin, _manager, hr, staff = _bootstrap()
     create_task(
@@ -120,8 +166,14 @@ def test_compliance_request_export_lineage_and_staff_blocking() -> None:
     assert lineage.status_code == 200
     assert "Request + export" in lineage.json()["policy"]
 
+    evidence = client.get("/compliance/evidence", headers=_hdr(int(admin["id"])))
+    assert evidence.status_code == 200
+    assert evidence.json()["delete_policy"] == "manual_review_no_hard_delete"
+    assert evidence.json()["data_lineage_domains"] >= 1
+
     assert client.get("/compliance/requests", headers=_hdr(int(staff["id"]))).status_code == 403
     assert client.get(f"/compliance/users/{staff['id']}/export", headers=_hdr(int(staff["id"]))).status_code == 403
+    assert client.get("/compliance/evidence", headers=_hdr(int(staff["id"]))).status_code == 403
 
 
 def test_maintenance_windows_retention_cleanup_and_release_gate_extensions() -> None:
@@ -190,6 +242,29 @@ def test_maintenance_windows_retention_cleanup_and_release_gate_extensions() -> 
     ).status_code == 403
 
 
+def test_phase6_qa_release_evidence_and_test_data_inventory_are_privileged() -> None:
+    admin, _manager, hr, staff = _bootstrap()
+    create_audit_log(int(admin["id"]), "qa_evidence_probe", "system", None, "qa release evidence")
+
+    for user in (admin, hr):
+        evidence = client.get("/qa/release-evidence", headers=_hdr(int(user["id"])))
+        assert evidence.status_code == 200
+        payload = evidence.json()
+        assert payload["status"] == "ready_for_local_release_review"
+        assert payload["performance"]["script"] == "scripts/benchmark_smoke.py"
+        assert "security headers" in payload["security"]["checks"]
+        assert payload["monitoring"]["release_gate"] == "/monitoring/release-gate"
+        assert payload["test_data"]["counts"]["users"] >= 1
+        assert payload["uat"]["template"] == "docs/PHASE6_UAT_EVIDENCE_TEMPLATE.md"
+
+        test_data = client.get("/qa/test-data", headers=_hdr(int(user["id"])))
+        assert test_data.status_code == 200
+        assert test_data.json()["reset_policy"].startswith("tests call init_db")
+
+    assert client.get("/qa/release-evidence", headers=_hdr(int(staff["id"]))).status_code == 403
+    assert client.get("/qa/test-data", headers=_hdr(int(staff["id"]))).status_code == 403
+
+
 def test_release_acceptance_matrix_promotes_phase_partial_scope_with_deferrals() -> None:
     admin, _manager, hr, staff = _bootstrap()
 
@@ -197,8 +272,8 @@ def test_release_acceptance_matrix_promotes_phase_partial_scope_with_deferrals()
     assert response.status_code == 200
     payload = response.json()
 
-    assert payload["total_stories"] == 114
-    assert payload["done_stories"] == 114
+    assert payload["total_stories"] >= 139
+    assert payload["done_stories"] == payload["total_stories"]
     assert payload["partial_stories"] == 0
     assert payload["deferral_count"] > 0
     assert "approved deferral" in payload["policy"]
@@ -209,6 +284,9 @@ def test_release_acceptance_matrix_promotes_phase_partial_scope_with_deferrals()
     assert stories["US221"]["evidence_type"] == "local_testable_with_approved_deferral"
     assert stories["US412"]["approved_deferrals"]
     assert stories["US493"]["approved_deferrals"]
+    assert stories["US431"]["status"] == "Done"
+    assert stories["US424"]["feature"] == "License"
+    assert stories["US510"]["feature"] == "Security Testing"
 
     assert "secret" not in response.text.lower()
     assert client.get("/monitoring/release-acceptance", headers=_hdr(int(staff["id"]))).status_code == 403

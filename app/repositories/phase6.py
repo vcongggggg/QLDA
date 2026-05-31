@@ -22,6 +22,21 @@ SAFE_CONFIG_KEYS = (
 SENSITIVE_CONFIG_MARKERS = ("secret", "token", "key", "password", "webhook", "authorization")
 
 
+def _phase6_system_counts() -> dict[str, int]:
+    with get_connection() as conn:
+        return {
+            "users": int(conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"] or 0),
+            "projects": int(conn.execute("SELECT COUNT(*) AS c FROM projects").fetchone()["c"] or 0),
+            "tasks": int(conn.execute("SELECT COUNT(*) AS c FROM tasks").fetchone()["c"] or 0),
+            "queued_notifications": int(
+                conn.execute("SELECT COUNT(*) AS c FROM notification_queue WHERE status = 'queued'").fetchone()["c"] or 0
+            ),
+            "failed_notifications": int(
+                conn.execute("SELECT COUNT(*) AS c FROM notification_queue WHERE status = 'failed'").fetchone()["c"] or 0
+            ),
+        }
+
+
 def _safe_url(entity_type: str, entity_id: int | None) -> str | None:
     if entity_id is None:
         return None
@@ -147,6 +162,120 @@ def admin_config_flags() -> list[dict[str, Any]]:
         if any(marker in lowered for marker in SENSITIVE_CONFIG_MARKERS):
             output.append({"key": key, "value": "[redacted]", "source": "environment", "sensitive": True})
     return output
+
+
+def admin_system_config_overview() -> dict[str, Any]:
+    flags = admin_config_flags()
+    safe = [item for item in flags if not item["sensitive"]]
+    sensitive_count = sum(1 for item in flags if item["sensitive"])
+    auth_flags = {
+        "app_env": getattr(settings, "app_env", "development"),
+        "jwt_validation_disabled": bool(getattr(settings, "auth_disable_jwt_validation", False)),
+        "header_fallback_allowed": bool(getattr(settings, "auth_allow_header_fallback", False)),
+        "allowed_email_domains_configured": bool(getattr(settings, "auth_allowed_email_domains", ())),
+    }
+    teams_flags = {
+        "proactive_mode": getattr(settings, "teams_proactive_mode", "disabled"),
+        "graph_outbound_default": "disabled_unless_configured",
+    }
+    ai_flags = {
+        "rag_embedding_enabled": bool(getattr(settings, "rag_embedding_enabled", False)),
+        "rag_vector_backend": getattr(settings, "rag_vector_backend", "sqlite"),
+        "external_provider_required": False,
+    }
+    return {
+        "status": "ok",
+        "safe_config_count": len(safe),
+        "redacted_sensitive_count": sensitive_count,
+        "auth": auth_flags,
+        "teams": teams_flags,
+        "ai": ai_flags,
+        "change_policy": "configuration changes require privileged review; secrets are never returned",
+        "flags": flags,
+    }
+
+
+def admin_license_status() -> dict[str, Any]:
+    metrics = _phase6_system_counts()
+    active_users = 0
+    inactive_users = 0
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT COALESCE(is_active, 1) AS is_active, COUNT(*) AS c FROM users GROUP BY COALESCE(is_active, 1)"
+        ).fetchall()
+    for row in rows:
+        if int(row["is_active"] or 0):
+            active_users += int(row["c"] or 0)
+        else:
+            inactive_users += int(row["c"] or 0)
+    return {
+        "mode": "local_demo_unlicensed",
+        "status": "ok",
+        "active_users": active_users,
+        "inactive_users": inactive_users,
+        "project_count": metrics["projects"],
+        "task_count": metrics["tasks"],
+        "limits": {
+            "users": None,
+            "projects": None,
+            "tasks": None,
+        },
+        "external_license_integration": "not_configured_for_local_demo",
+        "renewal_required": False,
+    }
+
+
+def admin_department_ops_evidence() -> dict[str, Any]:
+    departments = list_departments(include_inactive=True)
+    with get_connection() as conn:
+        user_rows = conn.execute(
+            """
+            SELECT d.id AS department_id, d.name AS department_name, COUNT(u.id) AS user_count
+            FROM departments d
+            LEFT JOIN users u ON u.department_id = d.id
+            GROUP BY d.id, d.name
+            ORDER BY d.name
+            """
+        ).fetchall()
+    return {
+        "total_departments": len(departments),
+        "active_departments": sum(1 for item in departments if item.get("is_active")),
+        "inactive_departments": sum(1 for item in departments if not item.get("is_active")),
+        "manager_assigned_count": sum(1 for item in departments if item.get("manager_user_id")),
+        "departments": departments,
+        "user_distribution": [dict(row) for row in user_rows],
+        "review_policy": "department changes are privileged and preserved through audit/admin workflow",
+    }
+
+
+def system_notification_evidence() -> dict[str, Any]:
+    with get_connection() as conn:
+        totals = conn.execute(
+            """
+            SELECT
+              COUNT(*) AS total,
+              SUM(CASE WHEN is_read THEN 1 ELSE 0 END) AS read_count,
+              SUM(CASE WHEN NOT is_read THEN 1 ELSE 0 END) AS unread_count
+            FROM app_notifications
+            WHERE entity_type = 'system_notification'
+            """
+        ).fetchone()
+        latest = conn.execute(
+            """
+            SELECT id, user_id, title, is_read, created_at
+            FROM app_notifications
+            WHERE entity_type = 'system_notification'
+            ORDER BY id DESC
+            LIMIT 10
+            """
+        ).fetchall()
+    return {
+        "total": int(totals["total"] or 0) if totals else 0,
+        "read_count": int(totals["read_count"] or 0) if totals else 0,
+        "unread_count": int(totals["unread_count"] or 0) if totals else 0,
+        "latest": [dict(row) for row in latest],
+        "audiences": ["all", "admin", "manager", "hr"],
+    }
 
 
 def list_users_for_system_notification(audience: str) -> list[dict[str, Any]]:
@@ -402,12 +531,31 @@ def compliance_backlog_summary() -> dict[str, Any]:
     return {"open_count": counts["open"], "in_review_count": counts["in_review"], "by_status": counts}
 
 
+def compliance_release_evidence() -> dict[str, Any]:
+    backlog = compliance_backlog_summary()
+    lineage = data_lineage_notes()
+    return {
+        "backlog": backlog,
+        "data_lineage_domains": len(lineage["domains"]),
+        "delete_policy": "manual_review_no_hard_delete",
+        "export_endpoint": "/compliance/users/{user_id}/export",
+        "request_endpoint": "/compliance/requests",
+        "lineage_endpoint": "/compliance/data-lineage",
+    }
+
+
 def qa_evidence_summary() -> dict[str, Any]:
     return {
         "focused_phase6_command": "pytest tests/test_phase6_admin_compliance_maintenance.py tests/test_ops_dashboard.py tests/test_maintenance_hardening.py -q",
+        "security_command": "pytest tests/test_auth_security_hardening.py tests/test_maintenance_hardening.py -q",
+        "performance_command": "python scripts/benchmark_smoke.py --json",
+        "monitoring_command": "pytest tests/test_ops_dashboard.py -q",
+        "test_data_command": "pytest tests/test_demo_seed.py tests/test_full_demo_seed.py -q",
         "compile_command": "python -m compileall app scripts",
         "full_suite_command": "pytest -q",
         "uat_template": "docs/PHASE6_UAT_EVIDENCE_TEMPLATE.md",
+        "test_evidence_doc": "docs/TEST_EVIDENCE.md",
+        "quality_gate_doc": "docs/QUALITY_GATE.md",
     }
 
 
@@ -417,4 +565,77 @@ def synthetic_journey_summary() -> dict[str, Any]:
         "script": "scripts/benchmark_smoke.py",
         "journeys": ["health", "readiness", "metrics", "release_gate"],
         "external_integrations": "disabled_by_default",
+    }
+
+
+def qa_release_evidence() -> dict[str, Any]:
+    metrics = _phase6_system_counts()
+    return {
+        "status": "ready_for_local_release_review",
+        "generated_at": _now_iso(),
+        "qa": qa_evidence_summary(),
+        "performance": {
+            "script": "scripts/benchmark_smoke.py",
+            "mode": "local_synthetic_smoke",
+            "journeys": ["health", "readiness", "metrics", "release_gate"],
+            "production_load_test": "deferred_external_infrastructure",
+        },
+        "security": {
+            "checks": [
+                "security headers",
+                "failed-login lockout",
+                "audit export",
+                "release-gate redaction",
+                "production auth safety validation",
+            ],
+            "secrets_policy": "redacted_from_api_responses",
+        },
+        "monitoring": {
+            "health": "/health",
+            "readiness": "/monitoring/readiness",
+            "metrics": "/monitoring/metrics",
+            "release_gate": "/monitoring/release-gate",
+            "queued_notifications": metrics["queued_notifications"],
+            "failed_notifications": metrics["failed_notifications"],
+        },
+        "test_data": test_data_inventory(),
+        "uat": {
+            "template": "docs/PHASE6_UAT_EVIDENCE_TEMPLATE.md",
+            "status": "template_ready_pending_stakeholder_signoff",
+        },
+    }
+
+
+def test_data_inventory() -> dict[str, Any]:
+    with get_connection() as conn:
+        counts = {
+            "users": int(conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()["c"] or 0),
+            "departments": int(conn.execute("SELECT COUNT(*) AS c FROM departments").fetchone()["c"] or 0),
+            "projects": int(conn.execute("SELECT COUNT(*) AS c FROM projects").fetchone()["c"] or 0),
+            "sprints": int(conn.execute("SELECT COUNT(*) AS c FROM sprints").fetchone()["c"] or 0),
+            "tasks": int(conn.execute("SELECT COUNT(*) AS c FROM tasks").fetchone()["c"] or 0),
+            "notifications": int(conn.execute("SELECT COUNT(*) AS c FROM app_notifications").fetchone()["c"] or 0),
+        }
+    return {
+        "mode": "local_seeded_or_test_bootstrap",
+        "counts": counts,
+        "seed_command": "POST /seed/init",
+        "demo_seed_command": "python scripts/seed_demo.py",
+        "reset_policy": "tests call init_db and create isolated timestamped records",
+        "accounts_doc": "docs/DEMO_SEED.md",
+    }
+
+
+def admin_release_panel_summary() -> dict[str, Any]:
+    return {
+        "admin_search": "/admin/search",
+        "activity": "/admin/activity",
+        "config": "/admin/system-config/overview",
+        "license": "/admin/license/status",
+        "departments": "/admin/departments/ops-evidence",
+        "system_notifications": "/admin/system-notifications",
+        "compliance": "/compliance/evidence",
+        "maintenance": "/maintenance/windows",
+        "qa": "/qa/release-evidence",
+        "release_gate": "/monitoring/release-gate",
     }

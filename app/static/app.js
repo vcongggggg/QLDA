@@ -8,6 +8,12 @@ MEMBER:  ['dashboard', 'kanban', 'timeline', 'kpi']
 ROLE_NAV_LABELS
 My Tasks
 My KPI
+MOBILE_NAV_PRIORITY
+mobile-bottom-nav
+skip-link
+toggleLanguage
+tw_lang
+prefers-reduced-motion
 function canViewModule(module)
 showAccessDenied
 Phiên đăng nhập đã hết hạn

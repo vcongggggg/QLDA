@@ -161,6 +161,79 @@ def _analytics_payload(month: str, as_of: datetime | None = None) -> dict:
     )
 
 
+def _analytics_payload_for_tasks(tasks: list[dict], month: str, as_of: datetime | None = None) -> dict:
+    normalized_as_of = None
+    if as_of is not None:
+        normalized_as_of = as_of.replace(tzinfo=timezone.utc) if as_of.tzinfo is None else as_of.astimezone(timezone.utc)
+    return build_report_analytics_summary(
+        tasks,
+        month=month,
+        as_of=normalized_as_of,
+        dependency_edges=list_task_dependency_edges(),
+    )
+
+
+def _role_dashboard_scope(current_user: dict, tasks: list[dict]) -> tuple[str, list[dict]]:
+    if is_member_role(current_user):
+        return "personal", [task for task in tasks if int(task.get("assignee_id") or 0) == int(current_user["id"])]
+    if str(current_user.get("role_code") or "").upper() == "HR":
+        return "hr", tasks
+    if str(current_user.get("role_code") or "").upper() == "ADMIN":
+        return "admin", tasks
+    return "team", tasks
+
+
+def _dashboard_insight_cards(summary: dict, kpi_rows: list[dict], schedule_count: int) -> list[dict]:
+    productivity = summary["productivity"]
+    backlog = summary["backlog_health"]
+    cycle = summary["cycle_time"]
+    utilization = summary["utilization"]
+    avg_kpi = round(sum(float(row.get("score") or 0) for row in kpi_rows) / len(kpi_rows), 2) if kpi_rows else 0.0
+    return [
+        {"key": "total_tasks", "label": "Total tasks", "value": productivity["total_tasks"], "state": "empty" if productivity["total_tasks"] == 0 else "ready"},
+        {"key": "completion_rate", "label": "Completion rate", "value": productivity["completion_rate"], "unit": "%", "state": "ready"},
+        {"key": "overdue_open_tasks", "label": "Overdue open tasks", "value": backlog["overdue_open_tasks"], "state": "warning" if backlog["overdue_open_tasks"] else "ready"},
+        {"key": "avg_kpi_score", "label": "Average KPI", "value": avg_kpi, "state": "ready" if kpi_rows else "empty"},
+        {"key": "avg_cycle_time_days", "label": "Average cycle time", "value": cycle["avg_cycle_time_days"], "unit": "days", "state": "empty" if cycle["avg_cycle_time_days"] is None else "ready"},
+        {"key": "utilization_rate", "label": "Utilization", "value": utilization["utilization_rate"], "unit": "%", "state": "ready"},
+        {"key": "scheduled_reports", "label": "Scheduled reports", "value": schedule_count, "state": "empty" if schedule_count == 0 else "ready"},
+    ]
+
+
+def _dashboard_alerts(summary: dict) -> list[dict]:
+    alerts: list[dict] = []
+    backlog = summary["backlog_health"]
+    productivity = summary["productivity"]
+    if productivity["total_tasks"] == 0:
+        alerts.append({"severity": "info", "code": "empty_dashboard", "message": "No reportable task data exists for this month."})
+    if backlog["overdue_open_tasks"]:
+        alerts.append({"severity": "warning", "code": "overdue_backlog", "message": f"{backlog['overdue_open_tasks']} open task(s) are overdue."})
+    if backlog["unassigned_open_tasks"]:
+        alerts.append({"severity": "warning", "code": "unassigned_backlog", "message": f"{backlog['unassigned_open_tasks']} open task(s) are unassigned."})
+    return alerts
+
+
+def _dashboard_chart_catalog(summary: dict) -> list[dict]:
+    return [
+        {"key": "task_status", "title": "Task status", "type": "doughnut", "data": summary["task_status"], "state": "ready"},
+        {"key": "workload", "title": "Workload by assignee", "type": "bar", "data": summary["workload_distribution"], "state": "empty" if not summary["workload_distribution"] else "ready"},
+        {"key": "velocity", "title": "Sprint velocity", "type": "bar", "data": summary["velocity"], "state": "empty" if not summary["velocity"] else "ready"},
+        {"key": "project_effort", "title": "Project effort", "type": "bar", "data": summary["project_effort"], "state": "empty" if not summary["project_effort"] else "ready"},
+        {"key": "dependency_map", "title": "Dependency map", "type": "summary", "data": summary["dependency_map"], "state": "ready"},
+    ]
+
+
+def _dashboard_export_links(month: str) -> dict:
+    return {
+        "analytics_json": f"/reports/analytics.json?month={month}",
+        "analytics_csv": f"/reports/analytics.csv?month={month}",
+        "analytics_xlsx": f"/reports/analytics.xlsx?month={month}",
+        "kpi_csv": f"/reports/kpi.csv?month={month}",
+        "portfolio_csv": "/reports/portfolio/summary.csv",
+        "project_progress_csv": "/reports/projects/progress.csv",
+    }
+
+
 @router.get("/analytics/summary", response_model=ReportAnalyticsSummary)
 def analytics_summary(
     month: str = Query(description="YYYY-MM"),
@@ -169,6 +242,41 @@ def analytics_summary(
 ) -> dict:
     _require_report_view(current_user)
     return _analytics_payload(month, as_of)
+
+
+@router.get("/dashboard/insights")
+def dashboard_insights(
+    month: str = Query(description="YYYY-MM"),
+    as_of: datetime | None = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    all_tasks = all_tasks_with_users()
+    scope_type, scoped_tasks = _role_dashboard_scope(current_user, all_tasks)
+    summary = _analytics_payload_for_tasks(scoped_tasks, month, as_of)
+    summary["scope"] = {
+        "type": scope_type,
+        "user_id": int(current_user["id"]) if scope_type == "personal" else None,
+    }
+    kpi_rows = _kpi_rows(month, current_user)
+    schedule_count = 0 if is_member_role(current_user) else len(list_report_schedules(active_only=True))
+    return {
+        "month": month,
+        "role": str(current_user.get("role") or "").lower(),
+        "role_code": str(current_user.get("role_code") or "").upper(),
+        "scope": summary["scope"],
+        "generated_at": summary["generated_at"],
+        "cards": _dashboard_insight_cards(summary, kpi_rows, schedule_count),
+        "alerts": _dashboard_alerts(summary),
+        "analytics": summary,
+        "kpi": kpi_rows,
+        "chart_catalog": _dashboard_chart_catalog(summary),
+        "export_links": _dashboard_export_links(month) if has_permission(current_user, "reports.export") else {},
+        "states": {
+            "loading": False,
+            "empty": summary["productivity"]["total_tasks"] == 0,
+            "error": None,
+        },
+    }
 
 
 @router.get("/analytics.json")

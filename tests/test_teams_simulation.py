@@ -176,3 +176,168 @@ def test_complete_card_action_updates_task_to_done() -> None:
     assert resp.status_code == 200
     assert "moved to done" in resp.json()["text"]
     assert get_task_by_id(int(task["id"]))["status"] == "done"
+
+
+def test_local_card_preview_catalog_is_permission_scoped() -> None:
+    manager, staff = _bootstrap()
+    other = create_user("Teams Sim Card Other", _email("teams.sim.card.other"), "staff", "Engineering")
+    own_task = create_task(
+        "Local card own task",
+        None,
+        int(staff["id"]),
+        None,
+        None,
+        1,
+        "easy",
+        (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    )
+    other_task = create_task(
+        "Local card hidden task",
+        None,
+        int(other["id"]),
+        None,
+        None,
+        1,
+        "easy",
+        (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    )
+
+    deadline = client.get(
+        f"/integrations/teams/cards/preview?kind=deadline&task_id={own_task['id']}",
+        headers=_hdr(int(staff["id"])),
+    )
+    assert deadline.status_code == 200
+    assert deadline.json()["card"]["type"] == "AdaptiveCard"
+    assert "Simulation only" in str(deadline.json()["card"])
+
+    hidden = client.get(
+        f"/integrations/teams/cards/preview?kind=task-action&task_id={other_task['id']}",
+        headers=_hdr(int(staff["id"])),
+    )
+    assert hidden.status_code == 404
+
+    action = client.get(
+        f"/integrations/teams/cards/preview?kind=task-action&task_id={own_task['id']}",
+        headers=_hdr(int(staff["id"])),
+    )
+    assert action.status_code == 200
+    assert "Done" in {item["title"] for item in action.json()["card"]["actions"]}
+
+    kpi_summary = client.get(
+        "/integrations/teams/cards/preview?kind=kpi-summary&month=2026-05",
+        headers=_hdr(int(manager["id"])),
+    )
+    assert kpi_summary.status_code == 200
+    assert kpi_summary.json()["card"]["type"] == "AdaptiveCard"
+
+    denied_summary = client.get(
+        "/integrations/teams/cards/preview?kind=kpi-summary&month=2026-05",
+        headers=_hdr(int(staff["id"])),
+    )
+    assert denied_summary.status_code == 403
+
+
+def test_local_simulator_supports_bot_command_catalog_without_teams_tenant() -> None:
+    manager, staff = _bootstrap()
+    own_task = create_task(
+        "Local simulator alpha task",
+        None,
+        int(staff["id"]),
+        None,
+        None,
+        2,
+        "easy",
+        (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    )
+    create_task(
+        "Manager-only alpha task",
+        None,
+        int(manager["id"]),
+        None,
+        None,
+        3,
+        "medium",
+        (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+    )
+
+    health = client.get("/integrations/teams/health", headers=_hdr(int(manager["id"])))
+    assert health.status_code == 200
+    assert "/new-task" in health.json()["supported_commands"]
+    assert health.json()["real_outbound_enabled"] is False
+
+    search = client.post(
+        "/integrations/teams/simulator/command",
+        headers=_hdr(int(staff["id"])),
+        json={"command": "/search alpha"},
+    )
+    assert search.status_code == 200
+    assert "Local simulator alpha task" in search.json()["text"]
+    assert "Manager-only alpha task" not in search.json()["text"]
+    assert search.json()["card"]["type"] == "AdaptiveCard"
+
+    deadlines = client.post(
+        "/integrations/teams/simulator/command",
+        headers=_hdr(int(staff["id"])),
+        json={"command": "/my-deadlines"},
+    )
+    assert deadlines.status_code == 200
+    assert f"#{own_task['id']}" in deadlines.json()["text"]
+
+    team_kpi = client.post(
+        "/integrations/teams/simulator/command",
+        headers=_hdr(int(manager["id"])),
+        json={"command": "/team-kpi"},
+    )
+    assert team_kpi.status_code == 200
+    assert team_kpi.json()["card"]["type"] == "AdaptiveCard"
+
+    report = client.post(
+        "/integrations/teams/simulator/command",
+        headers=_hdr(int(manager["id"])),
+        json={"command": "/report 2026-05"},
+    )
+    assert report.status_code == 200
+    assert "Report 2026-05" in report.json()["text"]
+
+
+def test_local_simulator_mutating_commands_use_existing_permissions() -> None:
+    manager, staff = _bootstrap()
+    other = create_user("Teams Sim Other", _email("teams.sim.other"), "staff", "Engineering")
+
+    create_resp = client.post(
+        "/integrations/teams/simulator/command",
+        headers=_hdr(int(manager["id"])),
+        json={
+            "command": f'/new-task title="Local simulator created task" assignee={staff["id"]} due=2026-06-15 points=2 difficulty=easy'
+        },
+    )
+    assert create_resp.status_code == 200
+    assert "Created task #" in create_resp.json()["text"]
+    task_id = int(create_resp.json()["text"].split("#", 1)[1].split(":", 1)[0])
+    assert int(get_task_by_id(task_id)["assignee_id"]) == int(staff["id"])
+
+    status_resp = client.post(
+        "/integrations/teams/simulator/command",
+        headers=_hdr(int(staff["id"])),
+        json={"command": f"/status {task_id} doing"},
+    )
+    assert status_resp.status_code == 200
+    assert "moved to doing" in status_resp.json()["text"]
+    assert get_task_by_id(task_id)["status"] == "doing"
+
+    denied_assign = client.post(
+        "/integrations/teams/simulator/command",
+        headers=_hdr(int(staff["id"])),
+        json={"command": f"/assign {task_id} {other['id']}"},
+    )
+    assert denied_assign.status_code == 200
+    assert "do not have permission" in denied_assign.json()["text"]
+
+    assign_resp = client.post(
+        "/integrations/teams/simulator/command",
+        headers=_hdr(int(manager["id"])),
+        json={"command": f"/assign {task_id} {other['id']}"},
+    )
+    assert assign_resp.status_code == 200
+    assert "assigned to" in assign_resp.json()["text"]
+    assert int(get_task_by_id(task_id)["assignee_id"]) == int(other["id"])

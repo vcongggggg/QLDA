@@ -5,7 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import get_current_user, has_permission, require_permission, require_roles
 from app.repository import (
     admin_config_flags,
+    admin_department_ops_evidence,
     admin_global_search,
+    admin_license_status,
+    admin_release_panel_summary,
+    admin_system_config_overview,
+    compliance_release_evidence,
     create_compliance_request,
     create_maintenance_window,
     create_system_notification_broadcast,
@@ -14,7 +19,10 @@ from app.repository import (
     list_compliance_requests,
     list_maintenance_windows,
     log_cleanup_dry_run,
+    qa_release_evidence,
     retention_metadata,
+    system_notification_evidence,
+    test_data_inventory,
     update_compliance_request,
     update_maintenance_window,
     user_exists,
@@ -72,6 +80,34 @@ def admin_config_flags_endpoint(current_user: dict = Depends(get_current_user)) 
     return admin_config_flags()
 
 
+@router.get("/admin/system-config/overview")
+def admin_system_config_overview_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    if not (has_permission(current_user, "OPS_VIEW") or has_permission(current_user, "monitoring.admin")):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return admin_system_config_overview()
+
+
+@router.get("/admin/license/status")
+def admin_license_status_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    if not (has_permission(current_user, "USER_VIEW") or has_permission(current_user, "OPS_VIEW")):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return admin_license_status()
+
+
+@router.get("/admin/departments/ops-evidence")
+def admin_department_ops_evidence_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    if not (has_permission(current_user, "DEPARTMENT_VIEW") or has_permission(current_user, "USER_VIEW")):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return admin_department_ops_evidence()
+
+
+@router.get("/admin/release-panel")
+def admin_release_panel_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    if not (has_permission(current_user, "USER_VIEW") or has_permission(current_user, "OPS_VIEW")):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return admin_release_panel_summary()
+
+
 @router.post("/admin/system-notifications", response_model=SystemNotificationBroadcastOut)
 def admin_system_notification_endpoint(
     payload: SystemNotificationCreate,
@@ -79,6 +115,13 @@ def admin_system_notification_endpoint(
 ) -> dict:
     require_roles(current_user, {"admin", "manager", "hr"})
     return create_system_notification_broadcast(payload.title, payload.message, payload.audience, int(current_user["id"]))
+
+
+@router.get("/admin/system-notifications/evidence")
+def admin_system_notification_evidence_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    if not (has_permission(current_user, "OPS_VIEW") or has_permission(current_user, "USER_VIEW")):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return system_notification_evidence()
 
 
 @router.get("/compliance/requests", response_model=list[ComplianceRequestOut])
@@ -128,6 +171,12 @@ def compliance_user_export_endpoint(user_id: int, current_user: dict = Depends(g
 def compliance_data_lineage_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
     _require_compliance_view(current_user)
     return data_lineage_notes()
+
+
+@router.get("/compliance/evidence")
+def compliance_release_evidence_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    _require_compliance_view(current_user)
+    return compliance_release_evidence()
 
 
 @router.get("/maintenance/windows", response_model=list[MaintenanceWindowOut])
@@ -196,3 +245,25 @@ def maintenance_log_cleanup_dry_run_endpoint(
 ) -> dict:
     require_permission(current_user, "monitoring.admin")
     return log_cleanup_dry_run(retention_days=retention_days)
+
+
+@router.get("/qa/release-evidence")
+def qa_release_evidence_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    if not (
+        has_permission(current_user, "OPS_VIEW")
+        or has_permission(current_user, "AUDIT_VIEW")
+        or has_permission(current_user, "monitoring.admin")
+    ):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return qa_release_evidence()
+
+
+@router.get("/qa/test-data")
+def qa_test_data_inventory_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
+    if not (
+        has_permission(current_user, "OPS_VIEW")
+        or has_permission(current_user, "AUDIT_VIEW")
+        or has_permission(current_user, "monitoring.admin")
+    ):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return test_data_inventory()

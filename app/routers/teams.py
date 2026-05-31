@@ -552,7 +552,20 @@ def _simulator_task_rows(user: dict) -> list[dict]:
     return [task for task in tasks if task.get("status") != "done"]
 
 
-SIMULATOR_HELP_TEXT = "Supported commands: /task-list, /kpi-me, /help"
+SIMULATOR_SUPPORTED_COMMANDS = [
+    "/help",
+    "/task-list",
+    "/team-kpi",
+    "/kpi-me",
+    "/my-deadlines",
+    "/top-kpi",
+    "/search",
+    "/new-task",
+    "/assign",
+    "/status",
+    "/report",
+]
+SIMULATOR_HELP_TEXT = "Supported local simulator commands: " + ", ".join(SIMULATOR_SUPPORTED_COMMANDS)
 
 
 @router.get("/integrations/teams/health")
@@ -565,7 +578,7 @@ def teams_simulation_health(current_user: dict = Depends(get_current_user)) -> d
         "real_graph_enabled": settings.teams_real_graph_enabled,
         "real_outbound_enabled": settings.teams_integration_mode != "simulation" and settings.teams_real_graph_enabled,
         "queue": counts,
-        "supported_commands": ["/task-list", "/kpi-me", "/help"],
+        "supported_commands": SIMULATOR_SUPPORTED_COMMANDS,
     }
 
 
@@ -575,7 +588,8 @@ def teams_simulator_command(
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     require_permission(current_user, "TEAM_VIEW")
-    command = str(payload.get("command") or "").strip().lower()
+    raw_command = str(payload.get("command") or "").strip()
+    command, argument = _parse_bot_command(raw_command)
     if command == "/help":
         card = {
             "type": "AdaptiveCard",
@@ -591,6 +605,15 @@ def teams_simulator_command(
         card = _build_task_list_card(tasks)
         text = _bot_task_list(current_user)
         return {"type": "message", "text": text, "tasks": tasks, "card": card, "preview_html": _adaptive_card_preview_html(card)}
+    if command == "/team-kpi":
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+        if current_role_code(current_user) in {"ADMIN", "MANAGER", "HR"}:
+            rows = _monthly_kpi_rows(month)
+            card = build_kpi_summary_card(month, rows)
+            return {"type": "message", "text": _bot_team_kpi(current_user), "kpi": rows, "card": card, "preview_html": _adaptive_card_preview_html(card)}
+        row = _personal_kpi_row(current_user, month)
+        card = _build_personal_kpi_card(month, row)
+        return {"type": "message", "text": _bot_team_kpi(current_user), "kpi": row, "card": card, "preview_html": _adaptive_card_preview_html(card)}
     if command == "/kpi-me":
         month = str(payload.get("month") or datetime.now(timezone.utc).strftime("%Y-%m"))
         if not re.fullmatch(r"\d{4}-\d{2}", month):
@@ -604,6 +627,56 @@ def teams_simulator_command(
             "card": card,
             "preview_html": _adaptive_card_preview_html(card),
         }
+    if command == "/my-deadlines":
+        now = datetime.now(timezone.utc)
+        horizon = now + timedelta(days=7)
+        tasks = []
+        for task in list_tasks(assignee_id=int(current_user["id"])):
+            if task.get("status") == "done" or not task.get("deadline"):
+                continue
+            try:
+                deadline = datetime.fromisoformat(str(task["deadline"]))
+            except ValueError:
+                continue
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=timezone.utc)
+            if deadline <= horizon:
+                tasks.append(task)
+        card = _build_task_list_card(tasks, title="TeamsWork - My Deadlines")
+        return {"type": "message", "text": _bot_my_deadlines(current_user), "tasks": tasks[:8], "card": card, "preview_html": _adaptive_card_preview_html(card)}
+    if command == "/top-kpi":
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+        rows = _monthly_kpi_rows(month) if current_role_code(current_user) in {"ADMIN", "MANAGER", "HR"} else []
+        card = build_kpi_summary_card(month, rows)
+        return {"type": "message", "text": _bot_top_kpi(current_user), "kpi": rows, "card": card, "preview_html": _adaptive_card_preview_html(card)}
+    if command == "/search":
+        tasks = list_tasks(
+            assignee_id=int(current_user["id"]) if is_member_role(current_user) else None,
+            keyword=argument.strip(),
+        )[:8] if len(argument.strip()) >= 2 else []
+        card = _build_task_list_card(tasks, title="TeamsWork - Search Results")
+        return {"type": "message", "text": _bot_search(current_user, argument), "tasks": tasks, "card": card, "preview_html": _adaptive_card_preview_html(card)}
+    if command == "/new-task":
+        text = _bot_new_task(current_user, argument)
+        return {"type": "message", "text": text}
+    if command == "/assign":
+        parts = argument.split()
+        text = (
+            _bot_assign_task(current_user, int(parts[0]), parts[1] if len(parts) > 1 else None)
+            if parts and parts[0].isdigit()
+            else "Usage: /assign <task_id> <assignee_email|assignee_id>"
+        )
+        return {"type": "message", "text": text}
+    if command == "/status":
+        parts = argument.split()
+        text = (
+            _bot_status_update(current_user, int(parts[0]), parts[1].lower() if len(parts) > 1 else "")
+            if parts and parts[0].isdigit()
+            else "Usage: /status <task_id> <todo|doing|done>"
+        )
+        return {"type": "message", "text": text}
+    if command == "/report":
+        return {"type": "message", "text": _bot_report(current_user, argument)}
     raise HTTPException(status_code=400, detail=SIMULATOR_HELP_TEXT)
 
 
@@ -615,20 +688,27 @@ def teams_card_preview(
     current_user: dict = Depends(get_current_user),
 ) -> dict:
     require_permission(current_user, "TEAM_VIEW")
-    if kind == "kpi-me":
+    normalized_kind = kind.strip().lower()
+    if normalized_kind == "kpi-me":
         kpi_month = month or datetime.now(timezone.utc).strftime("%Y-%m")
         row = _personal_kpi_row(current_user, kpi_month)
         card = _build_personal_kpi_card(kpi_month, row)
-    elif kind == "deadline":
+    elif normalized_kind == "kpi-summary":
+        require_roles(current_user, {"admin", "manager", "hr"})
+        kpi_month = month or datetime.now(timezone.utc).strftime("%Y-%m")
+        card = build_kpi_summary_card(kpi_month, _monthly_kpi_rows(kpi_month))
+    elif normalized_kind in {"deadline", "task-action"}:
         task = get_task_by_id(task_id) if task_id else None
         if not task:
             tasks = _simulator_task_rows(current_user)
             task = tasks[0] if tasks else None
         if not task or not _task_visible_to_bot_user(task, current_user):
             raise HTTPException(status_code=404, detail="task not found")
-        card = _build_deadline_simulation_card(task)
-    else:
+        card = _build_deadline_simulation_card(task) if normalized_kind == "deadline" else build_task_action_card(task)
+    elif normalized_kind == "task-list":
         card = _build_task_list_card(_simulator_task_rows(current_user)[:8])
+    else:
+        raise HTTPException(status_code=400, detail="kind must be task-list|kpi-me|kpi-summary|deadline|task-action")
     return {"card": card, "preview_html": _adaptive_card_preview_html(card)}
 
 
@@ -934,6 +1014,7 @@ def queue_proactive_notification(
     message: str = Query(..., min_length=2),
     user_id: int | None = Query(default=None),
     target_type: str = Query(default="user"),
+    project_id: int | None = Query(default=None),
     team_id: str | None = Query(default=None),
     channel_id: str | None = Query(default=None),
     dedup_key: str | None = Query(default=None),
@@ -943,13 +1024,25 @@ def queue_proactive_notification(
     require_roles(current_user, {"admin", "manager", "hr"})
     if target_type not in {"user", "channel", "project_channel", "webhook"}:
         raise HTTPException(status_code=400, detail="target_type must be one of user|channel|project_channel|webhook")
+    normalized_team_id = (team_id or "").strip()
+    normalized_channel_id = (channel_id or "").strip()
+    if target_type in {"channel", "project_channel"} and (not normalized_team_id or not normalized_channel_id):
+        raise HTTPException(status_code=400, detail="team_id and channel_id are required for channel targets")
+    if target_type == "project_channel":
+        if project_id is None:
+            raise HTTPException(status_code=400, detail="project_id is required for project_channel targets")
+        require_project_access(current_user, project_id)
+    if target_type == "user" and user_id is not None and not user_exists(user_id):
+        raise HTTPException(status_code=404, detail="user not found")
     payload = {"type": "message", "text": message, "target": {"type": target_type}}
     if dedup_key:
         payload["dedup_key"] = dedup_key.strip()
-    if team_id:
-        payload["target"]["team_id"] = team_id.strip()
-    if channel_id:
-        payload["target"]["channel_id"] = channel_id.strip()
+    if target_type == "project_channel":
+        payload["target"]["project_id"] = project_id
+    if normalized_team_id:
+        payload["target"]["team_id"] = normalized_team_id
+    if normalized_channel_id:
+        payload["target"]["channel_id"] = normalized_channel_id
     item = queue_notification(
         user_id=user_id,
         channel="teams",

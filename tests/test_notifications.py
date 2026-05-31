@@ -4,7 +4,15 @@ from fastapi.testclient import TestClient
 
 from app.database import init_db
 from app.main import app
-from app.repository import create_app_notification, create_task, create_user, list_app_notifications, list_notifications, queue_notification
+from app.repository import (
+    create_app_notification,
+    create_project,
+    create_task,
+    create_user,
+    list_app_notifications,
+    list_notifications,
+    queue_notification,
+)
 
 client = TestClient(app)
 
@@ -213,3 +221,62 @@ def test_teams_queue_endpoint_accepts_target_and_dedup_but_staff_cannot_manage_i
     assert second.status_code == 200
     assert second.json()["id"] == first.json()["id"]
     assert first.json()["payload"]["target"]["channel_id"] == "channel-a"
+
+
+def test_teams_project_channel_queue_requires_project_access_and_graph_target() -> None:
+    manager, _staff, other = _bootstrap()
+    owned_project = create_project(
+        "Teams owned project",
+        None,
+        None,
+        int(manager["id"]),
+        None,
+        None,
+        "active",
+    )
+    hidden_project = create_project(
+        "Teams hidden project",
+        None,
+        None,
+        int(other["id"]),
+        None,
+        None,
+        "active",
+    )
+
+    missing_channel = client.post(
+        f"/integrations/teams/proactive/queue?message=Missing&target_type=channel&team_id=team-a",
+        headers=_hdr(int(manager["id"])),
+    )
+    assert missing_channel.status_code == 400
+
+    unknown_user = client.post(
+        "/integrations/teams/proactive/queue?message=Unknown%20user&target_type=user&user_id=999999",
+        headers=_hdr(int(manager["id"])),
+    )
+    assert unknown_user.status_code == 404
+
+    missing_project = client.post(
+        "/integrations/teams/proactive/queue?message=Missing&target_type=project_channel&team_id=team-a&channel_id=channel-a",
+        headers=_hdr(int(manager["id"])),
+    )
+    assert missing_project.status_code == 400
+
+    denied = client.post(
+        f"/integrations/teams/proactive/queue?message=Denied&target_type=project_channel&team_id=team-a&channel_id=channel-a&project_id={hidden_project['id']}",
+        headers=_hdr(int(manager["id"])),
+    )
+    assert denied.status_code == 403
+
+    ok = client.post(
+        f"/integrations/teams/proactive/queue?message=Project%20channel&target_type=project_channel&team_id=team-a&channel_id=channel-a&project_id={owned_project['id']}",
+        headers=_hdr(int(manager["id"])),
+    )
+    assert ok.status_code == 200
+    target = ok.json()["payload"]["target"]
+    assert target == {
+        "type": "project_channel",
+        "project_id": owned_project["id"],
+        "team_id": "team-a",
+        "channel_id": "channel-a",
+    }

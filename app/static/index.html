@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
+<a class="skip-link" href="#appContent">Skip to main content</a>
 
 <svg class="icon-sprite" aria-hidden="true">
   <symbol id="i-menu" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></symbol>
@@ -131,6 +132,7 @@
     <button class="menu-btn" onclick="toggleSidebar()" aria-label="Mở menu"><svg class="ui-icon" aria-hidden="true"><use href="#i-menu"></use></svg></button>
     <div class="topbar-title" id="pageTitle">Dashboard</div>
     <div class="topbar-controls">
+      <button class="btn btn-outline btn-sm language-toggle" id="languageToggle" type="button" onclick="toggleLanguage()" aria-label="Switch language">EN</button>
       <div class="notification-wrap">
         <button type="button" class="notification-bell" id="notificationBell" onclick="toggleNotificationPanel(event)" aria-label="Notifications">
           <svg class="ui-icon" aria-hidden="true"><use href="#i-bell"></use></svg>
@@ -155,7 +157,7 @@
   </header>
 
   <!-- Content area -->
-  <main class="content-area">
+  <main class="content-area" id="appContent" tabindex="-1">
 
     <!-- ─── DASHBOARD ─── -->
     <section id="sec-dashboard" class="section">
@@ -798,6 +800,7 @@
     </section>
 
   </main>
+  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile primary navigation"></nav>
 </div>
 
 <!-- Task detail drawer -->
