@@ -66,6 +66,43 @@ def _kpi_rows(month: str, current_user: dict) -> list[dict]:
     return sorted(report.values(), key=lambda r: r["score"], reverse=True)
 
 
+def _kpi_report_summary(month: str, current_user: dict) -> dict:
+    rows = _kpi_rows(month, current_user)
+    scores = [float(row.get("score") or 0) for row in rows]
+    targets = [float(row["target_score"]) for row in rows if row.get("target_score") is not None]
+    below_target = [row for row in rows if float(row.get("gap") or 0) > 0]
+    top = rows[0] if rows else None
+    return {
+        "month": month,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scope": "personal" if is_member_role(current_user) else "team",
+        "user_count": len(rows),
+        "average_score": round(sum(scores) / len(scores), 2) if scores else 0.0,
+        "average_target": round(sum(targets) / len(targets), 2) if targets else None,
+        "below_target_count": len(below_target),
+        "top_performer": {
+            "user_id": int(top["user_id"]),
+            "user_name": top["user_name"],
+            "score": top["score"],
+        } if top else None,
+        "rows": rows,
+        "drilldown_links": {
+            "transactions": f"/kpi/transactions?month={month}",
+            "targets": f"/kpi/targets/progress?month={month}",
+            "history": "/kpi/history?user_id={user_id}&end_month=" + month,
+        },
+        "export_links": {
+            "csv": f"/reports/kpi.csv?month={month}",
+            "xlsx": f"/reports/kpi.xlsx?month={month}",
+            "pdf": f"/reports/kpi.pdf?month={month}",
+        } if has_permission(current_user, "reports.export") else {},
+        "states": {
+            "empty": len(rows) == 0,
+            "warning": len(below_target) > 0,
+        },
+    }
+
+
 def _normalize_dt(value: datetime | None) -> str | None:
     if value is None:
         return None
@@ -419,6 +456,12 @@ def kpi_report_pdf(month: str = Query(description="YYYY-MM"), current_user: dict
     content = build_kpi_pdf(_kpi_rows(month, current_user), month)
     return Response(content=content, media_type="application/pdf",
                     headers={"Content-Disposition": f"attachment; filename=teamswork-kpi-{month}.pdf"})
+
+
+@router.get("/kpi/summary")
+def kpi_report_summary(month: str = Query(description="YYYY-MM"), current_user: dict = Depends(get_current_user)) -> dict:
+    _require_report_view(current_user)
+    return _kpi_report_summary(month, current_user)
 
 
 @router.get("/tasks.csv")

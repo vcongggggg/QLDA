@@ -5,6 +5,7 @@ from app.repository import (
     create_audit_log,
     create_user,
     department_exists,
+    effective_user_notification_settings,
     get_user_notification_preferences,
     invite_user,
     list_roles,
@@ -17,6 +18,7 @@ from app.repository import (
 )
 from app.schemas import (
     PasswordReset,
+    UserNotificationEffectiveSettingsOut,
     UserCreate,
     UserNotificationPreferencesOut,
     UserNotificationPreferencesUpdate,
@@ -81,6 +83,14 @@ def update_current_user_endpoint(
 @router.get("/users/me/notification-settings", response_model=UserNotificationPreferencesOut)
 def get_current_user_notification_settings_endpoint(current_user: dict = Depends(get_current_user)) -> dict:
     return get_user_notification_preferences(int(current_user["id"]))
+
+
+@router.get("/users/me/notification-settings/effective", response_model=UserNotificationEffectiveSettingsOut)
+def get_current_user_effective_notification_settings_endpoint(
+    at_time: str | None = None,
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    return effective_user_notification_settings(int(current_user["id"]), at_time=at_time)
 
 
 @router.patch("/users/me/notification-settings", response_model=UserNotificationPreferencesOut)

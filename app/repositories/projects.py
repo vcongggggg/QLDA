@@ -147,12 +147,32 @@ def project_progress(project_id: int) -> dict[str, Any]:
             """,
             (_now_iso(), project_id),
         ).fetchone()
+        trend_rows = conn.execute(
+            """
+            SELECT id, sprint_id, week_label, progress_percent, rag_status, summary, next_steps, blocker, created_by, created_at
+            FROM weekly_status_updates
+            WHERE project_id = ?
+            ORDER BY created_at ASC, id ASC
+            LIMIT 12
+            """,
+            (project_id,),
+        ).fetchall()
     total_tasks = int(totals["total_tasks"] or 0)
     done_tasks = int(totals["done_tasks"] or 0)
     overdue_tasks = int(totals["overdue_tasks"] or 0)
     total_story_points = int(totals["total_story_points"] or 0)
     completed_story_points = int(totals["completed_story_points"] or 0)
     completion_rate = round((done_tasks / total_tasks) * 100, 2) if total_tasks else 0.0
+    trend = [dict(row) for row in trend_rows]
+    latest = trend[-1] if trend else None
+    direction = "flat"
+    if len(trend) >= 2:
+        first = float(trend[0].get("progress_percent") or 0)
+        last = float(trend[-1].get("progress_percent") or 0)
+        if last > first:
+            direction = "up"
+        elif last < first:
+            direction = "down"
     return {
         "project_id": project_id,
         "total_tasks": total_tasks,
@@ -161,6 +181,9 @@ def project_progress(project_id: int) -> dict[str, Any]:
         "completion_rate": completion_rate,
         "total_story_points": total_story_points,
         "completed_story_points": completed_story_points,
+        "latest_status_update": latest,
+        "trend": trend,
+        "trend_direction": direction,
     }
 
 

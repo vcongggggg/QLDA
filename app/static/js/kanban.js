@@ -467,16 +467,9 @@ async function showCreateTaskModal() {
   renderTaskCreateChecklist();
   updateExpectedKpiPoints();
   
-  // Set default deadline to 7 days from now at 17:00
-  const defaultDeadline = new Date();
-  defaultDeadline.setDate(defaultDeadline.getDate() + 7);
-  defaultDeadline.setHours(17, 0, 0, 0);
   const deadlineInput = document.getElementById('taskCreateDeadline');
   if (deadlineInput) {
-    // Format to yyyy-MM-ddThh:mm
-    const tzOffset = defaultDeadline.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(defaultDeadline - tzOffset)).toISOString().slice(0, 16);
-    deadlineInput.value = localISOTime;
+    deadlineInput.value = `${DEFAULT_WORK_DATE}T17:00`;
   }
 
   // Populate Assignee Select

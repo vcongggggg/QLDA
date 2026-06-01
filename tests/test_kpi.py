@@ -26,15 +26,17 @@ def test_default_kpi_policy_matches_current_business_rules() -> None:
         "medium": 1.5,
         "hard": 2.0,
     }
+    assert DEFAULT_KPI_POLICY.early_points == 12.0
     assert DEFAULT_KPI_POLICY.on_time_points == 10.0
     assert DEFAULT_KPI_POLICY.late_points == 5.0
     assert DEFAULT_KPI_POLICY.overdue_unfinished_points == -5.0
     assert DEFAULT_KPI_POLICY.fallback_difficulty == "easy"
 
 
-def test_kpi_done_on_time_and_late_and_overdue() -> None:
+def test_kpi_done_early_on_time_late_and_overdue() -> None:
     tasks = [
-        _task(),
+        _task(difficulty="easy", completed_at="2026-04-09T10:00:00+00:00"),
+        _task(difficulty="easy", completed_at="2026-04-10T09:00:00+00:00"),
         _task(difficulty="hard", completed_at="2026-04-12T10:00:00+00:00"),
         _task(difficulty="medium", status="todo", deadline="2026-04-15T10:00:00+00:00", completed_at=None),
     ]
@@ -42,16 +44,17 @@ def test_kpi_done_on_time_and_late_and_overdue() -> None:
     report = calculate_monthly_kpi(tasks, "2026-04")
     result = report[1]
 
+    assert result["done_early"] == 1
     assert result["done_on_time"] == 1
     assert result["done_late"] == 1
     assert result["overdue_unfinished"] == 1
-    assert result["score"] == 12.5
+    assert result["score"] == 24.5
 
 
 def test_unknown_difficulty_falls_back_to_easy_multiplier() -> None:
     report = calculate_monthly_kpi([_task(difficulty="unknown")], "2026-04")
 
-    assert report[1]["score"] == 10.0
+    assert report[1]["score"] == 12.0
 
 
 def test_adjustments_are_applied_after_calculated_score() -> None:

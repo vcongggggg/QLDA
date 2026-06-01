@@ -326,6 +326,8 @@ def test_reports_static_ui_exposes_analytics_schedule_and_accessibility_hooks() 
     assert 'id="analyticsWorkloadChart"' in index
     assert 'id="scheduledReportsPanel"' in index
     assert "loadReportAnalytics" in reports_js
+    assert "loadKpiReportSummary" in reports_js
+    assert "/reports/kpi/summary" in reports_js
     assert "renderAnalyticsWorkloadChart" in reports_js
     assert "renderAnalyticsStatusChart" in reports_js
     assert "renderAnalyticsVelocityChart" in reports_js

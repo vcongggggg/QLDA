@@ -3,6 +3,7 @@ from __future__ import annotations
 import socket
 import threading
 import time
+from pathlib import Path
 
 import httpx
 import pytest
@@ -156,3 +157,44 @@ def test_phase5_mobile_shell_i18n_and_accessibility_hooks(live_server: str, brow
         assert page.evaluate("() => document.documentElement.scrollWidth <= window.innerWidth + 1") is True
     finally:
         page.close()
+
+
+def test_admin_dashboard_management_sections_render(live_server: str, browser) -> None:
+    page = browser.new_page(viewport={"width": 1366, "height": 900})
+    try:
+        _login(page, live_server, *ROLE_ACCOUNTS["ADMIN"])
+
+        page.locator("#dashboardSimulationBadge").wait_for(state="visible", timeout=10000)
+        assert page.locator("#dashboardSimulationBadge").inner_text() == "Teams Simulation Mode"
+        assert page.locator("#sec-dashboard").inner_text(timeout=10000).find("Bang dieu khien quan ly") >= 0
+
+        page.locator("#dashStats .stat-label").first.wait_for(state="visible", timeout=10000)
+        labels = {label.lower() for label in page.locator("#dashStats .stat-label").all_inner_texts()}
+        assert {"tong task", "task qua han", "kpi trung binh", "teams queue"}.issubset(labels)
+
+        page.locator("#kpiRankTable").get_by_text("DONE DUNG HAN").wait_for(state="visible", timeout=10000)
+        dashboard_text = page.locator("#sec-dashboard").inner_text(timeout=10000).lower()
+        assert "done dung han" in dashboard_text
+        assert "done tre" in dashboard_text
+        assert "task can xu ly gap" in dashboard_text
+        assert "suc khoe he thong & audit" in dashboard_text
+        assert "tien do du an" in dashboard_text
+        assert "ty le hoan thanh" in dashboard_text
+        assert page.evaluate("() => document.documentElement.scrollWidth <= window.innerWidth + 1") is True
+    finally:
+        page.close()
+
+
+def test_dashboard_static_management_hooks_exist() -> None:
+    root = Path(__file__).resolve().parents[1]
+    dashboard_js = (root / "app" / "static" / "js" / "utils-dashboard.js").read_text(encoding="utf-8")
+    css_text = "\n".join(path.read_text(encoding="utf-8") for path in (root / "app" / "static" / "css").rglob("*.css"))
+
+    assert "Bang dieu khien quan ly" in dashboard_js
+    assert "Task can xu ly gap" in dashboard_js
+    assert "Suc khoe he thong & audit" in dashboard_js
+    assert "Done dung han" in dashboard_js
+    assert "loadSystemHealth" in dashboard_js
+    assert "loadUrgentTasks" in dashboard_js
+    assert ".dashboard-management-head" in css_text
+    assert ".dashboard-mini-stats" in css_text

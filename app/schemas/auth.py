@@ -64,6 +64,12 @@ class UserNotificationPreferencesOut(BaseModel):
     quiet_hours_end: str | None = None
     updated_at: datetime
 
+class UserNotificationEffectiveSettingsOut(UserNotificationPreferencesOut):
+    enabled_channels: list[str]
+    quiet_hours_configured: bool
+    quiet_hours_active: bool
+    delivery_summary: str
+
 class UserNotificationPreferencesUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -306,6 +306,13 @@ def test_end_to_end_rbac_kpi_and_reports() -> None:
     assert list_weekly_resp.status_code == 200
     assert len(list_weekly_resp.json()) >= 1
 
+    progress_with_trend = client.get(f"/projects/{project_id}/progress", headers=_hdr(manager_id))
+    assert progress_with_trend.status_code == 200
+    progress_trend_payload = progress_with_trend.json()
+    assert progress_trend_payload["latest_status_update"]["week_label"] == "2026-W17"
+    assert progress_trend_payload["trend"][0]["progress_percent"] == 52
+    assert progress_trend_payload["trend_direction"] in {"flat", "up", "down"}
+
     proj_csv = client.get("/reports/projects/progress.csv", headers=_hdr(manager_id))
     assert proj_csv.status_code == 200
     assert "project_id,total_tasks" in proj_csv.text

@@ -421,6 +421,17 @@ def test_current_user_notification_settings_are_self_scoped_and_validated() -> N
     assert body["digest_enabled"] is True
     assert body["quiet_hours_start"] == "18:30"
 
+    effective = client.get(
+        "/users/me/notification-settings/effective?at_time=19:00",
+        headers=_bearer(member["accessToken"]),
+    )
+    assert effective.status_code == 200
+    assert effective.json()["user_id"] == member["user"]["id"]
+    assert effective.json()["quiet_hours_configured"] is True
+    assert effective.json()["quiet_hours_active"] is True
+    assert effective.json()["enabled_channels"] == ["app", "email", "teams", "digest"]
+    assert "muted" in effective.json()["delivery_summary"]
+
     invalid_time = client.patch(
         "/users/me/notification-settings",
         headers=_bearer(member["accessToken"]),
@@ -448,6 +459,17 @@ def test_current_user_notification_settings_are_self_scoped_and_validated() -> N
     assert row is not None
     assert row["entity"] == "user_notification_preferences"
     assert int(row["entity_id"]) == int(member["user"]["id"])
+
+
+def test_notification_settings_static_ui_exposes_self_service_controls() -> None:
+    index = Path("app/static/index.html").read_text(encoding="utf-8")
+    notifications_js = Path("app/static/js/notifications.js").read_text(encoding="utf-8")
+
+    assert 'id="notificationSettingsForm"' in index
+    assert 'id="notifyTeamsEnabled"' in index
+    assert "toggleNotificationSettings" in notifications_js
+    assert "saveNotificationSettings" in notifications_js
+    assert "/users/me/notification-settings/effective" in notifications_js
 
 
 def test_current_user_can_update_safe_profile_fields_only() -> None:

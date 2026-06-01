@@ -3,12 +3,15 @@
    ══════════════════════════════════════════════ */
 
 // ── State ──────────────────────────────────────
+const DEFAULT_WORK_DATE = '2026-06-01';
+const DEFAULT_WORK_MONTH = DEFAULT_WORK_DATE.slice(0, 7);
+
 const state = {
   userId: localStorage.getItem('tw_uid') || '1',
   accessToken: localStorage.getItem('tw_access_token') || '',
   currentUser: null,
   permissions: new Set(),
-  month: new Date().toISOString().slice(0, 7),
+  month: DEFAULT_WORK_MONTH,
   currentSection: 'dashboard',
   currentUserRole: null,
   charts: {},

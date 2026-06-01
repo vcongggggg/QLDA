@@ -386,6 +386,38 @@ def update_user_notification_preferences(
     return get_user_notification_preferences(user_id)
 
 
+def effective_user_notification_settings(user_id: int, *, at_time: str | None = None) -> dict[str, Any]:
+    prefs = get_user_notification_preferences(user_id)
+    enabled_channels = [
+        channel
+        for channel, enabled in (
+            ("app", prefs.get("app_enabled")),
+            ("email", prefs.get("email_enabled")),
+            ("teams", prefs.get("teams_enabled")),
+            ("digest", prefs.get("digest_enabled")),
+        )
+        if bool(enabled)
+    ]
+    start = prefs.get("quiet_hours_start")
+    end = prefs.get("quiet_hours_end")
+    quiet_configured = bool(start and end)
+    current_time = at_time or datetime.now(timezone.utc).strftime("%H:%M")
+    quiet_active = False
+    if quiet_configured:
+        if str(start) <= str(end):
+            quiet_active = str(start) <= current_time < str(end)
+        else:
+            quiet_active = current_time >= str(start) or current_time < str(end)
+    summary = "muted during quiet hours" if quiet_active else f"{len(enabled_channels)} active channel(s)"
+    return {
+        **prefs,
+        "enabled_channels": enabled_channels,
+        "quiet_hours_configured": quiet_configured,
+        "quiet_hours_active": quiet_active,
+        "delivery_summary": summary,
+    }
+
+
 def reset_user_password(user_id: int, password: str) -> bool:
     existing = get_user_by_id(user_id)
     if not existing:

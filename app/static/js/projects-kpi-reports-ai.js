@@ -74,6 +74,10 @@ function showProjectCreateModal() {
   if (form) form.reset();
   const managerInput = document.getElementById('projectCreateManagerId');
   if (managerInput && state.currentUser?.id) managerInput.value = state.currentUser.id;
+  const startInput = document.getElementById('projectCreateStart');
+  const endInput = document.getElementById('projectCreateEnd');
+  if (startInput && !startInput.value) startInput.value = DEFAULT_WORK_DATE;
+  if (endInput && !endInput.value) endInput.value = DEFAULT_WORK_DATE;
   document.getElementById('projectCreateOverlay')?.classList.remove('hidden');
 }
 
@@ -163,6 +167,8 @@ function projectDetailHtml(projectId, progress, backlog, sprints, members) {
         ${taskDetailField('Tasks', `${progress?.done_tasks ?? 0}/${progress?.total_tasks ?? 0}`)}
         ${taskDetailField('Overdue', progress?.overdue_tasks ?? 0)}
         ${taskDetailField('Story points', `${progress?.completed_story_points ?? 0}/${progress?.total_story_points ?? 0}`)}
+        ${taskDetailField('Latest update', progress?.latest_status_update?.week_label || '-')}
+        ${taskDetailField('Trend', progress?.trend_direction || 'flat')}
         ${taskDetailField('Members', members?.length ?? 0)}
       </div>
     </div>
@@ -340,6 +346,7 @@ async function loadKpiChart() {
 // -------------------------------- REPORTS ------
 
 function setupReports() {
+  loadKpiReportSummary();
   loadReportAnalytics();
   loadReportSchedules();
 }
@@ -376,6 +383,16 @@ function triggerDownload(url) {
   a.click();
 }
 
+async function loadKpiReportSummary() {
+  const el = document.getElementById('kpiReportSummary');
+  if (!el) return;
+  try {
+    const data = await api(`/reports/kpi/summary?month=${state.month}`);
+    el.textContent = `${data.user_count || 0} users | avg ${data.average_score || 0} | below target ${data.below_target_count || 0}`;
+  } catch (e) {
+    el.textContent = e.message;
+  }
+}
 
 async function loadReportAnalytics() {
   const stats = document.getElementById('analyticsStats');

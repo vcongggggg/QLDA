@@ -23,6 +23,52 @@ async function toggleNotificationPanel(event) {
   await loadNotifications();
 }
 
+async function toggleNotificationSettings(event) {
+  if (event) event.stopPropagation();
+  const form = document.getElementById('notificationSettingsForm');
+  if (!form) return;
+  const willOpen = form.classList.contains('hidden');
+  form.classList.toggle('hidden', !willOpen);
+  if (willOpen) await loadNotificationSettings();
+}
+
+async function loadNotificationSettings() {
+  try {
+    const prefs = await api('/users/me/notification-settings/effective');
+    document.getElementById('notifyAppEnabled').checked = Boolean(prefs.app_enabled);
+    document.getElementById('notifyEmailEnabled').checked = Boolean(prefs.email_enabled);
+    document.getElementById('notifyTeamsEnabled').checked = Boolean(prefs.teams_enabled);
+    document.getElementById('notifyDigestEnabled').checked = Boolean(prefs.digest_enabled);
+    document.getElementById('notifyQuietStart').value = prefs.quiet_hours_start || '';
+    document.getElementById('notifyQuietEnd').value = prefs.quiet_hours_end || '';
+    const summary = document.getElementById('notificationSettingsSummary');
+    if (summary) summary.textContent = prefs.delivery_summary || '';
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function saveNotificationSettings(event) {
+  if (event) event.preventDefault();
+  try {
+    await api('/users/me/notification-settings', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        app_enabled: document.getElementById('notifyAppEnabled').checked,
+        email_enabled: document.getElementById('notifyEmailEnabled').checked,
+        teams_enabled: document.getElementById('notifyTeamsEnabled').checked,
+        digest_enabled: document.getElementById('notifyDigestEnabled').checked,
+        quiet_hours_start: document.getElementById('notifyQuietStart').value || null,
+        quiet_hours_end: document.getElementById('notifyQuietEnd').value || null,
+      }),
+    });
+    await loadNotificationSettings();
+    toast('Notification settings saved', 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 function closeNotificationPanel() {
   state.notificationsOpen = false;
   const panel = document.getElementById('notificationPanel');

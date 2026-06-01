@@ -33,11 +33,13 @@ font-size: 11px;
 /* ── Reports ── */
 .report-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 16px;
 }
 
 .report-card {
+  box-sizing: border-box;
+  min-width: 0;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -60,9 +62,10 @@ font-size: 11px;
 .prog-icon   { background: #FFF7ED; color: var(--warning); }
 .sprint-icon { background: #FDF4FF; color: #A21CAF; }
 
-.report-info { flex: 1; }
+.report-info { flex: 1; min-width: 0; }
 .report-info h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
 .report-info p  { font-size: 12px; color: var(--text-2); }
+#kpiReportSummary { overflow-wrap: anywhere; }
 .report-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* ── Teams info ── */
@@ -249,5 +252,19 @@ code { background: #F1F5F9; padding: 1px 6px; border-radius: 4px; font-size: 12p
 
   .report-card {
     align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .report-actions {
+    width: 100%;
+  }
+
+  .analytics-table,
+  .schedule-table,
+  #analyticsWorkloadTable table {
+    min-width: 0;
+    width: 100%;
+    table-layout: fixed;
+    overflow-wrap: anywhere;
   }
 }

@@ -141,8 +141,19 @@
         <div id="notificationPanel" class="notification-panel hidden">
           <div class="notification-panel-head">
             <strong>Notifications</strong>
+            <button type="button" class="btn btn-outline btn-sm" onclick="toggleNotificationSettings(event)">Settings</button>
             <button type="button" class="btn btn-outline btn-sm" onclick="markAllNotificationsRead()">Mark all read</button>
           </div>
+          <form id="notificationSettingsForm" class="notification-settings hidden" onsubmit="saveNotificationSettings(event)">
+            <label><input type="checkbox" id="notifyAppEnabled" /> App</label>
+            <label><input type="checkbox" id="notifyEmailEnabled" /> Email</label>
+            <label><input type="checkbox" id="notifyTeamsEnabled" /> Teams</label>
+            <label><input type="checkbox" id="notifyDigestEnabled" /> Digest</label>
+            <label>Quiet start <input class="input" type="time" id="notifyQuietStart" /></label>
+            <label>Quiet end <input class="input" type="time" id="notifyQuietEnd" /></label>
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+            <div id="notificationSettingsSummary" class="text-sm text-muted"></div>
+          </form>
           <div id="notificationList" class="notification-list">
             <div class="empty-state compact">Bạn chưa có thông báo mới.</div>
           </div>
@@ -373,6 +384,7 @@
           <div class="report-info">
             <h4>Báo cáo KPI tháng</h4>
             <p>Điểm KPI toàn bộ nhân sự trong tháng đã chọn</p>
+            <div id="kpiReportSummary" class="text-sm text-muted">-</div>
           </div>
           <div class="report-actions">
             <button class="btn btn-outline btn-sm" data-requires-any-permission="REPORT_EXPORT,reports.export" onclick="downloadReport('kpi','csv')">CSV</button>

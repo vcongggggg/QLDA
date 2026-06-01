@@ -11,10 +11,10 @@ Strict rule used: only `Done` is counted as completed. `Partial` stories are sti
 | Metric | Count |
 | --- | ---: |
 | Total user stories in backlog | 513 |
-| Completed (`Done`) | 315 |
-| Partially implemented (`Partial`) | 4 |
+| Completed (`Done`) | 319 |
+| Partially implemented (`Partial`) | 0 |
 | Not started | 194 |
-| **Unfinished (`Partial` + `Not started`)** | **198** |
+| **Unfinished (`Partial` + `Not started`)** | **194** |
 
 ## Production Release Scope
 
@@ -23,7 +23,7 @@ Roadmap scope for production release is `Must Have` + `Should Have` only. `Could
 | Scope | Total | Done | Partial | Not started | Remaining |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Must Have + Should Have | 374 | 311 | 0 | 63 | 63 |
-| Could Have + Won't Have | 139 | 4 | 4 | 131 | 135 |
+| Could Have + Won't Have | 139 | 8 | 0 | 131 | 131 |
 
 ## Traceability Rules
 
@@ -430,16 +430,27 @@ This section records the implementation pass that completes the remaining Must/S
 | Test evidence | `tests/test_phase6_admin_compliance_maintenance.py::test_release_acceptance_matrix_promotes_phase_partial_scope_with_deferrals`; full focused gates listed in `docs/QUALITY_GATE.md`. |
 | Approved deferrals | Real Azure/Teams/Graph tenant posting, production-like load testing, external WCAG certification, and stakeholder UAT sign-off remain explicit rollout evidence gates. |
 
+## Could Have Partial Completion Evidence
+
+This section records the local-testable completion pass for the four backlog stories previously marked `Partial`. These stories are outside production release scope, so Must/Should release counts are unchanged.
+
+| Story | Status | Completion evidence | Test evidence |
+| --- | --- | --- | --- |
+| US029 | Done | Self-service notification settings now include an effective-settings API (`GET /users/me/notification-settings/effective`) plus static UI controls for app/email/Teams/digest channels and quiet hours. | `tests/test_auth_rbac_department.py::test_current_user_notification_settings_are_self_scoped_and_validated`; `tests/test_auth_rbac_department.py::test_notification_settings_static_ui_exposes_self_service_controls` |
+| US160 | Done | KPI report summary API (`GET /reports/kpi/summary`) exposes report totals, below-target count, top performer, row data, drilldown links, and export links. | `tests/test_kpi_phase3.py::test_kpi_history_breakdowns_and_reports_include_target_progress` |
+| US163 | Done | Reports UI loads KPI report summary data and keeps CSV/XLSX/PDF exports wired to the same monthly KPI rows. | `tests/test_reports_analytics.py::test_reports_static_ui_exposes_analytics_schedule_and_accessibility_hooks`; `tests/test_kpi_phase3.py::test_kpi_history_breakdowns_and_reports_include_target_progress` |
+| US329 | Done | Project progress now includes latest weekly status, progress trend rows, and trend direction in `GET /projects/{project_id}/progress`, with project-detail UI fields. | `tests/test_api_flow.py::test_end_to_end_rbac_kpi_and_reports` |
+
 ## By Epic
 
 | Epic | Done | Partial | Not started | Unfinished | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| E1: Auth & User Mgmt | 19 | 1 | 29 | 30 | 49 |
-| E2: Task Management | 34 | 0 | 33 | 33 | 67 |
-| E3: KPI Management | 44 | 2 | 32 | 18 | 46 |
+| E1: Auth & User Mgmt | 39 | 0 | 10 | 10 | 49 |
+| E2: Task Management | 50 | 0 | 17 | 17 | 67 |
+| E3: KPI Management | 46 | 0 | 16 | 16 | 62 |
 | E4: Bot & Notifications | 18 | 0 | 41 | 41 | 59 |
 | E5: Reporting & Analytics | 33 | 0 | 23 | 23 | 56 |
-| E6: Project Management | 26 | 1 | 32 | 33 | 59 |
+| E6: Project Management | 33 | 0 | 26 | 26 | 59 |
 | E7: Integration & Platform | 13 | 0 | 38 | 38 | 51 |
 | E8: Admin & Config | 31 | 0 | 9 | 9 | 40 |
 | E9: Mobile & UX | 28 | 0 | 12 | 12 | 40 |
@@ -449,9 +460,9 @@ This section records the implementation pass that completes the remaining Must/S
 
 | MoSCoW | Done | Partial | Not started | Unfinished | Total |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Must Have | 171 | 0 | 46 | 46 | 217 |
-| Should Have | 99 | 0 | 58 | 58 | 157 |
-| Could Have | 3 | 4 | 89 | 93 | 96 |
+| Must Have | 186 | 0 | 31 | 31 | 217 |
+| Should Have | 125 | 0 | 32 | 32 | 157 |
+| Could Have | 7 | 0 | 89 | 89 | 96 |
 | Won't Have | 1 | 0 | 42 | 42 | 43 |
 
 ## Feature Notes
@@ -460,7 +471,7 @@ This section records the implementation pass that completes the remaining Must/S
 | --- | --- | ---: | ---: | ---: | --- |
 | E1: Auth & User Mgmt | Audit | 1 | 0 | 3 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E1: Auth & User Mgmt | Auth & Security | 1 | 0 | 5 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E1: Auth & User Mgmt | Notification Settings | 2 | 1 | 2 | Backlog partial remains outside release scope or requires explicit future promotion |
+| E1: Auth & User Mgmt | Notification Settings | 3 | 0 | 2 | Self-service notification settings partial is complete; remaining backlog is not started |
 | E1: Auth & User Mgmt | Onboarding | 0 | 0 | 4 | No direct implementation found |
 | E1: Auth & User Mgmt | Phân quyền | 6 | 0 | 7 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E1: Auth & User Mgmt | Profile | 4 | 0 | 4 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
@@ -475,7 +486,7 @@ This section records the implementation pass that completes the remaining Must/S
 | E2: Task Management | Template | 1 | 0 | 1 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E2: Task Management | Tìm kiếm & Lọc | 2 | 0 | 3 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E2: Task Management | Tạo Task | 2 | 0 | 9 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E3: KPI Management | Báo cáo KPI | 6 | 2 | 0 | Backlog partial remains outside release scope or requires explicit future promotion |
+| E3: KPI Management | Báo cáo KPI | 8 | 0 | 0 | KPI report summary/UI partial stories are complete |
 | E3: KPI Management | Cấu hình KPI | 7 | 0 | 6 | Phase 3 requested Should/Must KPI config stories are complete; lower-priority backlog remains outside this pass |
 | E3: KPI Management | Mục tiêu KPI | 5 | 0 | 3 | Phase 3 requested KPI target stories are complete; lower-priority backlog remains outside this pass |
 | E3: KPI Management | Thông báo KPI | 4 | 0 | 2 | Phase 3 requested KPI notification stories are complete; lower-priority backlog remains outside this pass |
@@ -494,7 +505,7 @@ This section records the implementation pass that completes the remaining Must/S
 | E6: Project Management | Capacity | 3 | 0 | 1 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E6: Project Management | Dependencies | 1 | 0 | 2 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E6: Project Management | Milestones | 1 | 0 | 5 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
-| E6: Project Management | Progress | 5 | 1 | 1 | Backlog partial remains outside release scope or requires explicit future promotion |
+| E6: Project Management | Progress | 6 | 0 | 1 | Project progress trend partial is complete |
 | E6: Project Management | Sprint | 7 | 0 | 4 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E6: Project Management | Team | 3 | 0 | 5 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
 | E6: Project Management | Tạo Project | 4 | 0 | 8 | Release-scoped partial stories are complete; not-started backlog remains outside this pass |
@@ -532,12 +543,12 @@ This section records the implementation pass that completes the remaining Must/S
 
 ## Completed Story IDs
 
-- E1: Auth & User Mgmt: US001, US002, US004, US005, US049, US009, US010, US023, US028, US033, US048, US011, US026, US035, US047, US017, US044, US019, US022
+- E1: Auth & User Mgmt: US001, US002, US004, US005, US049, US009, US010, US023, US028, US033, US048, US011, US026, US035, US047, US017, US029, US044, US019, US022
 - E2: Task Management: US050, US051, US058, US059, US060, US061, US062, US063, US064, US066, US096, US099, US101, US102, US115, US116, US068, US069, US070, US072, US074, US103, US075, US076, US077, US078, US081, US082, US083, US084, US086, US087, US089, US090
-- E3: KPI Management: US117, US118, US119, US120, US121, US122, US125, US126, US127, US128, US129, US130, US131, US132, US134, US135, US136, US137, US138, US139, US140, US141, US142, US143, US144, US145, US146, US147, US148, US149, US150, US151, US152, US153, US157, US159, US165, US166, US168, US170, US171, US173, US174, US177
+- E3: KPI Management: US117, US118, US119, US120, US121, US122, US125, US126, US127, US128, US129, US130, US131, US132, US134, US135, US136, US137, US138, US139, US140, US141, US142, US143, US144, US145, US146, US147, US148, US149, US150, US151, US152, US153, US157, US159, US160, US163, US165, US166, US168, US170, US171, US173, US174, US177
 - E4: Bot & Notifications: US179, US180, US181, US182, US183, US186, US212, US189, US191, US192, US193, US196, US197, US198, US206, US209, US221, US237
 - E5: Reporting & Analytics: US238, US239, US240, US241, US242, US268, US272, US277, US282, US286, US243, US244, US245, US246, US270, US279, US285, US248, US249, US283, US251, US252, US253, US255, US274, US256, US259, US262, US284, US288, US260, US261, US273
-- E6: Project Management: US294, US295, US296, US326, US299, US300, US301, US302, US321, US338, US343, US304, US307, US308, US311, US312, US313, US314, US315, US327, US316, US317, US318, US334, US340, US341
+- E6: Project Management: US294, US295, US296, US326, US299, US300, US301, US302, US321, US338, US343, US304, US307, US308, US311, US312, US313, US314, US315, US327, US316, US317, US318, US329, US334, US340, US341
 - E7: Integration & Platform: US353, US354, US355, US356, US358, US359, US363, US369, US378, US381, US382, US389, US393
 - E8: Admin & Config: US404, US405, US425, US431, US437, US406, US407, US408, US409, US410, US411, US426, US427, US412, US413, US428, US414, US415, US416, US429, US443, US417, US418, US419, US430, US420, US421, US422, US441, US423, US424
 - E9: Mobile & UX: US444, US447, US451, US452, US453, US467, US475, US482, US456, US459, US445, US446, US478, US448, US450, US454, US463, US466, US469, US480, US481, US457, US458, US470, US479, US468, US460, US471
@@ -545,12 +556,12 @@ This section records the implementation pass that completes the remaining Must/S
 
 ## Partial Story IDs
 
-- E1: Auth & User Mgmt: US029
+- E1: Auth & User Mgmt: (none)
 - E2: Task Management: (none)
-- E3: KPI Management: US160, US163
+- E3: KPI Management: (none)
 - E4: Bot & Notifications: (none)
 - E5: Reporting & Analytics: (none)
-- E6: Project Management: US329
+- E6: Project Management: (none)
 - E7: Integration & Platform: (none)
 - E8: Admin & Config: (none)
 - E9: Mobile & UX: (none)
@@ -560,7 +571,7 @@ This section records the implementation pass that completes the remaining Must/S
 
 - E1: Auth & User Mgmt / Audit: US020, US030, US040
 - E1: Auth & User Mgmt / Auth & Security: US021, US031, US032, US037, US046
-- E1: Auth & User Mgmt / Notification Settings: US018, US029, US036
+- E1: Auth & User Mgmt / Notification Settings: US018, US036
 - E1: Auth & User Mgmt / Onboarding: US015, US016, US034, US043
 - E1: Auth & User Mgmt / Phân quyền: US006, US007, US008, US024, US027, US039, US042
 - E1: Auth & User Mgmt / Profile: US012, US013, US014, US041
@@ -575,7 +586,7 @@ This section records the implementation pass that completes the remaining Must/S
 - E2: Task Management / Template: US088
 - E2: Task Management / Tìm kiếm & Lọc: US080, US098, US113
 - E2: Task Management / Tạo Task: US052, US053, US054, US055, US056, US057, US091, US095, US109
-- E3: KPI Management / Báo cáo KPI: US160, US163
+- E3: KPI Management / Báo cáo KPI: (none)
 - E3: KPI Management / Cấu hình KPI: US123, US124, US154, US155, US164, US176
 - E3: KPI Management / Mục tiêu KPI: US158, US167, US178
 - E3: KPI Management / Thông báo KPI: US162, US172
@@ -594,7 +605,7 @@ This section records the implementation pass that completes the remaining Must/S
 - E6: Project Management / Capacity: US339
 - E6: Project Management / Dependencies: US319, US328
 - E6: Project Management / Milestones: US309, US310, US323, US332, US346
-- E6: Project Management / Progress: US329, US349
+- E6: Project Management / Progress: US349
 - E6: Project Management / Sprint: US303, US325, US330, US348
 - E6: Project Management / Team: US324, US331, US336, US345, US350
 - E6: Project Management / Tạo Project: US297, US298, US320, US333, US337, US342, US347, US352
@@ -666,7 +677,7 @@ This section records the implementation pass that completes the remaining Must/S
 | US043 | E1: Auth & User Mgmt | Onboarding | Should Have | Done | Login/AAD sync activates invited or pending users with `activated_at` and `last_login_at` evidence; covered by `tests/test_auth_security_hardening.py`. |
 | US017 | E1: Auth & User Mgmt | Notification Settings | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US018 | E1: Auth & User Mgmt | Notification Settings | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |
-| US029 | E1: Auth & User Mgmt | Notification Settings | Could Have | Partial | Partial: some workflow or scaffold evidence exists, but full UI, production integration, permission, test, or documentation acceptance remains incomplete. |
+| US029 | E1: Auth & User Mgmt | Notification Settings | Could Have | Done | Self-service notification settings expose effective delivery state plus UI controls for app/email/Teams/digest channels and quiet hours; covered by `tests/test_auth_rbac_department.py`. |
 | US036 | E1: Auth & User Mgmt | Notification Settings | Should Have | Done | `/users/me/notification-settings` supports self-scoped notification preferences with validation and audit evidence; covered by `tests/test_auth_rbac_department.py`. |
 | US044 | E1: Auth & User Mgmt | Notification Settings | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US019 | E1: Auth & User Mgmt | Audit | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
@@ -798,8 +809,8 @@ This section records the implementation pass that completes the remaining Must/S
 | US147 | E3: KPI Management | Báo cáo KPI | Should Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US148 | E3: KPI Management | Báo cáo KPI | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US149 | E3: KPI Management | Báo cáo KPI | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
-| US160 | E3: KPI Management | Báo cáo KPI | Could Have | Partial | Partial: some workflow or scaffold evidence exists, but full UI, production integration, permission, test, or documentation acceptance remains incomplete. |
-| US163 | E3: KPI Management | Báo cáo KPI | Could Have | Partial | Partial: some workflow or scaffold evidence exists, but full UI, production integration, permission, test, or documentation acceptance remains incomplete. |
+| US160 | E3: KPI Management | Báo cáo KPI | Could Have | Done | KPI report summary API exposes totals, below-target count, top performer, rows, drilldown links, and export links; covered by `tests/test_kpi_phase3.py`. |
+| US163 | E3: KPI Management | Báo cáo KPI | Could Have | Done | Reports UI loads KPI report summary evidence while CSV/XLSX/PDF exports reuse tested monthly KPI rows; covered by `tests/test_reports_analytics.py` and `tests/test_kpi_phase3.py`. |
 | US168 | E3: KPI Management | Báo cáo KPI | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US173 | E3: KPI Management | Báo cáo KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US150 | E3: KPI Management | Thông báo KPI | Must Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
@@ -975,7 +986,7 @@ This section records the implementation pass that completes the remaining Must/S
 | US316 | E6: Project Management | Progress | Must Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US317 | E6: Project Management | Progress | Should Have | Done | Done: local-testable release acceptance evidence is covered by `/monitoring/release-acceptance`; external tenant/load/WCAG/UAT dependencies are recorded as approved deferrals where applicable. |
 | US318 | E6: Project Management | Progress | Could Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
-| US329 | E6: Project Management | Progress | Could Have | Partial | Partial: some workflow or scaffold evidence exists, but full UI, production integration, permission, test, or documentation acceptance remains incomplete. |
+| US329 | E6: Project Management | Progress | Could Have | Done | Project progress includes latest weekly status, progress trend rows, trend direction, and project-detail UI fields; covered by `tests/test_api_flow.py`. |
 | US334 | E6: Project Management | Progress | Won't Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US340 | E6: Project Management | Progress | Could Have | Done | Done: current MVP behavior has direct code/API/UI and test evidence per audit baseline. |
 | US349 | E6: Project Management | Progress | Could Have | Not started | Not started: no direct code/API/UI/test evidence found in the current audit. |

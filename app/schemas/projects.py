@@ -40,6 +40,9 @@ class ProjectProgressOut(BaseModel):
     completion_rate: float
     total_story_points: int
     completed_story_points: int
+    latest_status_update: dict | None = None
+    trend: list[dict] = Field(default_factory=list)
+    trend_direction: str = "flat"
 
 class ProjectRiskCreate(BaseModel):
     title: str = Field(min_length=3, max_length=180)

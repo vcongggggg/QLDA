@@ -55,11 +55,12 @@ def test_kpi_config_update_requires_reason_and_preserves_policy_shape() -> None:
     current = client.get("/kpi/config", headers=_hdr(ids["admin"]))
     assert current.status_code == 200
     assert current.json()["difficulty_multiplier"]["easy"] == 1.0
+    assert current.json()["early_points"] == 12.0
 
     missing_reason = client.put(
         "/kpi/config",
         headers=_hdr(ids["admin"]),
-        json={"on_time_points": 11.0, "late_points": 5.0, "overdue_unfinished_points": -5.0},
+        json={"early_points": 12.0, "on_time_points": 11.0, "late_points": 5.0, "overdue_unfinished_points": -5.0},
     )
     assert missing_reason.status_code == 422
 
@@ -68,6 +69,7 @@ def test_kpi_config_update_requires_reason_and_preserves_policy_shape() -> None:
         headers=_hdr(ids["admin"]),
         json={
             "difficulty_multiplier": {"easy": 1.0, "medium": 1.5, "hard": 2.0},
+            "early_points": 12.0,
             "on_time_points": 10.0,
             "late_points": 5.0,
             "overdue_unfinished_points": -5.0,
@@ -82,6 +84,7 @@ def test_kpi_config_update_requires_reason_and_preserves_policy_shape() -> None:
         headers=_hdr(ids["staff"]),
         json={
             "difficulty_multiplier": {"easy": 1.0, "medium": 1.5, "hard": 2.0},
+            "early_points": 12.0,
             "on_time_points": 10.0,
             "late_points": 5.0,
             "overdue_unfinished_points": -5.0,
@@ -120,6 +123,37 @@ def test_kpi_transaction_rebuild_is_idempotent_and_reverses_stale_task_events() 
     assert rebuilt.status_code == 200
     rows = client.get("/kpi/transactions?month=2026-04", headers=_hdr(ids["admin"])).json()
     assert any(row["source_type"] == "task" and row["source_id"] == task["id"] and row["status"] == "reversed" for row in rows)
+
+
+def test_kpi_transaction_rebuild_tracks_done_early() -> None:
+    ids = _bootstrap()
+    task = _done_task(ids["staff"])
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
+            ("2026-04-09T10:00:00+00:00", task["id"]),
+        )
+
+    rebuilt = client.post("/kpi/transactions/rebuild?month=2026-04", headers=_hdr(ids["admin"]))
+    assert rebuilt.status_code == 200
+
+    transactions = client.get("/kpi/transactions?month=2026-04", headers=_hdr(ids["admin"]))
+    assert transactions.status_code == 200
+    assert any(
+        row["source_type"] == "task"
+        and row["source_id"] == task["id"]
+        and row["status"] == "active"
+        and row["reason"].startswith("done_early")
+        and row["points"] == 12.0
+        for row in transactions.json()
+    )
+
+    monthly = client.get("/kpi/monthly?month=2026-04", headers=_hdr(ids["admin"]))
+    assert monthly.status_code == 200
+    staff_row = next(row for row in monthly.json() if row["user_id"] == ids["staff"])
+    assert staff_row["done_early"] == 1
+    assert staff_row["done_on_time"] == 0
+    assert staff_row["score"] == 12.0
 
 
 def test_manual_adjustments_require_approval_before_affecting_kpi() -> None:
@@ -240,6 +274,19 @@ def test_kpi_history_breakdowns_and_reports_include_target_progress() -> None:
     xlsx_report = client.get("/reports/kpi.xlsx?month=2026-04", headers=_hdr(ids["hr"]))
     assert xlsx_report.status_code == 200
     assert "teamswork-kpi-2026-04.xlsx" in xlsx_report.headers["content-disposition"]
+
+    summary = client.get("/reports/kpi/summary?month=2026-04", headers=_hdr(ids["hr"]))
+    assert summary.status_code == 200
+    summary_payload = summary.json()
+    assert summary_payload["month"] == "2026-04"
+    assert summary_payload["user_count"] >= 1
+    assert summary_payload["below_target_count"] >= 1
+    assert summary_payload["top_performer"]["user_id"] == ids["staff"]
+    assert summary_payload["drilldown_links"]["transactions"] == "/kpi/transactions?month=2026-04"
+    assert summary_payload["export_links"]["pdf"] == "/reports/kpi.pdf?month=2026-04"
+
+    staff_summary = client.get("/reports/kpi/summary?month=2026-04", headers=_hdr(ids["staff"]))
+    assert staff_summary.status_code == 403
 
     staff_export = client.get("/reports/kpi.csv?month=2026-04", headers=_hdr(ids["staff"]))
     assert staff_export.status_code == 403
